@@ -13,6 +13,8 @@ export interface CurrentUser {
   employeeCode?: string | null;
   designation?: string | null;
   mustChangePassword?: boolean;
+  termsVersion?: string | null;
+  termsAcceptedAt?: Date | null;
 }
 
 export type InvitationStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED";

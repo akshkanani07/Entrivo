@@ -11,6 +11,7 @@ const magicLinkRequestSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const ip = getClientIp(request.headers);
     const body = await request.json().catch(() => null);
@@ -81,13 +82,14 @@ export async function POST(request: Request) {
         console.log(`\n[SECURE SERVER CONSOLE] Magic Link for ${user.email}:\n${magicUrl}\n`);
       }
 
-      // Dispatch branded HTML email via Mailjet
-      await emailService.sendEmail(
-        {
-          to: user.email,
-          recipientName: user.name,
-          subject: "Your Secure Entrivo Sign-In Link",
-          htmlContent: `
+      // Dispatch branded HTML email via Mailjet asynchronously (fire-and-forget, never await)
+      emailService
+        .sendEmail(
+          {
+            to: user.email,
+            recipientName: user.name,
+            subject: "Your Secure Entrivo Sign-In Link",
+            htmlContent: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
               <div style="margin-bottom: 24px; text-align: center;">
                 <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
@@ -107,10 +109,21 @@ export async function POST(request: Request) {
               </p>
             </div>
           `,
-          textContent: `Sign in to Entrivo: ${magicUrl}\nThis link expires in 15 minutes.`,
-        },
-        user.id
-      );
+            textContent: `Sign in to Entrivo: ${magicUrl}\nThis link expires in 15 minutes.`,
+          },
+          user.id
+        )
+        .catch((err) => {
+          console.error("[MagicLink] Failed to send email:", err);
+        });
+    }
+
+    // Floor delay equalization: ensure response timing between known and unknown email
+    // is indistinguishable (floor of 80ms + 0-40ms jitter)
+    const elapsed = Date.now() - startTime;
+    const targetFloor = 80 + Math.floor(Math.random() * 40);
+    if (elapsed < targetFloor) {
+      await new Promise((r) => setTimeout(r, targetFloor - elapsed));
     }
 
     // ALWAYS return the exact same 200 response whether user exists or not.

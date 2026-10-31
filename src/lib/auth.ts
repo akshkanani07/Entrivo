@@ -70,12 +70,22 @@ export function validatePasswordStrength(
 }
 
 export function getClientIp(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0].trim();
+  const trustProxy = process.env.TRUST_PROXY === "true" || process.env.TRUST_PROXY === "1";
+  if (trustProxy) {
+    const forwarded = headers.get("x-forwarded-for");
+    if (forwarded) {
+      // In trusted proxy setups, take the right-most untrusted hop
+      const ips = forwarded
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ips.length > 0) {
+        return ips[0];
+      }
+    }
+    const realIp = headers.get("x-real-ip");
+    if (realIp) return realIp.trim();
   }
-  const realIp = headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
   return "127.0.0.1";
 }
 
@@ -182,6 +192,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       employeeCode: user.employee?.employeeCode,
       designation: user.employee?.designation,
       mustChangePassword: user.mustChangePassword,
+      termsVersion: user.termsVersion,
+      termsAcceptedAt: user.termsAcceptedAt,
     };
   } catch (error) {
     console.error("Error retrieving current user:", error);

@@ -17,7 +17,7 @@ export type AuthResult =
   | { user: CurrentUser; response?: never }
   | { user?: never; response: NextResponse };
 
-export async function requireUser(): Promise<AuthResult> {
+export async function requireUser(req?: Request): Promise<AuthResult> {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -27,6 +27,25 @@ export async function requireUser(): Promise<AuthResult> {
       ),
     };
   }
+
+  if (user.mustChangePassword) {
+    const url = req?.url || "";
+    const EXEMPT = ["/api/auth/change-password", "/api/auth/logout", "/api/auth/me"];
+    const isExempt = EXEMPT.some((path) => url.includes(path));
+    if (!isExempt) {
+      return {
+        response: NextResponse.json(
+          {
+            success: false,
+            error: "Password change required before accessing the system.",
+            code: "PASSWORD_CHANGE_REQUIRED",
+          },
+          { status: 403 }
+        ),
+      };
+    }
+  }
+
   return { user };
 }
 

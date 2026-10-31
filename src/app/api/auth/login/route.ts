@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { verifyPassword, createDatabaseSession, getClientIp } from "@/lib/auth";
-import { loginRateLimiter } from "@/lib/rate-limit";
+import { loginRateLimiter, clearLoginEmailRateLimit } from "@/lib/rate-limit";
+import { LEGAL_VERSION } from "@/lib/legal";
 
 const loginSchema = z.object({
   email: z.string().email("A valid email address is required"),
   password: z.string().min(1, "Password is required"),
 });
 
-// Pre-computed valid bcrypt hash used to equalize timing when user does not exist
-const DUMMY_BCRYPT_HASH = "$2a$12$7k8mK/eG6n3ZgR5Y8W0qJu8A.Wc5hT9v4pL1r6m3s8d2f5g9h0j1k";
+// Pre-computed dynamic bcrypt hash generated at module init to equalize timing
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString("hex"), 12);
 
 export async function POST(request: Request) {
   try {
@@ -81,6 +84,20 @@ export async function POST(request: Request) {
         { success: false, error: "Your account is disabled. Please contact your workplace administrator." },
         { status: 403 }
       );
+    }
+
+    // Clear per-email rate limit counter on successful login
+    clearLoginEmailRateLimit(cleanEmail);
+
+    // Set termsAcceptedAt and termsVersion on first successful login if not already set
+    if (!user.termsAcceptedAt) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          termsAcceptedAt: new Date(),
+          termsVersion: LEGAL_VERSION,
+        },
+      });
     }
 
     // Determine device label

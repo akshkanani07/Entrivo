@@ -11,6 +11,7 @@ const forgotPasswordSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const startTime = Date.now();
   try {
     const ip = getClientIp(request.headers);
     const body = await request.json().catch(() => null);
@@ -79,12 +80,14 @@ export async function POST(request: Request) {
         console.log(`\n[SECURE SERVER CONSOLE] Password Reset Link for ${user.email}:\n${resetUrl}\n`);
       }
 
-      await emailService.sendEmail(
-        {
-          to: user.email,
-          recipientName: user.name,
-          subject: "Entrivo Password Reset Request",
-          htmlContent: `
+      // Fire-and-forget: do not await email delivery to prevent response timing side-channels
+      emailService
+        .sendEmail(
+          {
+            to: user.email,
+            recipientName: user.name,
+            subject: "Entrivo Password Reset Request",
+            htmlContent: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
               <div style="margin-bottom: 24px; text-align: center;">
                 <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
@@ -104,10 +107,20 @@ export async function POST(request: Request) {
               </p>
             </div>
           `,
-          textContent: `Reset your Entrivo password: ${resetUrl}\nThis link expires in 30 minutes.`,
-        },
-        user.id
-      );
+            textContent: `Reset your Entrivo password: ${resetUrl}\nThis link expires in 30 minutes.`,
+          },
+          user.id
+        )
+        .catch((err) => {
+          console.error("[ForgotPassword] Failed to send email:", err);
+        });
+    }
+
+    // Timing equalization floor
+    const elapsed = Date.now() - startTime;
+    const targetFloor = 80 + Math.floor(Math.random() * 40);
+    if (elapsed < targetFloor) {
+      await new Promise((r) => setTimeout(r, targetFloor - elapsed));
     }
 
     // Uniform 200 response

@@ -6,3 +6,4 @@
 *.md text eol=lf
 *.prisma text eol=lf
 *.css text eol=lf
+

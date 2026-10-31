@@ -189,57 +189,110 @@ export async function POST(request: Request) {
       });
     }
 
+    // Determine if invitation requires approval workflow
+    let requiresApproval = false;
+    if (visitorTypeId) {
+      const vType = await prisma.visitorType.findFirst({
+        where: { id: visitorTypeId, organizationId: orgId },
+      });
+      if (vType?.requiresApproval) {
+        requiresApproval = true;
+      }
+      const typeName = (vType?.name || "").toLowerCase();
+      if (typeName.includes("vip") || typeName.includes("vendor") || typeName.includes("contractor")) {
+        requiresApproval = true;
+      }
+    }
+
+    const initialStatus = requiresApproval ? "PENDING" : "APPROVED";
+
     // Generate unique QR token
     const qrToken = generateVisitorToken("INV");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const passUrl = `${appUrl}/pass/${qrToken}`;
 
-    const invitation = await prisma.invitation.create({
-      data: {
-        organizationId: orgId,
-        hostEmployeeId: effectiveHostId,
-        visitorId: visitor.id,
-        meetingRoomId: meetingRoomId || null,
-        scheduledDate: new Date(scheduledDate),
-        startTime,
-        endTime,
-        purpose: purpose.trim(),
-        notes: notes?.trim() || null,
-        qrToken,
-        passUrl,
-        status: "APPROVED",
-      },
-      include: {
-        visitor: true,
-        hostEmployee: { include: { user: true, office: true } },
-        meetingRoom: true,
-        organization: true,
-      },
+    const { invitation } = await prisma.$transaction(async (tx) => {
+      const inv = await tx.invitation.create({
+        data: {
+          organizationId: orgId,
+          hostEmployeeId: effectiveHostId,
+          visitorId: visitor.id,
+          meetingRoomId: meetingRoomId || null,
+          scheduledDate: new Date(scheduledDate),
+          startTime,
+          endTime,
+          purpose: purpose.trim(),
+          notes: notes?.trim() || null,
+          qrToken,
+          passUrl,
+          status: initialStatus,
+        },
+        include: {
+          visitor: true,
+          hostEmployee: { include: { user: true, office: true } },
+          meetingRoom: true,
+          organization: true,
+        },
+      });
+
+      if (requiresApproval) {
+        await tx.approval.create({
+          data: {
+            invitationId: inv.id,
+            approverId: effectiveHostId,
+            step: "HOST",
+            status: "PENDING",
+          },
+        });
+      }
+
+      return { invitation: inv };
     });
 
-    // Dispatch multi-channel notification (Email to visitor, Slack/Teams, etc.)
     const formattedDate = formatDate(invitation.scheduledDate);
     const location = invitation.meetingRoom?.name || invitation.hostEmployee.office?.name || invitation.organization.name;
 
-    await notify(NotificationEvent.VISITOR_INVITED, {
-      organizationId: orgId,
-      visitorName: visitor.name,
-      visitorEmail: visitor.email,
-      visitorCompany: visitor.company || undefined,
-      hostName: hostEmployee.user.name,
-      hostEmail: hostEmployee.user.email,
-      hostUserId: hostEmployee.userId,
-      date: formattedDate,
-      time: `${invitation.startTime} - ${invitation.endTime}`,
-      location,
-      qrPassUrl: passUrl,
-      purpose: invitation.purpose,
-      entityId: invitation.id,
-    }).catch(console.error);
+    if (requiresApproval) {
+      // Fire APPROVAL_REQUESTED notification to host
+      await notify(NotificationEvent.APPROVAL_REQUESTED, {
+        organizationId: orgId,
+        visitorName: visitor.name,
+        visitorEmail: visitor.email,
+        visitorCompany: visitor.company || undefined,
+        hostName: hostEmployee.user.name,
+        hostEmail: hostEmployee.user.email,
+        hostUserId: hostEmployee.userId,
+        date: formattedDate,
+        time: `${invitation.startTime} - ${invitation.endTime}`,
+        location,
+        purpose: invitation.purpose,
+        approvalUrl: `${appUrl}/approvals`,
+        entityId: invitation.id,
+      }).catch(console.error);
+    } else {
+      // Dispatch standard invitation email to visitor
+      await notify(NotificationEvent.VISITOR_INVITED, {
+        organizationId: orgId,
+        visitorName: visitor.name,
+        visitorEmail: visitor.email,
+        visitorCompany: visitor.company || undefined,
+        hostName: hostEmployee.user.name,
+        hostEmail: hostEmployee.user.email,
+        hostUserId: hostEmployee.userId,
+        date: formattedDate,
+        time: `${invitation.startTime} - ${invitation.endTime}`,
+        location,
+        qrPassUrl: passUrl,
+        purpose: invitation.purpose,
+        entityId: invitation.id,
+      }).catch(console.error);
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Invitation generated and sent to visitor",
+      message: requiresApproval
+        ? "Invitation submitted for host approval"
+        : "Invitation generated and sent to visitor",
       data: invitation,
     });
   } catch (error) {

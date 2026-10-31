@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { LEGAL_VERSION } from "@/lib/legal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
@@ -19,6 +20,10 @@ export default async function DashboardLayout({
 
   if (currentUser.mustChangePassword) {
     redirect("/change-password");
+  }
+
+  if (currentUser.termsVersion !== LEGAL_VERSION) {
+    redirect("/accept-terms");
   }
 
   return (

@@ -23,13 +23,32 @@ export async function POST(request: Request) {
     const { token, password } = parsed.data;
     const tokenHash = hashToken(token);
 
+    // Atomic consumption: update only if unused and unexpired, require count === 1
+    const consumeResult = await prisma.passwordResetToken.updateMany({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    if (consumeResult.count !== 1) {
+      return NextResponse.json(
+        { success: false, error: "The password reset link is invalid, expired, or has already been used." },
+        { status: 400 }
+      );
+    }
+
     const resetRecord = await prisma.passwordResetToken.findUnique({
       where: { tokenHash },
     });
 
-    if (!resetRecord || resetRecord.expiresAt < new Date() || resetRecord.usedAt) {
+    if (!resetRecord) {
       return NextResponse.json(
-        { success: false, error: "The password reset link is invalid, expired, or has already been used." },
+        { success: false, error: "Password reset token record not found." },
         { status: 400 }
       );
     }
@@ -68,15 +87,20 @@ export async function POST(request: Request) {
         },
       });
 
-      // Mark token as used
-      await tx.passwordResetToken.update({
-        where: { id: resetRecord.id },
-        data: { usedAt: new Date() },
-      });
-
       // REVOKE ALL existing sessions for this user across all devices
       await tx.session.deleteMany({
         where: { userId: user.id },
+      });
+
+      // Invalidate all pending MagicLinkTokens for this email
+      await tx.magicLinkToken.updateMany({
+        where: {
+          email: user.email,
+          usedAt: null,
+        },
+        data: {
+          usedAt: new Date(),
+        },
       });
 
       // Write audit log
@@ -87,18 +111,19 @@ export async function POST(request: Request) {
           action: "PASSWORD_RESET",
           entity: "USER",
           entityId: user.id,
-          details: `Password reset successfully completed for ${user.email}. All active sessions invalidated.`,
+          details: `Password reset successfully completed for ${user.email}. All active sessions and magic links invalidated.`,
         },
       });
     });
 
-    // Send security notification email
-    await emailService.sendEmail(
-      {
-        to: user.email,
-        recipientName: user.name,
-        subject: "Your Entrivo Password Was Changed",
-        htmlContent: `
+    // Send security notification email (fire-and-forget)
+    emailService
+      .sendEmail(
+        {
+          to: user.email,
+          recipientName: user.name,
+          subject: "Your Entrivo Password Was Changed",
+          htmlContent: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
             <div style="margin-bottom: 24px; text-align: center;">
               <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
@@ -116,10 +141,13 @@ export async function POST(request: Request) {
             </p>
           </div>
         `,
-        textContent: `Your Entrivo password was changed on ${new Date().toUTCString()}. All active sessions were revoked.`,
-      },
-      user.id
-    );
+          textContent: `Your Entrivo password was changed on ${new Date().toUTCString()}. All active sessions were revoked.`,
+        },
+        user.id
+      )
+      .catch((err) => {
+        console.error("[ResetPassword] Email notification error:", err);
+      });
 
     return NextResponse.json({
       success: true,
@@ -133,4 +161,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

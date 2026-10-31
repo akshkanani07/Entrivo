@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashToken, createDatabaseSession, getClientIp } from "@/lib/auth";
+import { LEGAL_VERSION } from "@/lib/legal";
 
 const consumeSchema = z.object({
   token: z.string().min(10, "Valid token is required"),
@@ -21,13 +22,32 @@ export async function POST(request: Request) {
     const { token } = parsed.data;
     const tokenHash = hashToken(token);
 
+    // Atomic token consumption: prevent TOCTOU race conditions
+    const consumeResult = await prisma.magicLinkToken.updateMany({
+      where: {
+        tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    if (consumeResult.count !== 1) {
+      return NextResponse.json(
+        { success: false, error: "This sign-in link is invalid or has already been used." },
+        { status: 401 }
+      );
+    }
+
     const magicRecord = await prisma.magicLinkToken.findUnique({
       where: { tokenHash },
     });
 
-    if (!magicRecord || magicRecord.expiresAt < new Date() || magicRecord.usedAt) {
+    if (!magicRecord) {
       return NextResponse.json(
-        { success: false, error: "This sign-in link is invalid or has already been used." },
+        { success: false, error: "Sign-in token not found." },
         { status: 401 }
       );
     }
@@ -44,11 +64,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Invalidate token in DB
-    await prisma.magicLinkToken.update({
-      where: { id: magicRecord.id },
-      data: { usedAt: new Date() },
-    });
+    // First login terms acceptance
+    if (!user.termsAcceptedAt) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          termsAcceptedAt: new Date(),
+          termsVersion: LEGAL_VERSION,
+        },
+      });
+    }
 
     const ipAddress = getClientIp(request.headers);
     const userAgent = request.headers.get("user-agent") || "Magic Link Client";
@@ -102,4 +127,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

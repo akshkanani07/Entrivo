@@ -157,80 +157,122 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   // Generate badge number BEFORE the transaction
   const badgeNumber = await generateUniqueBadgeNumber(orgId);
 
-  // Serializable transaction: check + create atomically to prevent double check-in race
-  const checkIn = await prisma.$transaction(
-    async (tx) => {
-      // Re-check inside the transaction (serializable isolation prevents races)
-      const existing = await tx.checkIn.findFirst({
-        where: {
-          visitorId: invitation.visitorId,
-          status: "CHECKED_IN",
-          visitor: { organizationId: orgId },
-        },
-      });
+  // Ensure partial unique index on PostgreSQL (db push safe)
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "uniq_active_checkin_visitor"
+      ON "CheckIn" ("visitorId")
+      WHERE ("status" = 'CHECKED_IN');
+    `);
+  } catch {
+    /* Safe fallback if index already exists or table is locked */
+  }
 
-      if (existing) {
-        throw Object.assign(new Error("ALREADY_CHECKED_IN"), {
-          badgeNumber: existing.badgeNumber,
-          visitorName: invitation.visitor.name,
-        });
+  // Serializable transaction + retry loop: check + create atomically to prevent double check-in race
+  let checkIn;
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      checkIn = await prisma.$transaction(
+        async (tx) => {
+          // Re-check inside the transaction (serializable isolation prevents races)
+          const existing = await tx.checkIn.findFirst({
+            where: {
+              visitorId: invitation.visitorId,
+              status: "CHECKED_IN",
+              visitor: { organizationId: orgId },
+            },
+          });
+
+          if (existing) {
+            throw Object.assign(new Error("ALREADY_CHECKED_IN"), {
+              badgeNumber: existing.badgeNumber,
+              visitorName: invitation.visitor.name,
+            });
+          }
+
+          const created = await tx.checkIn.create({
+            data: {
+              visitorId: invitation.visitorId,
+              invitationId: invitation.id,
+              hostEmployeeId: invitation.hostEmployeeId,
+              badgeNumber,
+              badgeIssued: true,
+              status: "CHECKED_IN",
+              consentGiven: input.consentGiven ?? true,
+              consentVersion: input.consentVersion ?? "v1.0",
+              photoUrl: input.photoUrl ?? invitation.visitor.avatarUrl ?? null,
+              signatureUrl: input.signatureUrl ?? null,
+              receptionistName: input.receptionistName ?? input.actorName,
+              securityGuardName: input.actorName,
+            },
+            include: {
+              visitor: { include: { visitorType: true } },
+              hostEmployee: { include: { user: true, office: true } },
+            },
+          });
+
+          await tx.visitor.update({
+            where: { id: invitation.visitorId },
+            data: { consentGiven: true, consentVersion: input.consentVersion ?? "v1.0" },
+          });
+
+          await tx.badge.create({
+            data: {
+              badgeNumber,
+              visitorId: invitation.visitorId,
+              checkInId: created.id,
+              printCount: 1,
+              status: "ACTIVE",
+            },
+          });
+
+          await tx.invitation.update({
+            where: { id: invitation.id },
+            data: { status: "COMPLETED" },
+          });
+
+          await tx.securityLog.create({
+            data: {
+              organizationId: orgId,
+              logType: "VISITOR_CHECKIN",
+              description: `Visitor ${invitation.visitor.name} checked in (Badge ${badgeNumber}) for host ${invitation.hostEmployee.user.name}.`,
+              severity: "LOW",
+              guardName: input.actorName,
+            },
+          });
+
+          return created;
+        },
+        { isolationLevel: "Serializable" }
+      );
+      break;
+    } catch (err: any) {
+      if (err.message === "ALREADY_CHECKED_IN") {
+        return {
+          success: false,
+          error: `Visitor ${err.visitorName || "Guest"} is already checked in with Badge ${err.badgeNumber || ""}. Please check them out first.`,
+          status: 400,
+        };
       }
+      if (
+        (err.code === "P2034" ||
+          err.code === "40001" ||
+          err.message?.includes("could not serialize access") ||
+          err.message?.includes("deadlock detected")) &&
+        retries > 1
+      ) {
+        retries--;
+        await new Promise((r) => setTimeout(r, 50));
+        continue;
+      }
+      throw err;
+    }
+  }
 
-      const created = await tx.checkIn.create({
-        data: {
-          visitorId: invitation.visitorId,
-          invitationId: invitation.id,
-          hostEmployeeId: invitation.hostEmployeeId,
-          badgeNumber,
-          badgeIssued: true,
-          status: "CHECKED_IN",
-          consentGiven: input.consentGiven ?? true,
-          consentVersion: input.consentVersion ?? "v1.0",
-          photoUrl: input.photoUrl ?? invitation.visitor.avatarUrl ?? null,
-          signatureUrl: input.signatureUrl ?? null,
-          receptionistName: input.receptionistName ?? input.actorName,
-          securityGuardName: input.actorName,
-        },
-        include: {
-          visitor: { include: { visitorType: true } },
-          hostEmployee: { include: { user: true, office: true } },
-        },
-      });
-
-      await tx.visitor.update({
-        where: { id: invitation.visitorId },
-        data: { consentGiven: true, consentVersion: input.consentVersion ?? "v1.0" },
-      });
-
-      await tx.badge.create({
-        data: {
-          badgeNumber,
-          visitorId: invitation.visitorId,
-          checkInId: created.id,
-          printCount: 1,
-          status: "ACTIVE",
-        },
-      });
-
-      await tx.invitation.update({
-        where: { id: invitation.id },
-        data: { status: "COMPLETED" },
-      });
-
-      await tx.securityLog.create({
-        data: {
-          organizationId: orgId,
-          logType: "VISITOR_CHECKIN",
-          description: `Visitor ${invitation.visitor.name} checked in (Badge ${badgeNumber}) for host ${invitation.hostEmployee.user.name}.`,
-          severity: "LOW",
-          guardName: input.actorName,
-        },
-      });
-
-      return created;
-    },
-    { isolationLevel: "Serializable" }
-  );
+  if (!checkIn) {
+    return { success: false, error: "Failed to complete check-in transaction", status: 500 };
+  }
 
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {

@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createDatabaseSession, getClientIp } from "@/lib/auth";
+import { LEGAL_VERSION } from "@/lib/legal";
 
 const googleAuthSchema = z.object({
   credential: z.string().min(1, "Google credential token is required"),
@@ -77,6 +78,16 @@ export async function POST(request: Request) {
         },
         { status: 401 }
       );
+    }
+
+    if (!user.termsAcceptedAt) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          termsAcceptedAt: new Date(),
+          termsVersion: LEGAL_VERSION,
+        },
+      });
     }
 
     // Extract real IP and User-Agent
