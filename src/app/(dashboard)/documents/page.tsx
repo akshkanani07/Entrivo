@@ -1,11 +1,21 @@
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import prisma from "@/lib/db";
 import { DocumentsClient } from "@/components/documents/DocumentsClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function DocumentsPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("documents.read");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   let documents: any[] = [];
   let visitors: any[] = [];
@@ -13,12 +23,12 @@ export default async function DocumentsPage() {
   try {
     const [docs, vists] = await Promise.all([
       prisma.document.findMany({
-        where: orgId ? { visitor: { organizationId: orgId } } : {},
+        where: { visitor: { organizationId: orgId } },
         include: { visitor: true },
         orderBy: { createdAt: "desc" },
       }),
       prisma.visitor.findMany({
-        where: orgId ? { organizationId: orgId } : {},
+        where: { organizationId: orgId },
         select: { id: true, name: true, company: true },
         orderBy: { name: "asc" },
       }),

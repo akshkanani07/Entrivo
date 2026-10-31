@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -13,6 +15,10 @@ export default async function DashboardLayout({
 
   if (!currentUser) {
     redirect("/login");
+  }
+
+  if (currentUser.mustChangePassword) {
+    redirect("/change-password");
   }
 
   return (

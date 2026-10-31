@@ -3,7 +3,8 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, Building2, User, Mail, Lock, Phone, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { ShieldCheck, Building2, User, Mail, Lock, Phone, ArrowRight, Loader2, AlertCircle, CheckSquare, Square } from "lucide-react";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,10 +18,17 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [agreeTerms, setAgreeTerms] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.companyName || !formData.name || !formData.email || !formData.password) {
       setError("Please fill all required fields");
+      return;
+    }
+
+    if (!agreeTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy to register.");
       return;
     }
 
@@ -31,7 +39,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, agreeTerms }),
       });
 
       const data = await res.json();
@@ -146,14 +154,54 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            <div className="flex items-start gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setAgreeTerms(!agreeTerms)}
+                className="mt-0.5 text-indigo-400 hover:text-indigo-300 focus:outline-none"
+              >
+                {agreeTerms ? (
+                  <CheckSquare className="w-4 h-4 text-indigo-500 fill-indigo-950" />
+                ) : (
+                  <Square className="w-4 h-4 text-slate-500" />
+                )}
+              </button>
+              <label
+                onClick={() => setAgreeTerms(!agreeTerms)}
+                className="text-xs text-slate-400 cursor-pointer select-none leading-relaxed"
+              >
+                I agree to the Entrivo{" "}
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-indigo-400 hover:underline"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-indigo-400 hover:underline"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </label>
+            </div>
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreeTerms}
               className="w-full mt-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-glow flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Complete Free Setup & Launch"}
             </button>
           </form>
+
+          <GoogleSignInButton onError={(msg) => setError(msg)} />
 
           <div className="text-center mt-5 text-xs text-slate-500">
             Already registered?{" "}

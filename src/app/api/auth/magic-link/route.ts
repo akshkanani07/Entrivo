@@ -1,124 +1,147 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { hashToken, createDatabaseSession } from "@/lib/auth";
+import { hashToken, getClientIp } from "@/lib/auth";
+import { magicLinkRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
+
+const magicLinkRequestSchema = z.object({
+  email: z.string().email("A valid work email is required"),
+});
 
 export async function POST(request: Request) {
   try {
-    const { email } = await request.json();
+    const ip = getClientIp(request.headers);
+    const body = await request.json().catch(() => null);
+    const parsed = magicLinkRequestSchema.safeParse(body);
 
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid email" },
+        { status: 400 }
+      );
     }
 
+    const { email } = parsed.data;
     const cleanEmail = email.toLowerCase().trim();
+
+    // Rate-limit per IP AND per email (3 / 15 min)
+    const rateCheck = magicLinkRateLimiter(ip, cleanEmail);
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Too many magic link requests. Please try again in a few minutes.",
+        },
+        { status: 429 }
+      );
+    }
+
+    // Lookup user - Uniform response timing and content to prevent user enumeration
     const user = await prisma.user.findUnique({
       where: { email: cleanEmail },
       include: { organization: true },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: "No registered workplace account found with this email" }, { status: 404 });
+    if (user && user.isActive && !user.deletedAt) {
+      // Invalidate any older unused tokens for this email
+      await prisma.magicLinkToken.updateMany({
+        where: {
+          email: user.email,
+          usedAt: null,
+        },
+        data: {
+          usedAt: new Date(),
+        },
+      });
+
+      // Generate cryptographically secure 32-byte token
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+      await prisma.magicLinkToken.create({
+        data: {
+          email: user.email,
+          tokenHash,
+          expiresAt,
+        },
+      });
+
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      // Redirect target avoids immediate consumption by security scanners
+      const magicUrl = `${appUrl}/magic-link/confirm?token=${rawToken}`;
+
+      // In non-production or mock email mode, print to server console only
+      if (
+        process.env.NODE_ENV !== "production" ||
+        process.env.MAILJET_API_KEY?.startsWith("mock_")
+      ) {
+        console.log(`\n[SECURE SERVER CONSOLE] Magic Link for ${user.email}:\n${magicUrl}\n`);
+      }
+
+      // Dispatch branded HTML email via Mailjet
+      await emailService.sendEmail(
+        {
+          to: user.email,
+          recipientName: user.name,
+          subject: "Your Secure Entrivo Sign-In Link",
+          htmlContent: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
+              <div style="margin-bottom: 24px; text-align: center;">
+                <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
+                <p style="font-size: 11px; color: #818cf8; margin-top: 4px; font-weight: 600; text-transform: uppercase;">Workplace Access & Visitor Management</p>
+              </div>
+              <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Sign In to Your Workplace</h2>
+              <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
+                Hello ${user.name}, we received a sign-in request for your Entrivo account. Click the button below to authenticate securely:
+              </p>
+              <div style="text-align: center; margin-bottom: 28px;">
+                <a href="${magicUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">
+                  Continue to Entrivo &rarr;
+                </a>
+              </div>
+              <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; pt: 16px; margin: 0;">
+                This link will expire in 15 minutes and can only be used once. If you did not request this link, you can safely ignore this email.
+              </p>
+            </div>
+          `,
+          textContent: `Sign in to Entrivo: ${magicUrl}\nThis link expires in 15 minutes.`,
+        },
+        user.id
+      );
     }
 
-    // Generate cryptographically secure magic link token
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-
-    await prisma.magicLinkToken.create({
-      data: {
-        email: user.email,
-        tokenHash,
-        expiresAt,
-      },
-    });
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const magicUrl = `${appUrl}/api/auth/magic-link?token=${rawToken}`;
-
-    // Dispatch Mailjet email
-    await emailService.sendEmail(
-      {
-        to: user.email,
-        recipientName: user.name,
-        subject: "Your Entrivo Instant Magic Sign-In Link",
-        htmlContent: `
-          <div style="font-family: sans-serif; background: #0b0f19; color: #fff; padding: 24px; border-radius: 8px;">
-            <h2>Hello ${user.name},</h2>
-            <p>Click below to sign in to your Entrivo workplace terminal:</p>
-            <p><a href="${magicUrl}" style="display:inline-block; padding: 12px 24px; background: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px;">Sign In Instantly</a></p>
-            <p style="font-size: 11px; color: #94a3b8;">This magic link expires in 15 minutes.</p>
-          </div>
-        `,
-        textContent: `Sign in to Entrivo: ${magicUrl}`,
-      },
-      user.id
-    );
-
+    // ALWAYS return the exact same 200 response whether user exists or not.
+    // NEVER return magicUrl or token.
     return NextResponse.json({
       success: true,
-      message: "Magic sign-in link dispatched to your inbox",
-      magicUrl,
+      message: "If an account exists, a sign-in link was sent.",
     });
   } catch (error) {
-    console.error("Magic link error:", error);
-    return NextResponse.json({ error: "Failed to send magic link" }, { status: 500 });
+    console.error("Magic link dispatch error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to dispatch magic link" },
+      { status: 500 }
+    );
   }
 }
 
+/**
+ * GET Handler protects against email scanner auto-consumption:
+ * Redirects scanners and users to the confirmation landing page without consuming the token.
+ */
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const token = searchParams.get("token");
+  const { searchParams } = new URL(request.url);
+  const token = searchParams.get("token");
 
-    if (!token) {
-      return NextResponse.redirect(new URL("/login?error=InvalidToken", request.url));
-    }
-
-    const tokenHash = hashToken(token);
-    const magicRecord = await prisma.magicLinkToken.findUnique({
-      where: { tokenHash },
-    });
-
-    if (!magicRecord || magicRecord.expiresAt < new Date() || magicRecord.usedAt) {
-      return NextResponse.redirect(new URL("/login?error=ExpiredOrInvalidToken", request.url));
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: magicRecord.email },
-    });
-
-    if (!user || !user.isActive || user.deletedAt) {
-      return NextResponse.redirect(new URL("/login?error=AccountDisabled", request.url));
-    }
-
-    // Mark token as used
-    await prisma.magicLinkToken.update({
-      where: { id: magicRecord.id },
-      data: { usedAt: new Date() },
-    });
-
-    // Create session
-    const { token: sessionJwt } = await createDatabaseSession(user.id, {
-      device: "Magic Link Sign-In",
-      ipAddress: "127.0.0.1",
-      userAgent: "Email Client",
-    });
-
-    const response = NextResponse.redirect(new URL("/", request.url));
-    response.cookies.set("entrivo_session_token", sessionJwt, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
-  } catch (err) {
-    console.error("Magic link verification error:", err);
-    return NextResponse.redirect(new URL("/login?error=AuthenticationFailed", request.url));
+  if (!token) {
+    return NextResponse.redirect(new URL("/login?error=InvalidToken", request.url));
   }
+
+  // Redirect to user confirmation page to prevent scanner consumption
+  const confirmUrl = new URL("/magic-link/confirm", request.url);
+  confirmUrl.searchParams.set("token", token);
+  return NextResponse.redirect(confirmUrl);
 }

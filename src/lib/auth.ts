@@ -18,11 +18,65 @@ export interface SessionPayload {
   sessionId: string;
 }
 
-export function validatePasswordStrength(password: string): { valid: boolean; error?: string } {
-  if (password.length < 8) {
-    return { valid: false, error: "Password must be at least 8 characters long." };
+const COMMON_PASSWORDS = new Set([
+  "password123", "password1234", "password12345", "1234567890", "12345678901",
+  "welcome123", "welcome1234", "welcome2024", "welcome2025", "welcome2026",
+  "administrator", "changeme123", "iloveyou123", "qwerty1234", "qwertyuiop",
+  "letmein123", "sunshine123", "princess123", "football123", "monkey1234",
+  "shadow1234", "master1234", "dragon1234", "trustno123", "superman123",
+  "batman1234", "starwars123", "solo123456", "secret1234", "login12345",
+  "passcode123", "entrivo123", "entrivo2024", "entrivo2025", "entrivo2026",
+  "company123", "corporate123", "workplace123", "security123", "database123",
+  "network123", "system1234", "server1234", "default123", "temp123456",
+  "guest12345", "testing123", "test123456", "orange1234", "coffee1234",
+  "access1234", "freedom123", "freedom2024", "whatever12", "computer12",
+  "internet12", "matrix1234", "killer1234", "thunder123", "warrior123",
+  "harley1234", "hunter1234", "ranger1234", "target1234", "summer1234",
+  "winter1234", "spring1234", "autumn1234", "january123", "february12",
+  "march12345", "april12345", "may1234567", "june123456", "july123456",
+  "august1234", "september1", "october123", "november12", "december12",
+  "monday1234", "friday1234", "sunday1234", "london1234", "newyork123",
+  "tokyo12345", "paris12345", "berlin1234", "india12345", "america123",
+  "canada1234", "brazil1234", "champion12", "winner1234", "success123",
+  "money12345", "diamond123", "golden1234", "silver1234", "platinum12"
+]);
+
+export function validatePasswordStrength(
+  password: string,
+  email?: string
+): { valid: boolean; error?: string } {
+  if (!password || password.length < 10) {
+    return { valid: false, error: "Password must be at least 10 characters long." };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, error: "Password must contain at least one uppercase letter." };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, error: "Password must contain at least one lowercase letter." };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, error: "Password must contain at least one number." };
+  }
+  if (COMMON_PASSWORDS.has(password.toLowerCase())) {
+    return { valid: false, error: "Password is too common and easily guessed." };
+  }
+  if (email) {
+    const localPart = email.split("@")[0]?.toLowerCase().trim();
+    if (localPart && localPart.length >= 3 && password.toLowerCase().includes(localPart)) {
+      return { valid: false, error: "Password must not contain parts of your email address." };
+    }
   }
   return { valid: true };
+}
+
+export function getClientIp(headers: Headers): string {
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  const realIp = headers.get("x-real-ip");
+  if (realIp) return realIp.trim();
+  return "127.0.0.1";
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -127,6 +181,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       employeeId: user.employee?.id,
       employeeCode: user.employee?.employeeCode,
       designation: user.employee?.designation,
+      mustChangePassword: user.mustChangePassword,
     };
   } catch (error) {
     console.error("Error retrieving current user:", error);

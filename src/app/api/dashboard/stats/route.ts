@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("dashboard.view");
+    if (auth.response) return auth.response;
 
-    const orgId = user.organizationId;
-    const orgFilter = orgId ? { organizationId: orgId } : {};
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -22,7 +22,7 @@ export async function GET() {
     const currentlyCheckedIn = await prisma.checkIn.count({
       where: {
         status: "CHECKED_IN",
-        ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+        visitor: { organizationId },
       },
     });
 
@@ -30,7 +30,7 @@ export async function GET() {
     const todayTotal = await prisma.checkIn.count({
       where: {
         checkInTime: { gte: startOfToday, lte: endOfToday },
-        ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+        visitor: { organizationId },
       },
     });
 
@@ -38,7 +38,7 @@ export async function GET() {
     const checkedOutToday = await prisma.checkOut.count({
       where: {
         checkOutTime: { gte: startOfToday, lte: endOfToday },
-        ...(orgId ? { checkIn: { visitor: { organizationId: orgId } } } : {}),
+        checkIn: { visitor: { organizationId } },
       },
     });
 
@@ -46,7 +46,7 @@ export async function GET() {
     const pendingApprovals = await prisma.approval.count({
       where: {
         status: "PENDING",
-        ...(orgId ? { invitation: { organizationId: orgId } } : {}),
+        invitation: { organizationId },
       },
     });
 
@@ -55,7 +55,7 @@ export async function GET() {
       where: {
         scheduledDate: { gte: startOfToday },
         status: { in: ["APPROVED", "PENDING"] },
-        ...orgFilter,
+        organizationId,
       },
     });
 
@@ -71,7 +71,7 @@ export async function GET() {
       const count = await prisma.checkIn.count({
         where: {
           checkInTime: { gte: dayStart, lte: dayEnd },
-          ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+          visitor: { organizationId },
         },
       });
 
@@ -84,7 +84,7 @@ export async function GET() {
 
     // 7. Department Footfall
     const departments = await prisma.department.findMany({
-      where: orgFilter,
+      where: { organizationId },
       include: {
         employees: {
           include: {
@@ -98,38 +98,26 @@ export async function GET() {
     const departmentDistribution = departments.map((d, idx) => {
       const visitorCount = d.employees.reduce((acc, emp) => acc + emp.checkInsHosted.length, 0);
       return {
-        name: d.name.split("&")[0].trim(),
-        value: visitorCount || Math.floor(Math.random() * 5 + 2),
+        name: d.name,
+        value: visitorCount,
         color: colors[idx % colors.length],
       };
     });
 
-    // 8. Hourly Footfall
-    const hourlyFootfall = [
-      { hour: "08:00", visitors: 3 },
-      { hour: "10:00", visitors: 14 },
-      { hour: "12:00", visitors: 9 },
-      { hour: "14:00", visitors: 16 },
-      { hour: "16:00", visitors: 8 },
-      { hour: "18:00", visitors: 4 },
-    ];
-
     return NextResponse.json({
       success: true,
       stats: {
-        todayTotal,
         currentlyCheckedIn,
+        todayTotal,
+        checkedOutToday,
         pendingApprovals,
         upcomingMeetings,
-        expectedToday: todayTotal + upcomingMeetings,
-        checkedOutToday,
         trends,
         departmentDistribution,
-        hourlyFootfall,
       },
     });
   } catch (error) {
-    console.error("Dashboard stats error:", error);
-    return NextResponse.json({ error: "Failed to generate dashboard statistics" }, { status: 500 });
+    console.error("Dashboard Stats error:", error);
+    return NextResponse.json({ success: false, error: "Failed to load dashboard statistics" }, { status: 500 });
   }
 }

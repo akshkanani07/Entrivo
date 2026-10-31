@@ -1,6 +1,6 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import Link from "next/link";
 import {
   Users,
@@ -18,9 +18,11 @@ import {
 import { formatTime, formatDate } from "@/lib/utils";
 import { DashboardCharts } from "@/components/charts/DashboardCharts";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("dashboard.view");
+  const orgId = user.organizationId;
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -36,32 +38,40 @@ export default async function DashboardPage() {
   let todayInvitations: any[] = [];
   let dbOffline = false;
 
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
+
   try {
     // 1. Fetch Key Metrics
     const [c1, c2, c3, c4] = await Promise.all([
       prisma.checkIn.count({
         where: {
           status: "CHECKED_IN",
-          ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+          visitor: { organizationId: orgId },
         },
       }),
       prisma.checkIn.count({
         where: {
           checkInTime: { gte: startOfToday, lte: endOfToday },
-          ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+          visitor: { organizationId: orgId },
         },
       }),
       prisma.approval.count({
         where: {
           status: "PENDING",
-          ...(orgId ? { invitation: { organizationId: orgId } } : {}),
+          invitation: { organizationId: orgId },
         },
       }),
       prisma.invitation.count({
         where: {
           scheduledDate: { gte: startOfToday },
           status: { in: ["APPROVED", "PENDING"] },
-          ...(orgId ? { organizationId: orgId } : {}),
+          organizationId: orgId,
         },
       }),
     ]);
@@ -75,7 +85,7 @@ export default async function DashboardPage() {
     activeCheckIns = await prisma.checkIn.findMany({
       where: {
         status: "CHECKED_IN",
-        ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+        visitor: { organizationId: orgId },
       },
       include: {
         visitor: { include: { visitorType: true } },
@@ -90,7 +100,7 @@ export default async function DashboardPage() {
       where: {
         scheduledDate: { gte: startOfToday, lte: endOfToday },
         status: "APPROVED",
-        ...(orgId ? { organizationId: orgId } : {}),
+        organizationId: orgId,
       },
       include: {
         visitor: { include: { visitorType: true } },

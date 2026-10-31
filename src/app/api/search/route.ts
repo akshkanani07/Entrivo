@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireUser();
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") || "").trim();
@@ -16,13 +19,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, results: [] });
     }
 
-    const orgId = user.organizationId;
-    const orgFilter = orgId ? { organizationId: orgId } : {};
-
     const [visitors, employees, invitations, checkIns] = await Promise.all([
       prisma.visitor.findMany({
         where: {
-          ...orgFilter,
+          organizationId,
           OR: [
             { name: { contains: q, mode: "insensitive" } },
             { company: { contains: q, mode: "insensitive" } },
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       }),
       prisma.employee.findMany({
         where: {
-          ...orgFilter,
+          organizationId,
           OR: [
             { user: { name: { contains: q, mode: "insensitive" } } },
             { employeeCode: { contains: q, mode: "insensitive" } },
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       }),
       prisma.invitation.findMany({
         where: {
-          ...orgFilter,
+          organizationId,
           OR: [
             { qrToken: { contains: q, mode: "insensitive" } },
             { visitor: { name: { contains: q, mode: "insensitive" } } },
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       prisma.checkIn.findMany({
         where: {
           status: "CHECKED_IN",
-          ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+          visitor: { organizationId },
           OR: [
             { badgeNumber: { contains: q, mode: "insensitive" } },
             { visitor: { name: { contains: q, mode: "insensitive" } } },
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, results });
   } catch (error) {
-    console.error("Search API Error:", error);
-    return NextResponse.json({ error: "Failed to perform search" }, { status: 500 });
+    console.error("Global search error:", error);
+    return NextResponse.json({ success: false, error: "Search failed" }, { status: 500 });
   }
 }

@@ -1,15 +1,25 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { WalkinForm } from "./WalkinForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewWalkinPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("visitors.write");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   // Fetch host employees
   const employees = await prisma.employee.findMany({
-    where: orgId ? { organizationId: orgId } : {},
+    where: { organizationId: orgId },
     include: {
       user: { select: { id: true, name: true, email: true } },
       department: true,
@@ -20,7 +30,7 @@ export default async function NewWalkinPage() {
 
   // Fetch visitor types
   const visitorTypes = await prisma.visitorType.findMany({
-    where: orgId ? { organizationId: orgId } : {},
+    where: { organizationId: orgId },
     orderBy: { createdAt: "asc" },
   });
 

@@ -1,23 +1,45 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+
+const createVisitorSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("A valid email is required"),
+  phone: z.string().min(5, "Phone is required"),
+  company: z.string().optional(),
+  visitorTypeId: z.string().optional().nullable(),
+  idProofType: z.string().optional(),
+  idProofNumber: z.string().optional(),
+  avatarUrl: z.string().optional(),
+});
+
+const patchVisitorSchema = z.object({
+  id: z.string().min(1, "Visitor ID is required"),
+  isBlacklisted: z.boolean().optional(),
+  blacklistReason: z.string().optional(),
+  company: z.string().optional(),
+  visitorTypeId: z.string().optional().nullable(),
+  name: z.string().optional(),
+  phone: z.string().optional(),
+});
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("visitors.read");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
 
+    const orgId = orgCheck.organizationId;
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const typeId = searchParams.get("typeId") || "";
-    const status = searchParams.get("status") || "";
 
-    const where: any = {};
-    if (user.organizationId) {
-      where.organizationId = user.organizationId;
-    }
+    const where: Record<string, unknown> = {
+      organizationId: orgId,
+    };
 
     if (search) {
       where.OR = [
@@ -82,28 +104,43 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: formatted });
   } catch (error) {
     console.error("Visitors GET Error:", error);
-    return NextResponse.json({ error: "Failed to fetch visitors" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch visitors" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requirePermission("visitors.write");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const body = await request.json().catch(() => null);
+    const parsed = createVisitorSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json();
-    const { name, email, phone, company, visitorTypeId, idProofType, idProofNumber, avatarUrl } = body;
+    const { name, email, phone, company, visitorTypeId, idProofType, idProofNumber, avatarUrl } = parsed.data;
 
-    if (!name || !email || !phone) {
-      return NextResponse.json({ error: "Name, email, and phone are required" }, { status: 400 });
+    // Verify visitorTypeId if supplied
+    if (visitorTypeId) {
+      const vType = await prisma.visitorType.findFirst({
+        where: { id: visitorTypeId, organizationId: orgId },
+      });
+      if (!vType) {
+        return NextResponse.json({ success: false, error: "Invalid visitor type for organization" }, { status: 400 });
+      }
     }
 
-    // Check if blacklisted
+    // Check if blacklisted in organization
     const blacklisted = await prisma.blacklistVisitor.findFirst({
       where: {
-        organizationId: user.organizationId!,
+        organizationId: orgId,
         OR: [
           { email: email.toLowerCase().trim() },
           { phone: phone.trim() },
@@ -114,78 +151,106 @@ export async function POST(request: Request) {
 
     const visitor = await prisma.visitor.create({
       data: {
-        name,
+        name: name.trim(),
         email: email.toLowerCase().trim(),
         phone: phone.trim(),
-        company,
+        company: company?.trim() || null,
         visitorTypeId: visitorTypeId || null,
-        idProofType,
-        idProofNumber,
-        avatarUrl,
+        idProofType: idProofType || null,
+        idProofNumber: idProofNumber?.trim() || null,
+        avatarUrl: avatarUrl || null,
         isBlacklisted: Boolean(blacklisted),
         blacklistReason: blacklisted ? blacklisted.reason : null,
-        organizationId: user.organizationId!,
+        organizationId: orgId,
       },
       include: {
         visitorType: true,
       },
     });
 
-    return NextResponse.json({ success: true, data: visitor });
+    return NextResponse.json({ success: true, data: visitor, message: "Visitor created successfully" });
   } catch (error) {
     console.error("Create visitor error:", error);
-    return NextResponse.json({ error: "Failed to create visitor" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to create visitor" }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requirePermission("visitors.write");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const body = await request.json().catch(() => null);
+    const parsed = patchVisitorSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
-    const { id, isBlacklisted, blacklistReason } = await request.json();
+    const { id, isBlacklisted, blacklistReason, company, visitorTypeId, name, phone } = parsed.data;
 
-    if (!id) {
-      return NextResponse.json({ error: "Visitor ID is required" }, { status: 400 });
+    // Org-scoped lookup
+    const existing = await prisma.visitor.findFirst({
+      where: { id, organizationId: orgId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Visitor not found in organization." }, { status: 404 });
     }
 
     const updated = await prisma.visitor.update({
       where: { id },
       data: {
-        isBlacklisted: Boolean(isBlacklisted),
-        blacklistReason: isBlacklisted ? blacklistReason || "Flagged by security concierge" : null,
+        ...(name !== undefined ? { name: name.trim() } : {}),
+        ...(phone !== undefined ? { phone: phone.trim() } : {}),
+        ...(company !== undefined ? { company: company.trim() } : {}),
+        ...(visitorTypeId !== undefined ? { visitorTypeId } : {}),
+        ...(isBlacklisted !== undefined
+          ? {
+              isBlacklisted: Boolean(isBlacklisted),
+              blacklistReason: isBlacklisted ? blacklistReason || "Flagged by security concierge" : null,
+            }
+          : {}),
+      },
+      include: {
+        visitorType: true,
       },
     });
 
-    return NextResponse.json({ success: true, data: updated });
-  } catch (error: any) {
+    return NextResponse.json({ success: true, data: updated, message: "Visitor updated successfully" });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Failed to update visitor";
     console.error("Update visitor error:", error);
-    return NextResponse.json({ error: error.message || "Failed to update visitor" }, { status: 500 });
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("visitors.delete");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
 
+    const orgId = orgCheck.organizationId;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Visitor ID is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Visitor ID is required" }, { status: 400 });
     }
 
-    const visitor = await prisma.visitor.findUnique({
-      where: { id },
+    const visitor = await prisma.visitor.findFirst({
+      where: { id, organizationId: orgId },
     });
 
-    if (!visitor || visitor.organizationId !== user.organizationId) {
-      return NextResponse.json({ error: "Visitor not found" }, { status: 404 });
+    if (!visitor) {
+      return NextResponse.json({ success: false, error: "Visitor not found in organization" }, { status: 404 });
     }
 
     await prisma.visitor.delete({
@@ -193,8 +258,9 @@ export async function DELETE(request: Request) {
     });
 
     return NextResponse.json({ success: true, message: "Visitor record deleted successfully" });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Failed to delete visitor";
     console.error("Delete visitor error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete visitor" }, { status: 500 });
+    return NextResponse.json({ success: false, error: msg }, { status: 500 });
   }
 }

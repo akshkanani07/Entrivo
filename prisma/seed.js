@@ -125,8 +125,12 @@ async function main() {
     createdTypes[t.name] = vt;
   }
 
-  // 6. Users & Roles (password: admin123)
-  const passwordHash = await bcrypt.hash("admin123", 10);
+  // 6. Users & Roles
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(8).toString("hex") + "A1!";
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.log(`\n🔑 [SEED GENERATED PASSWORD]: ${seedPassword}\nUse this password to log in as seed administrators.\n`);
+  }
+  const passwordHash = await bcrypt.hash(seedPassword, 10);
 
   // Super Admin
   const superAdmin = await prisma.user.create({

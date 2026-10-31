@@ -1,14 +1,32 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { ApprovalsClient } from "./ApprovalsClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function ApprovalsPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("approvals.act");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
+
+  const whereClause: any = {
+    invitation: { organizationId: orgId },
+  };
+
+  if (user.role === "EMPLOYEE" && user.employeeId) {
+    whereClause.approverId = user.employeeId;
+  }
 
   const approvals = await prisma.approval.findMany({
-    where: orgId ? { invitation: { organizationId: orgId } } : {},
+    where: whereClause,
     include: {
       invitation: {
         include: {

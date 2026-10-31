@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, InvitationStatus, CheckInStatus, SecuritySeverity } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -188,7 +189,11 @@ async function main() {
   });
 
   // 7. Users & Roles
-  const passwordHash = await bcrypt.hash("admin123", 10);
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD || crypto.randomBytes(8).toString("hex") + "A1!";
+  if (!process.env.SEED_ADMIN_PASSWORD) {
+    console.log(`\n🔑 [SEED GENERATED PASSWORD]: ${seedPassword}\nUse this password to log in as seed administrators.\n`);
+  }
+  const passwordHash = await bcrypt.hash(seedPassword, 10);
 
   // Super Admin
   await prisma.user.create({

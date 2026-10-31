@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, revokeAllUserSessions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function POST() {
   try {
     const user = await getCurrentUser();
     if (user) {
+      await revokeAllUserSessions(user.id);
+
       await prisma.auditLog.create({
         data: {
           organizationId: user.organizationId,
@@ -22,6 +24,7 @@ export async function POST() {
     response.cookies.delete("entrivo_session_token");
     return response;
   } catch (error) {
-    return NextResponse.json({ error: "Failed to logout all devices" }, { status: 500 });
+    console.error("Logout all devices error:", error);
+    return NextResponse.json({ success: false, error: "Failed to logout all devices" }, { status: 500 });
   }
 }

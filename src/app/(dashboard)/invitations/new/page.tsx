@@ -1,24 +1,34 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { NewInvitationForm } from "./NewInvitationForm";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewInvitationPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("invitations.create");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   const [employees, rooms, visitorTypes] = await Promise.all([
     prisma.employee.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where: { organizationId: orgId },
       include: { user: { select: { name: true, email: true } }, department: true },
       orderBy: { user: { name: "asc" } },
     }),
     prisma.meetingRoom.findMany({
-      where: orgId ? { office: { branch: { organizationId: orgId } } } : {},
+      where: { office: { branch: { organizationId: orgId } } },
       orderBy: { name: "asc" },
     }),
     prisma.visitorType.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where: { organizationId: orgId },
       orderBy: { createdAt: "asc" },
     }),
   ]);

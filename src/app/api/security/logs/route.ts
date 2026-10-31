@@ -1,16 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("securityLogs.read");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const logs = await prisma.securityLog.findMany({
-      where: user.organizationId ? { organizationId: user.organizationId } : {},
+      where: { organizationId },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
@@ -18,6 +21,6 @@ export async function GET() {
     return NextResponse.json({ success: true, data: logs });
   } catch (error) {
     console.error("Security Logs GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch security logs" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch security logs" }, { status: 500 });
   }
 }

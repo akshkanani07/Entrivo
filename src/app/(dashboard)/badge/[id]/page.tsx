@@ -1,11 +1,13 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { notFound } from "next/navigation";
 import { BadgeCard } from "@/components/visitor/BadgeCard";
 import { formatDateTime } from "@/lib/utils";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 
 export default async function BadgePage({
   params,
@@ -13,10 +15,17 @@ export default async function BadgePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await getCurrentUser();
+  const user = await requirePagePermission("visitors.read");
 
-  const checkIn = await prisma.checkIn.findUnique({
-    where: { id },
+  if (!user.organizationId) {
+    notFound();
+  }
+
+  const checkIn = await prisma.checkIn.findFirst({
+    where: {
+      id,
+      visitor: { organizationId: user.organizationId },
+    },
     include: {
       visitor: { include: { visitorType: true } },
       hostEmployee: { include: { user: true, office: true } },

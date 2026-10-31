@@ -25,9 +25,19 @@ import {
   Webhook,
 } from "lucide-react";
 import { CurrentUser } from "@/types";
+import { can, Permission } from "@/lib/rbac-base";
 
 interface SidebarProps {
   currentUser?: CurrentUser | null;
+}
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permission?: Permission;
+  highlight?: boolean;
+  targetBlank?: boolean;
 }
 
 export function Sidebar({ currentUser }: SidebarProps) {
@@ -46,25 +56,30 @@ export function Sidebar({ currentUser }: SidebarProps) {
     }
   };
 
-  const navItems = [
-    { label: "Dashboard", href: "/", icon: LayoutDashboard },
-    { label: "Visitors", href: "/visitors", icon: Users },
-    { label: "New Walk-in", href: "/visitors/new", icon: UserPlus, highlight: true },
-    { label: "Invitations", href: "/invitations", icon: MailCheck },
-    { label: "Check-In Desk", href: "/checkin", icon: QrCode },
-    { label: "Security Gate", href: "/security", icon: ShieldAlert },
-    { label: "Approvals", href: "/approvals", icon: ClipboardCheck },
-    { label: "Documents", href: "/documents", icon: FileText },
-    { label: "Meeting Rooms", href: "/meeting-rooms", icon: Video },
-    { label: "Host Employees", href: "/employees", icon: Building2 },
+  const navItems: NavItem[] = [
+    { label: "Dashboard", href: "/", icon: LayoutDashboard, permission: "dashboard.view" },
+    { label: "Visitors", href: "/visitors", icon: Users, permission: "visitors.read" },
+    { label: "New Walk-in", href: "/visitors/new", icon: UserPlus, permission: "walkin.create", highlight: true },
+    { label: "Invitations", href: "/invitations", icon: MailCheck, permission: "invitations.read.own" },
+    { label: "Check-In Desk", href: "/checkin", icon: QrCode, permission: "checkin.perform" },
+    { label: "Security Gate", href: "/security", icon: ShieldAlert, permission: "securityLogs.read" },
+    { label: "Approvals", href: "/approvals", icon: ClipboardCheck, permission: "approvals.act" },
+    { label: "Documents", href: "/documents", icon: FileText, permission: "documents.read" },
+    { label: "Meeting Rooms", href: "/meeting-rooms", icon: Video, permission: "meetingRooms.read" },
+    { label: "Host Employees", href: "/employees", icon: Building2, permission: "employees.read" },
     { label: "Self Kiosk", href: "/kiosk", icon: Tablet, targetBlank: true },
-    { label: "Notifications", href: "/notifications", icon: BellRing },
-    { label: "Reports & Logs", href: "/reports", icon: BarChart3 },
-    { label: "Organization", href: "/organization", icon: Building2 },
-    { label: "Audit Trail", href: "/audit-logs", icon: Activity },
-    { label: "Integrations", href: "/integrations", icon: Webhook },
-    { label: "Settings", href: "/settings", icon: Settings },
+    { label: "Notifications", href: "/notifications", icon: BellRing, permission: "notifications.self" },
+    { label: "Reports & Logs", href: "/reports", icon: BarChart3, permission: "reports.view" },
+    { label: "Organization", href: "/organization", icon: Building2, permission: "org.manage" },
+    { label: "Audit Trail", href: "/audit-logs", icon: Activity, permission: "audit.read" },
+    { label: "Integrations", href: "/integrations", icon: Webhook, permission: "integrations.manage" },
+    { label: "Settings", href: "/settings", icon: Settings, permission: "settings.manage" },
   ];
+
+  const allowedNavItems = navItems.filter((item) => {
+    if (!item.permission) return true;
+    return can(currentUser, item.permission);
+  });
 
   return (
     <aside className="w-64 bg-[#0a0f1d] border-r border-indigo-950/60 flex flex-col h-screen fixed left-0 top-0 z-30 select-none">
@@ -94,7 +109,7 @@ export function Sidebar({ currentUser }: SidebarProps) {
           Workplace Operations
         </div>
 
-        {navItems.map((item) => {
+        {allowedNavItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
 
@@ -143,6 +158,15 @@ export function Sidebar({ currentUser }: SidebarProps) {
           >
             <LogOut className="w-4 h-4" />
           </button>
+        </div>
+        <div className="flex items-center justify-center gap-3 pt-2 text-[10px] text-slate-500">
+          <Link href="/terms" className="hover:text-slate-300 transition-colors">
+            Terms
+          </Link>
+          <span>•</span>
+          <Link href="/privacy" className="hover:text-slate-300 transition-colors">
+            Privacy
+          </Link>
         </div>
       </div>
     </aside>

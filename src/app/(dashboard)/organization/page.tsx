@@ -1,6 +1,6 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import {
   Building2,
   MapPin,
@@ -13,12 +13,22 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default async function OrganizationPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("org.manage");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   const org = await prisma.organization.findUnique({
-    where: { id: orgId || "" },
+    where: { id: orgId },
     include: {
       branches: {
         include: {

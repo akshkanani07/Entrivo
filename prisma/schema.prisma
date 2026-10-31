@@ -156,6 +156,8 @@ model User {
   isActive           Boolean      @default(true)
   organizationId     String?
   organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mustChangePassword Boolean      @default(false)
+  passwordChangedAt  DateTime?
   deletedAt          DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -202,6 +204,7 @@ model PasswordResetToken {
   id        String    @id @default(cuid())
   email     String
   tokenHash String    @unique
+  purpose   String    @default("RESET")
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())

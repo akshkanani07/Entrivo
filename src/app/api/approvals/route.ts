@@ -1,16 +1,34 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+
+const approvalActionSchema = z.object({
+  approvalId: z.string().min(1, "Approval ID is required"),
+  action: z.enum(["APPROVED", "REJECTED"]),
+  comments: z.string().optional(),
+});
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("approvals.act");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
 
-    const where: any = {};
-    if (user.role === "EMPLOYEE" && user.employeeId) {
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const where: Record<string, unknown> = {
+      invitation: { organizationId: orgId },
+    };
+
+    // Employees can only view approvals assigned to them
+    if (user.role === "EMPLOYEE") {
+      if (!user.employeeId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
       where.approverId = user.employeeId;
     }
 
@@ -21,6 +39,7 @@ export async function GET() {
           include: {
             visitor: { include: { visitorType: true } },
             hostEmployee: { include: { user: true } },
+            meetingRoom: true,
           },
         },
       },
@@ -30,47 +49,112 @@ export async function GET() {
     return NextResponse.json({ success: true, data: approvals });
   } catch (error) {
     console.error("Approvals GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch approvals" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch approvals" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requirePermission("approvals.act");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const body = await request.json().catch(() => null);
+    const parsed = approvalActionSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid approval payload" },
+        { status: 400 }
+      );
     }
 
-    const { approvalId, action, comments } = await request.json();
+    const { approvalId, action, comments } = parsed.data;
 
-    if (!approvalId || !["APPROVED", "REJECTED"].includes(action)) {
-      return NextResponse.json({ error: "Approval ID and valid action (APPROVED/REJECTED) are required" }, { status: 400 });
-    }
-
-    const approval = await prisma.approval.update({
-      where: { id: approvalId },
-      data: {
-        status: action,
-        comments,
-        approvedAt: new Date(),
+    // Load approval strictly scoped by organization
+    const approval = await prisma.approval.findFirst({
+      where: {
+        id: approvalId,
+        invitation: { organizationId: orgId },
       },
       include: {
-        invitation: true,
+        invitation: {
+          include: { visitor: true },
+        },
       },
     });
 
-    if (approval.invitationId) {
-      await prisma.invitation.update({
-        where: { id: approval.invitationId },
-        data: {
-          status: action === "APPROVED" ? "APPROVED" : "REJECTED",
-        },
-      });
+    if (!approval) {
+      return NextResponse.json(
+        { success: false, error: "Approval record not found in organization." },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ success: true, data: approval });
+    if (approval.status !== "PENDING") {
+      return NextResponse.json(
+        { success: false, error: `This request has already been decided (${approval.status}).` },
+        { status: 400 }
+      );
+    }
+
+    // Role-specific check: Employees can only decide their own approval requests
+    const isAdminOrGuard = user.role === "SUPER_ADMIN" || user.role === "ORG_ADMIN" || user.role === "SECURITY_GUARD";
+    if (!isAdminOrGuard && approval.approverId !== user.employeeId) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: You are only permitted to decide approvals assigned to you." },
+        { status: 403 }
+      );
+    }
+
+    // Execute state transitions in one atomic transaction
+    const updatedApproval = await prisma.$transaction(async (tx) => {
+      const updated = await tx.approval.update({
+        where: { id: approval.id },
+        data: {
+          status: action,
+          comments: comments?.trim() || null,
+          approvedAt: new Date(),
+        },
+        include: { invitation: true },
+      });
+
+      if (approval.invitationId) {
+        await tx.invitation.update({
+          where: { id: approval.invitationId },
+          data: {
+            status: action === "APPROVED" ? "APPROVED" : "REJECTED",
+          },
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: orgId,
+          userId: user.id,
+          action: action === "APPROVED" ? "APPROVAL_GRANTED" : "APPROVAL_REJECTED",
+          entity: "APPROVAL",
+          entityId: approval.id,
+          details: `Approval for visitor ${approval.invitation?.visitor?.name || "guest"} ${action.toLowerCase()} by ${user.name} (${user.role}).`,
+        },
+      });
+
+      return updated;
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: updatedApproval,
+      message: `Request successfully ${action.toLowerCase()}.`,
+    });
   } catch (error) {
     console.error("Approval action error:", error);
-    return NextResponse.json({ error: "Failed to update approval" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Failed to record approval decision" },
+      { status: 500 }
+    );
   }
 }

@@ -1,30 +1,63 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAnyPermission, can } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 import { generateVisitorToken } from "@/lib/qr";
 import { emailService } from "@/services/email/mailjet.service";
 import { generateVisitorInvitationEmail } from "@/services/email/email.templates";
-import { whatsappService } from "@/services/whatsapp/whatsapp.service";
 import { formatDate } from "@/lib/utils";
+
+const createInvitationSchema = z.object({
+  visitorName: z.string().min(1, "Visitor name is required"),
+  visitorEmail: z.string().email("Valid visitor email is required"),
+  visitorPhone: z.string().min(5, "Visitor phone is required"),
+  visitorCompany: z.string().optional(),
+  visitorTypeId: z.string().optional().nullable(),
+  hostEmployeeId: z.string().optional(),
+  scheduledDate: z.string().min(1, "Scheduled date is required"),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  purpose: z.string().min(1, "Purpose is required"),
+  meetingRoomId: z.string().optional().nullable(),
+  notes: z.string().optional(),
+});
+
+const patchInvitationSchema = z.object({
+  id: z.string().min(1, "Invitation ID is required"),
+  scheduledDate: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  purpose: z.string().optional(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "EXPIRED"]).optional(),
+  meetingRoomId: z.string().optional().nullable(),
+  notes: z.string().optional(),
+});
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAnyPermission(["invitations.read.all", "invitations.read.own"]);
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
     const date = searchParams.get("date");
 
-    const where: any = {};
-    if (user.organizationId) {
-      where.organizationId = user.organizationId;
-    }
+    const where: Record<string, unknown> = {
+      organizationId: orgId,
+    };
 
-    // If logged-in user is an employee, show their hosted invitations, unless admin/receptionist
-    if (user.role === "EMPLOYEE" && user.employeeId) {
+    // If caller cannot read all invitations, restrict strictly to their own hosted invitations
+    const canReadAll = can(user, "invitations.read.all");
+    if (!canReadAll) {
+      if (!user.employeeId) {
+        return NextResponse.json({ success: true, data: [] });
+      }
       where.hostEmployeeId = user.employeeId;
     }
 
@@ -53,18 +86,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: invitations });
   } catch (error) {
     console.error("Invitations GET Error:", error);
-    return NextResponse.json({ error: "Failed to fetch invitations" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch invitations" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAnyPermission(["invitations.create"]);
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const body = await request.json().catch(() => null);
+    const parsed = createInvitationSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json();
     const {
       visitorName,
       visitorEmail,
@@ -73,32 +117,58 @@ export async function POST(request: Request) {
       visitorTypeId,
       hostEmployeeId,
       scheduledDate,
-      startTime,
-      endTime,
+      startTime = "10:00",
+      endTime = "11:00",
       purpose,
       meetingRoomId,
       notes,
-    } = body;
+    } = parsed.data;
 
-    if (!visitorName || !visitorEmail || !visitorPhone || !scheduledDate || !purpose) {
-      return NextResponse.json({ error: "Missing required invitation fields" }, { status: 400 });
-    }
-
-    const orgId = user.organizationId!;
-
-    // 1. Resolve Host Employee
+    // Resolve Host Employee scoped to org
     let effectiveHostId = hostEmployeeId;
-    if (!effectiveHostId && user.employeeId) {
+    if (user.role === "EMPLOYEE") {
+      // Employees must host under their own employee profile
+      if (!user.employeeId) {
+        return NextResponse.json(
+          { success: false, error: "No employee profile linked to your user account." },
+          { status: 400 }
+        );
+      }
       effectiveHostId = user.employeeId;
+    } else if (!effectiveHostId) {
+      if (user.employeeId) {
+        effectiveHostId = user.employeeId;
+      } else {
+        const defaultEmp = await prisma.employee.findFirst({ where: { organizationId: orgId } });
+        if (defaultEmp) effectiveHostId = defaultEmp.id;
+      }
     }
 
     if (!effectiveHostId) {
-      // Find an employee in the org
-      const anyEmp = await prisma.employee.findFirst({ where: { organizationId: orgId } });
-      if (anyEmp) effectiveHostId = anyEmp.id;
+      return NextResponse.json({ success: false, error: "Host employee could not be resolved in organization." }, { status: 400 });
     }
 
-    // 2. Find or create visitor
+    // Verify host employee belongs to this organization
+    const hostEmployee = await prisma.employee.findFirst({
+      where: { id: effectiveHostId, organizationId: orgId },
+      include: { user: true, office: true },
+    });
+
+    if (!hostEmployee) {
+      return NextResponse.json({ success: false, error: "Host employee not found in organization." }, { status: 400 });
+    }
+
+    // Verify meeting room if supplied
+    if (meetingRoomId) {
+      const room = await prisma.meetingRoom.findFirst({
+        where: { id: meetingRoomId, office: { branch: { organizationId: orgId } } },
+      });
+      if (!room) {
+        return NextResponse.json({ success: false, error: "Meeting room not found in organization." }, { status: 400 });
+      }
+    }
+
+    // Find or create visitor scoped to organization
     let visitor = await prisma.visitor.findFirst({
       where: {
         organizationId: orgId,
@@ -109,22 +179,21 @@ export async function POST(request: Request) {
     if (!visitor) {
       visitor = await prisma.visitor.create({
         data: {
-          name: visitorName,
+          name: visitorName.trim(),
           email: visitorEmail.toLowerCase().trim(),
           phone: visitorPhone.trim(),
-          company: visitorCompany || "Guest",
+          company: visitorCompany?.trim() || "Guest",
           visitorTypeId: visitorTypeId || null,
           organizationId: orgId,
         },
       });
     }
 
-    // 3. Generate QR token
+    // Generate unique QR token
     const qrToken = generateVisitorToken("INV");
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const passUrl = `${appUrl}/pass/${qrToken}`;
 
-    // 4. Create Invitation
     const invitation = await prisma.invitation.create({
       data: {
         organizationId: orgId,
@@ -132,13 +201,13 @@ export async function POST(request: Request) {
         visitorId: visitor.id,
         meetingRoomId: meetingRoomId || null,
         scheduledDate: new Date(scheduledDate),
-        startTime: startTime || "10:00",
-        endTime: endTime || "11:00",
-        purpose,
-        notes,
+        startTime,
+        endTime,
+        purpose: purpose.trim(),
+        notes: notes?.trim() || null,
         qrToken,
         passUrl,
-        status: "APPROVED", // Auto-approved for employee invites
+        status: "APPROVED",
       },
       include: {
         visitor: true,
@@ -148,16 +217,15 @@ export async function POST(request: Request) {
       },
     });
 
-    // 5. Send Email Invitation
-    const hostName = invitation.hostEmployee.user.name;
+    // Send Email Invitation
     const formattedDate = formatDate(invitation.scheduledDate);
     const location = invitation.meetingRoom?.name || invitation.hostEmployee.office?.name || invitation.organization.name;
 
-    emailService.sendEmail(
+    await emailService.sendEmail(
       generateVisitorInvitationEmail({
         visitorName: visitor.name,
         visitorEmail: visitor.email,
-        hostName,
+        hostName: hostEmployee.user.name,
         companyName: invitation.organization.name,
         date: formattedDate,
         time: `${invitation.startTime} - ${invitation.endTime}`,
@@ -167,17 +235,6 @@ export async function POST(request: Request) {
       })
     ).catch(console.error);
 
-    // 6. Send WhatsApp Invitation
-    whatsappService.sendVisitorInvitation({
-      phone: visitor.phone,
-      visitorName: visitor.name,
-      hostName,
-      date: formattedDate,
-      time: `${invitation.startTime} - ${invitation.endTime}`,
-      location,
-      qrPassUrl: passUrl,
-    }).catch(console.error);
-
     return NextResponse.json({
       success: true,
       message: "Invitation generated and sent to visitor",
@@ -185,6 +242,119 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Create invitation error:", error);
-    return NextResponse.json({ error: "Failed to create invitation" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to create invitation" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const auth = await requireAnyPermission(["invitations.create", "invitations.read.own"]);
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const body = await request.json().catch(() => null);
+    const parsed = patchInvitationSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    const { id, scheduledDate, startTime, endTime, purpose, status, meetingRoomId, notes } = parsed.data;
+
+    // Load existing invitation scoped to org
+    const existing = await prisma.invitation.findFirst({
+      where: { id, organizationId: orgId },
+      include: { hostEmployee: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Invitation not found in organization." }, { status: 404 });
+    }
+
+    // Role check: Employees can only reschedule or cancel their own invitations
+    if (user.role === "EMPLOYEE" && existing.hostEmployeeId !== user.employeeId) {
+      return NextResponse.json({ success: false, error: "Forbidden: You may only modify your own invitations." }, { status: 403 });
+    }
+
+    // Verify meeting room if updated
+    if (meetingRoomId) {
+      const room = await prisma.meetingRoom.findFirst({
+        where: { id: meetingRoomId, office: { branch: { organizationId: orgId } } },
+      });
+      if (!room) {
+        return NextResponse.json({ success: false, error: "Meeting room not found in organization." }, { status: 400 });
+      }
+    }
+
+    const updated = await prisma.invitation.update({
+      where: { id },
+      data: {
+        ...(scheduledDate ? { scheduledDate: new Date(scheduledDate) } : {}),
+        ...(startTime ? { startTime } : {}),
+        ...(endTime ? { endTime } : {}),
+        ...(purpose ? { purpose: purpose.trim() } : {}),
+        ...(status ? { status } : {}),
+        ...(meetingRoomId !== undefined ? { meetingRoomId } : {}),
+        ...(notes !== undefined ? { notes: notes?.trim() || null } : {}),
+      },
+      include: {
+        visitor: true,
+        hostEmployee: { include: { user: true } },
+        meetingRoom: true,
+      },
+    });
+
+    return NextResponse.json({ success: true, data: updated, message: "Invitation updated successfully." });
+  } catch (error) {
+    console.error("Update invitation error:", error);
+    return NextResponse.json({ success: false, error: "Failed to update invitation" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const auth = await requireAnyPermission(["invitations.create", "invitations.read.own"]);
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Invitation ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.invitation.findFirst({
+      where: { id, organizationId: orgId },
+      include: { hostEmployee: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Invitation not found in organization" }, { status: 404 });
+    }
+
+    if (user.role === "EMPLOYEE" && existing.hostEmployeeId !== user.employeeId) {
+      return NextResponse.json({ success: false, error: "Forbidden: You may only cancel your own invitations." }, { status: 403 });
+    }
+
+    // Cancel invitation
+    await prisma.invitation.update({
+      where: { id },
+      data: { status: "CANCELLED" },
+    });
+
+    return NextResponse.json({ success: true, message: "Invitation cancelled successfully" });
+  } catch (error) {
+    console.error("Cancel invitation error:", error);
+    return NextResponse.json({ success: false, error: "Failed to cancel invitation" }, { status: 500 });
   }
 }

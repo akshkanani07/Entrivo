@@ -1,21 +1,32 @@
 import { NextResponse } from "next/server";
 import { emailService } from "@/services/email/mailjet.service";
 import { generateVisitorInvitationEmail } from "@/services/email/email.templates";
+import { requirePermission } from "@/lib/rbac";
+import { z } from "zod";
+
+const testEmailSchema = z.object({
+  to: z.string().email("A valid email address is required"),
+});
 
 export async function POST(request: Request) {
   try {
-    const { to } = await request.json();
+    const auth = await requirePermission("templates.manage");
+    if (auth.response) return auth.response;
 
-    if (!to || !to.includes("@")) {
-      return NextResponse.json({ error: "A valid 'to' email address is required." }, { status: 400 });
+    const body = await request.json();
+    const parsed = testEmailSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
     }
+
+    const { to } = parsed.data;
 
     const result = await emailService.sendEmail(
       generateVisitorInvitationEmail({
         visitorName: "Test Guest",
         visitorEmail: to,
-        hostName: "Marcus Vance",
-        companyName: "Entrivo Global",
+        hostName: auth.user.name || "Marcus Vance",
+        companyName: auth.user.organizationName || "Entrivo Global",
         date: "Today",
         time: "11:00 AM",
         location: "Boardroom Alpha",
@@ -26,6 +37,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, result });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to send test email" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to send test email" }, { status: 500 });
   }
 }

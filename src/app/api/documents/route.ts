@@ -1,54 +1,79 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+import { z } from "zod";
 
-export async function GET(request: Request) {
+const createDocSchema = z.object({
+  visitorId: z.string().optional(),
+  title: z.string().min(1, "Document title is required"),
+  docType: z.string().optional(),
+  fileUrl: z.string().optional(),
+  expiryDate: z.string().datetime().optional().nullable(),
+});
+
+export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("documents.read");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const documents = await prisma.document.findMany({
-      where: user.organizationId ? { visitor: { organizationId: user.organizationId }, deletedAt: null } : { deletedAt: null },
+      where: {
+        visitor: { organizationId },
+        deletedAt: null,
+      },
       include: { visitor: true },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ success: true, data: documents });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Documents GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch documents" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch documents" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requirePermission("documents.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
+
+    const body = await request.json();
+    const parsed = createDocSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
     }
 
-    const { visitorId, title, docType, fileUrl, expiryDate } = await request.json();
+    const { visitorId, title, docType, fileUrl, expiryDate } = parsed.data;
 
-    if (!title) {
-      return NextResponse.json({ error: "Document title is required" }, { status: 400 });
-    }
-
-    // If visitorId not passed, find any visitor in org or create one
     let targetVisitorId = visitorId;
-    if (!targetVisitorId) {
+    if (targetVisitorId) {
+      const visitor = await prisma.visitor.findFirst({
+        where: { id: targetVisitorId, organizationId },
+      });
+      if (!visitor) {
+        return NextResponse.json({ success: false, error: "Visitor not found in organization" }, { status: 404 });
+      }
+    } else {
       let visitor = await prisma.visitor.findFirst({
-        where: { organizationId: user.organizationId },
+        where: { organizationId },
       });
       if (!visitor) {
         visitor = await prisma.visitor.create({
           data: {
-            name: user.name || "Workplace Visitor",
-            email: user.email,
-            phone: user.phone || "+91 99999 00000",
-            company: user.organizationName || "General",
-            organizationId: user.organizationId,
+            name: auth.user.name || "Workplace Visitor",
+            email: auth.user.email,
+            phone: auth.user.phone || "+91 99999 00000",
+            company: auth.user.organizationName || "General",
+            organizationId,
           },
         });
       }
@@ -70,40 +95,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: doc });
   } catch (error: any) {
     console.error("Document create error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create document" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to create document" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("documents.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Document ID is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Document ID is required" }, { status: 400 });
     }
 
-    const doc = await prisma.document.findUnique({
-      where: { id },
-      include: { visitor: true },
+    const doc = await prisma.document.findFirst({
+      where: {
+        id,
+        visitor: { organizationId },
+      },
     });
 
-    if (!doc || doc.visitor.organizationId !== user.organizationId) {
-      return NextResponse.json({ error: "Document not found" }, { status: 404 });
+    if (!doc) {
+      return NextResponse.json({ success: false, error: "Document not found" }, { status: 404 });
     }
 
     await prisma.document.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true, message: "Document removed successfully" });
+    return NextResponse.json({ success: true, message: "Document deleted successfully" });
   } catch (error: any) {
     console.error("Document delete error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete document" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete document" }, { status: 500 });
   }
 }

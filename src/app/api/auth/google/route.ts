@@ -1,38 +1,92 @@
 import { NextResponse } from "next/server";
+import { OAuth2Client } from "google-auth-library";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { createDatabaseSession } from "@/lib/auth";
+import { createDatabaseSession, getClientIp } from "@/lib/auth";
+
+const googleAuthSchema = z.object({
+  credential: z.string().min(1, "Google credential token is required"),
+});
 
 export async function POST(request: Request) {
   try {
-    const { email, name } = await request.json();
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
 
-    const targetEmail = (email || "marcus.vance@entrivo.com").toLowerCase().trim();
+    // Check if Google OAuth is configured and not a mock placeholder
+    if (!googleClientId || googleClientId.trim() === "" || googleClientId.startsWith("mock_")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Google Sign-In is not configured on this Entrivo instance.",
+        },
+        { status: 501 }
+      );
+    }
 
-    let user = await prisma.user.findUnique({
+    const body = await request.json().catch(() => null);
+    const parsed = googleAuthSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: parsed.error.errors[0]?.message || "Invalid Google credentials format.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { credential } = parsed.data;
+
+    // Verify token with google-auth-library
+    const client = new OAuth2Client(googleClientId);
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: googleClientId,
+      });
+    } catch (err: unknown) {
+      console.error("Google token verification failed:", err);
+      return NextResponse.json(
+        { success: false, error: "Invalid, expired, or untrusted Google credential token." },
+        { status: 401 }
+      );
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email || payload.email_verified !== true) {
+      return NextResponse.json(
+        { success: false, error: "Google account email is unverified or missing." },
+        { status: 401 }
+      );
+    }
+
+    const targetEmail = payload.email.toLowerCase().trim();
+
+    // NEVER auto-create users into a random org. Only sign in existing active user.
+    const user = await prisma.user.findUnique({
       where: { email: targetEmail },
       include: { organization: true, employee: true },
     });
 
-    if (!user) {
-      // Find default org
-      const org = await prisma.organization.findFirst();
-      user = await prisma.user.create({
-        data: {
-          email: targetEmail,
-          name: name || "Google Enterprise User",
-          passwordHash: "oauth_authenticated_user",
-          role: "EMPLOYEE",
-          organizationId: org?.id || null,
-          isEmailVerified: true,
+    if (!user || !user.isActive || user.deletedAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No Entrivo account is linked to this Google email. Ask your administrator or register your company.",
         },
-        include: { organization: true, employee: true },
-      });
+        { status: 401 }
+      );
     }
+
+    // Extract real IP and User-Agent
+    const ipAddress = getClientIp(request.headers);
+    const userAgent = request.headers.get("user-agent") || "Google SSO Client";
 
     const { token, sessionId } = await createDatabaseSession(user.id, {
       device: "Google Enterprise SSO",
-      ipAddress: "127.0.0.1",
-      userAgent: "Google Workspace Auth",
+      ipAddress,
+      userAgent,
     });
 
     await prisma.auditLog.create({
@@ -42,7 +96,7 @@ export async function POST(request: Request) {
         action: "GOOGLE_OAUTH_LOGIN",
         entity: "USER",
         entityId: user.id,
-        details: `Google SSO Login verified for ${user.email} - Session ${sessionId}`,
+        details: `Verified Google SSO login for ${user.email} from IP ${ipAddress} (Session: ${sessionId})`,
       },
     });
 
@@ -56,6 +110,7 @@ export async function POST(request: Request) {
         organizationId: user.organizationId,
         organizationName: user.organization?.name,
       },
+      message: "Google authentication successful",
     });
 
     response.cookies.set("entrivo_session_token", token, {
@@ -69,6 +124,9 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Google OAuth error:", error);
-    return NextResponse.json({ error: "Google authentication failed" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Google authentication failed" },
+      { status: 500 }
+    );
   }
 }

@@ -2,6 +2,8 @@ import React from "react";
 import prisma from "@/lib/db";
 import { KioskClientView } from "./KioskClientView";
 
+export const dynamic = "force-dynamic";
+
 export default async function KioskPage() {
   // Fetch default organization and active hosts
   const org = await prisma.organization.findFirst({

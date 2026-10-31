@@ -1,7 +1,9 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { CheckinTerminalClient } from "./CheckinTerminalClient";
+
+export const dynamic = "force-dynamic";
 
 export default async function CheckinDeskPage({
   searchParams,
@@ -9,8 +11,16 @@ export default async function CheckinDeskPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("checkin.perform");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -23,7 +33,7 @@ export default async function CheckinDeskPage({
     where: {
       scheduledDate: { gte: startOfToday, lte: endOfToday },
       status: "APPROVED",
-      ...(orgId ? { organizationId: orgId } : {}),
+      organizationId: orgId,
     },
     include: {
       visitor: { include: { visitorType: true } },
@@ -37,7 +47,7 @@ export default async function CheckinDeskPage({
   const activeCheckIns = await prisma.checkIn.findMany({
     where: {
       status: "CHECKED_IN",
-      ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+      visitor: { organizationId: orgId },
     },
     include: {
       visitor: { include: { visitorType: true } },

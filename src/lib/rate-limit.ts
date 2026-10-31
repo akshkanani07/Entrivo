@@ -46,12 +46,41 @@ export function checkRateLimit(
   };
 }
 
-// Preset rate limiters
-export const loginRateLimiter = (ip: string) =>
-  checkRateLimit(`login:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 }); // 5 attempts per 15 min
+// 5 attempts per 15 min by IP and by Email
+export const loginRateLimiter = (ip: string, email?: string) => {
+  const ipCheck = checkRateLimit(`login:ip:${ip}`, { maxRequests: 10, windowMs: 15 * 60 * 1000 });
+  if (!ipCheck.allowed) return ipCheck;
+  if (email) {
+    const emailCheck = checkRateLimit(`login:email:${email.toLowerCase().trim()}`, {
+      maxRequests: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!emailCheck.allowed) return emailCheck;
+  }
+  return ipCheck;
+};
 
-export const magicLinkRateLimiter = (email: string) =>
-  checkRateLimit(`magic:${email}`, { maxRequests: 3, windowMs: 60 * 60 * 1000 }); // 3 requests per hour
+// 3 requests per 15 min by IP and by Email
+export const magicLinkRateLimiter = (ip: string, email: string) => {
+  const ipCheck = checkRateLimit(`magic:ip:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+  if (!ipCheck.allowed) return ipCheck;
+  const emailCheck = checkRateLimit(`magic:email:${email.toLowerCase().trim()}`, {
+    maxRequests: 3,
+    windowMs: 15 * 60 * 1000,
+  });
+  return emailCheck;
+};
+
+// 3 requests per 15 min by IP and by Email
+export const forgotPasswordRateLimiter = (ip: string, email: string) => {
+  const ipCheck = checkRateLimit(`forgot:ip:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+  if (!ipCheck.allowed) return ipCheck;
+  const emailCheck = checkRateLimit(`forgot:email:${email.toLowerCase().trim()}`, {
+    maxRequests: 3,
+    windowMs: 15 * 60 * 1000,
+  });
+  return emailCheck;
+};
 
 export const registerRateLimiter = (ip: string) =>
-  checkRateLimit(`register:${ip}`, { maxRequests: 10, windowMs: 60 * 60 * 1000 }); // 10 per hour per IP
+  checkRateLimit(`register:${ip}`, { maxRequests: 10, windowMs: 60 * 60 * 1000 });

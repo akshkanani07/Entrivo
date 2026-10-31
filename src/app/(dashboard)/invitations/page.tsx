@@ -1,17 +1,26 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAnyPagePermission } from "@/lib/rbac";
 import Link from "next/link";
 import { MailCheck, Plus, Search, Calendar, Clock, QrCode, ExternalLink, User } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
-export default async function InvitationsPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+export const dynamic = "force-dynamic";
 
-  const where: any = {};
-  if (orgId) where.organizationId = orgId;
-  if (user?.role === "EMPLOYEE" && user.employeeId) {
+export default async function InvitationsPage() {
+  const user = await requireAnyPagePermission(["invitations.read.all", "invitations.read.own"]);
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
+
+  const where: any = { organizationId: orgId };
+  if (user.role === "EMPLOYEE" && user.employeeId) {
     where.hostEmployeeId = user.employeeId;
   }
 

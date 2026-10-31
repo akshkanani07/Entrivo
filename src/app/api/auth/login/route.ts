@@ -1,52 +1,98 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { verifyPassword, createDatabaseSession } from "@/lib/auth";
+import { verifyPassword, createDatabaseSession, getClientIp } from "@/lib/auth";
 import { loginRateLimiter } from "@/lib/rate-limit";
+
+const loginSchema = z.object({
+  email: z.string().email("A valid email address is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+// Pre-computed valid bcrypt hash used to equalize timing when user does not exist
+const DUMMY_BCRYPT_HASH = "$2a$12$7k8mK/eG6n3ZgR5Y8W0qJu8A.Wc5hT9v4pL1r6m3s8d2f5g9h0j1k";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "127.0.0.1";
+    const ip = getClientIp(request.headers);
     const userAgent = request.headers.get("user-agent") || "Desktop Client";
 
-    // Rate Limiting: 5 attempts per 15 minutes
-    const rateLimit = loginRateLimiter(ip);
+    const body = await request.json().catch(() => null);
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid credentials format" },
+        { status: 400 }
+      );
+    }
+
+    const { email, password } = parsed.data;
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Rate Limiting: 5 attempts per 15 minutes by IP and Email
+    const rateLimit = loginRateLimiter(ip, cleanEmail);
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Too many login attempts. Please wait before trying again." },
+        {
+          success: false,
+          error: "Too many login attempts. Account locked for 15 minutes. Please try again later.",
+        },
         { status: 429 }
       );
     }
 
-    const { email, password } = await request.json();
-
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
-    }
-
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: cleanEmail },
       include: {
         organization: true,
         employee: true,
       },
     });
 
-    if (!user || user.deletedAt) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
+    // Constant-time comparison whether user exists or not
+    const targetHash = user?.passwordHash || DUMMY_BCRYPT_HASH;
+    const isValid = await verifyPassword(password, targetHash);
 
-    const isValid = await verifyPassword(password, user.passwordHash);
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    if (!user || user.deletedAt || !isValid) {
+      // Record failed attempt in audit log if org can be determined
+      if (user?.organizationId) {
+        await prisma.auditLog.create({
+          data: {
+            organizationId: user.organizationId,
+            userId: user.id,
+            action: "USER_LOGIN_FAILED",
+            entity: "USER",
+            entityId: user.id,
+            details: `Failed password login attempt for ${cleanEmail} from IP ${ip}`,
+            ipAddress: ip,
+            userAgent,
+          },
+        });
+      }
+
+      return NextResponse.json(
+        { success: false, error: "Invalid email or password." },
+        { status: 401 }
+      );
     }
 
     if (!user.isActive) {
-      return NextResponse.json({ error: "Account is disabled. Please contact administrator." }, { status: 403 });
+      return NextResponse.json(
+        { success: false, error: "Your account is disabled. Please contact your workplace administrator." },
+        { status: 403 }
+      );
     }
+
+    // Determine device label
+    let deviceLabel = "Desktop Browser";
+    if (/mobile/i.test(userAgent)) deviceLabel = "Mobile Browser";
+    else if (/mac/i.test(userAgent)) deviceLabel = "macOS Workstation";
+    else if (/windows/i.test(userAgent)) deviceLabel = "Windows Workstation";
+    else if (/linux/i.test(userAgent)) deviceLabel = "Linux Workstation";
 
     // Create session in Session database table
     const { token, sessionId } = await createDatabaseSession(user.id, {
-      device: userAgent.includes("Windows") ? "Windows Desktop" : userAgent.includes("Mac") ? "Mac OS" : "Mobile / Tablet",
+      device: deviceLabel,
       ipAddress: ip,
       userAgent,
     });
@@ -59,7 +105,7 @@ export async function POST(request: Request) {
         action: "USER_LOGIN",
         entity: "USER",
         entityId: user.id,
-        details: `Successful login by ${user.name} (${user.role}) - Session ${sessionId}`,
+        details: `Successful login by ${user.name} (${user.role}) from IP ${ip} - Session ${sessionId}`,
         ipAddress: ip,
         userAgent,
       },
@@ -75,7 +121,9 @@ export async function POST(request: Request) {
         organizationId: user.organizationId,
         organizationName: user.organization?.name,
         employeeId: user.employee?.id,
+        mustChangePassword: user.mustChangePassword,
       },
+      message: "Login successful",
     });
 
     response.cookies.set("entrivo_session_token", token, {
@@ -89,6 +137,9 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error("Login API Error:", error);
-    return NextResponse.json({ error: "Internal server error during authentication" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Internal server error during authentication" },
+      { status: 500 }
+    );
   }
 }

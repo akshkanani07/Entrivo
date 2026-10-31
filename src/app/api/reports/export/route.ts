@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("reports.export");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const { searchParams } = new URL(request.url);
     const format = searchParams.get("format") || "csv";
 
     const checkIns = await prisma.checkIn.findMany({
-      where: user.organizationId ? { visitor: { organizationId: user.organizationId } } : {},
+      where: {
+        visitor: { organizationId },
+      },
       include: {
         visitor: { include: { visitorType: true } },
         hostEmployee: { include: { user: true } },
@@ -65,6 +70,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: checkIns });
   } catch (error) {
     console.error("Report Export error:", error);
-    return NextResponse.json({ error: "Failed to export report" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to export report" }, { status: 500 });
   }
 }

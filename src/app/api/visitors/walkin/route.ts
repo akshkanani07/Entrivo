@@ -1,20 +1,43 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
-import { emailService } from "@/services/email/mailjet.service";
-import { generateVisitorArrivedHostEmail } from "@/services/email/email.templates";
-import { whatsappService } from "@/services/whatsapp/whatsapp.service";
-import { formatTime } from "@/lib/utils";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
+
+const walkinSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().min(5, "Phone is required"),
+  company: z.string().optional(),
+  visitorTypeId: z.string().optional().nullable(),
+  hostEmployeeId: z.string().min(1, "Host employee is required"),
+  purpose: z.string().optional(),
+  idProofType: z.string().optional(),
+  idProofNumber: z.string().optional(),
+  photoUrl: z.string().optional(),
+  signatureUrl: z.string().optional(),
+});
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requirePermission("walkin.create");
+    if (auth.response) return auth.response;
+    const orgCheck = requireOrg(auth.user);
+    if (orgCheck.response) return orgCheck.response;
+
+    const orgId = orgCheck.organizationId;
+    const user = auth.user;
+
+    const body = await request.json().catch(() => null);
+    const parsed = walkinSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
     }
 
-    const body = await request.json();
     const {
       name,
       email,
@@ -22,26 +45,48 @@ export async function POST(request: Request) {
       company,
       visitorTypeId,
       hostEmployeeId,
-      purpose,
       idProofType,
       idProofNumber,
       photoUrl,
       signatureUrl,
-    } = body;
+    } = parsed.data;
 
-    if (!name || !phone || !hostEmployeeId) {
-      return NextResponse.json({ error: "Name, phone, and host employee are required" }, { status: 400 });
+    // Verify host employee belongs to this organization
+    const hostEmp = await prisma.employee.findFirst({
+      where: { id: hostEmployeeId, organizationId: orgId },
+      include: { user: true, office: true },
+    });
+
+    if (!hostEmp) {
+      return NextResponse.json(
+        { success: false, error: "Host employee not found in organization." },
+        { status: 400 }
+      );
     }
 
-    const orgId = user.organizationId!;
+    // Verify visitor type if provided
+    if (visitorTypeId) {
+      const vType = await prisma.visitorType.findFirst({
+        where: { id: visitorTypeId, organizationId: orgId },
+      });
+      if (!vType) {
+        return NextResponse.json(
+          { success: false, error: "Visitor type not found in organization." },
+          { status: 400 }
+        );
+      }
+    }
 
-    // 1. Blacklist Check
+    const cleanEmail = email ? email.toLowerCase().trim() : null;
+    const cleanPhone = phone.trim();
+
+    // 1. Blacklist Check within Organization
     const blacklisted = await prisma.blacklistVisitor.findFirst({
       where: {
         organizationId: orgId,
         OR: [
-          { email: email ? email.toLowerCase().trim() : undefined },
-          { phone: phone.trim() },
+          ...(cleanEmail ? [{ email: cleanEmail }] : []),
+          { phone: cleanPhone },
           ...(idProofNumber ? [{ idProofNumber: idProofNumber.trim() }] : []),
         ],
       },
@@ -52,7 +97,7 @@ export async function POST(request: Request) {
         data: {
           organizationId: orgId,
           logType: "BLACKLIST_MATCH",
-          description: `Blocked walk-in attempt by blacklisted visitor ${name} (${phone}). Reason: ${blacklisted.reason}`,
+          description: `Blocked walk-in entry for blacklisted visitor ${name} (${cleanPhone}). Reason: ${blacklisted.reason}`,
           severity: "CRITICAL",
           guardName: user.name,
         },
@@ -60,6 +105,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         {
+          success: false,
           error: `Security Alert: Visitor is on the facility blacklist. Entry Denied. (${blacklisted.reason})`,
           isBlacklisted: true,
           reason: blacklisted.reason,
@@ -68,143 +114,118 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Find or Create Visitor
-    let visitor = await prisma.visitor.findFirst({
+    // Check if visitor is already checked in
+    const activeCheckIn = await prisma.checkIn.findFirst({
       where: {
-        organizationId: orgId,
-        OR: [{ phone: phone.trim() }, ...(email ? [{ email: email.toLowerCase().trim() }] : [])],
+        status: "CHECKED_IN",
+        visitor: {
+          organizationId: orgId,
+          OR: [{ phone: cleanPhone }, ...(cleanEmail ? [{ email: cleanEmail }] : [])],
+        },
       },
+      include: { visitor: true },
     });
 
-    if (!visitor) {
-      visitor = await prisma.visitor.create({
-        data: {
-          name,
-          email: email ? email.toLowerCase().trim() : `${phone.replace(/\D/g, "")}@visitor.entrivo.internal`,
-          phone: phone.trim(),
-          company: company || "Independent Guest",
-          visitorTypeId: visitorTypeId || null,
-          idProofType,
-          idProofNumber,
-          avatarUrl: photoUrl || null,
-          organizationId: orgId,
+    if (activeCheckIn) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Visitor ${activeCheckIn.visitor.name} is already checked in with Badge ${activeCheckIn.badgeNumber}. Check them out first.`,
         },
-      });
-    } else {
-      visitor = await prisma.visitor.update({
-        where: { id: visitor.id },
-        data: {
-          name,
-          company: company || visitor.company,
-          avatarUrl: photoUrl || visitor.avatarUrl,
-          idProofType: idProofType || visitor.idProofType,
-          idProofNumber: idProofNumber || visitor.idProofNumber,
-        },
-      });
+        { status: 400 }
+      );
     }
 
-    // 3. Generate Collision-Free Unique Badge Number
+    // Collision-free unique badge number
     const badgeNumber = await generateUniqueBadgeNumber(orgId);
 
-    // 4. Create CheckIn Record
-    const checkIn = await prisma.checkIn.create({
-      data: {
-        visitorId: visitor.id,
-        hostEmployeeId,
-        photoUrl: photoUrl || null,
-        signatureUrl: signatureUrl || null,
-        badgeNumber,
-        badgeIssued: true,
-        status: "CHECKED_IN",
-        receptionistName: user.name,
-        expectedCheckout: new Date(Date.now() + 4 * 60 * 60 * 1000), // default 4 hours
-      },
-      include: {
-        visitor: { include: { visitorType: true } },
-        hostEmployee: {
-          include: {
-            user: true,
-            office: true,
-          },
+    const checkIn = await prisma.$transaction(async (tx) => {
+      // Find or create visitor scoped to organization
+      let visitor = await tx.visitor.findFirst({
+        where: {
+          organizationId: orgId,
+          OR: [{ phone: cleanPhone }, ...(cleanEmail ? [{ email: cleanEmail }] : [])],
         },
-      },
-    });
+      });
 
-    // 5. Create Active Badge
-    const badge = await prisma.badge.create({
-      data: {
-        badgeNumber,
-        visitorId: visitor.id,
-        checkInId: checkIn.id,
-        printCount: 1,
-        status: "ACTIVE",
-      },
-    });
+      if (!visitor) {
+        visitor = await tx.visitor.create({
+          data: {
+            name: name.trim(),
+            email: cleanEmail || `${cleanPhone.replace(/\D/g, "")}@visitor.entrivo.internal`,
+            phone: cleanPhone,
+            company: company?.trim() || "Independent Guest",
+            visitorTypeId: visitorTypeId || null,
+            idProofType: idProofType || null,
+            idProofNumber: idProofNumber?.trim() || null,
+            avatarUrl: photoUrl || null,
+            organizationId: orgId,
+          },
+        });
+      } else {
+        visitor = await tx.visitor.update({
+          where: { id: visitor.id },
+          data: {
+            name: name.trim(),
+            company: company?.trim() || visitor.company,
+            avatarUrl: photoUrl || visitor.avatarUrl,
+            idProofType: idProofType || visitor.idProofType,
+            idProofNumber: idProofNumber?.trim() || visitor.idProofNumber,
+          },
+        });
+      }
 
-    // 6. Security Log
-    await prisma.securityLog.create({
-      data: {
-        organizationId: orgId,
-        logType: "WALKIN_CHECKIN",
-        description: `Walk-in visitor ${visitor.name} checked in. Assigned Badge ${badgeNumber} to visit ${checkIn.hostEmployee.user.name}.`,
-        severity: "LOW",
-        guardName: user.name,
-      },
-    });
-
-    // 7. Dispatch Host Notifications (Async non-blocking)
-    const hostUser = checkIn.hostEmployee.user;
-    if (hostUser.email) {
-      emailService.sendEmail(
-        generateVisitorArrivedHostEmail({
-          hostName: hostUser.name,
-          hostEmail: hostUser.email,
-          visitorName: visitor.name,
-          visitorCompany: visitor.company || "Guest",
+      const createdCheckIn = await tx.checkIn.create({
+        data: {
+          visitorId: visitor.id,
+          hostEmployeeId: hostEmp.id,
+          photoUrl: photoUrl || null,
+          signatureUrl: signatureUrl || null,
           badgeNumber,
-          checkInTime: formatTime(new Date()),
-          location: checkIn.hostEmployee.office?.name || "Main Reception",
-        }),
-        hostUser.id
-      ).catch(console.error);
-    }
+          badgeIssued: true,
+          status: "CHECKED_IN",
+          receptionistName: user.name,
+          expectedCheckout: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
+        },
+        include: {
+          visitor: { include: { visitorType: true } },
+          hostEmployee: { include: { user: true, office: true } },
+        },
+      });
 
-    if (checkIn.hostEmployee.phone || hostUser.phone) {
-      whatsappService.sendHostVisitorArrivedAlert({
-        hostPhone: checkIn.hostEmployee.phone || hostUser.phone || "",
-        hostName: hostUser.name,
-        visitorName: visitor.name,
-        company: visitor.company || "Guest",
-        roomName: checkIn.hostEmployee.office?.name || "Reception Waiting Lounge",
-      }).catch(console.error);
-    }
+      await tx.badge.create({
+        data: {
+          badgeNumber,
+          visitorId: visitor.id,
+          checkInId: createdCheckIn.id,
+          printCount: 1,
+          status: "ACTIVE",
+        },
+      });
+
+      await tx.securityLog.create({
+        data: {
+          organizationId: orgId,
+          logType: "WALKIN_CHECKIN",
+          description: `Walk-in visitor ${visitor.name} checked in (Badge ${badgeNumber}) for host ${hostEmp.user.name}.`,
+          severity: "LOW",
+          guardName: user.name,
+        },
+      });
+
+      return createdCheckIn;
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Walk-in check-in completed successfully",
-      checkIn: {
-        id: checkIn.id,
-        badgeNumber,
-        checkInTime: checkIn.checkInTime,
-        visitor: {
-          id: visitor.id,
-          name: visitor.name,
-          email: visitor.email,
-          phone: visitor.phone,
-          company: visitor.company,
-          avatarUrl: visitor.avatarUrl,
-          visitorTypeName: checkIn.visitor.visitorType?.name,
-          badgeColor: checkIn.visitor.visitorType?.badgeColor || "#6366f1",
-        },
-        host: {
-          name: hostUser.name,
-          office: checkIn.hostEmployee.office?.name,
-        },
-      },
-      badgeId: badge.id,
+      data: checkIn,
+      message: `Walk-in visitor ${checkIn.visitor.name} checked in successfully. Badge #${badgeNumber} issued.`,
     });
   } catch (error) {
-    console.error("Walkin API Error:", error);
-    return NextResponse.json({ error: "Failed to process walk-in registration" }, { status: 500 });
+    console.error("Walkin API error:", error);
+    return NextResponse.json(
+      { success: false, error: "Failed to process walk-in registration." },
+      { status: 500 }
+    );
   }
 }

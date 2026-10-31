@@ -1,11 +1,21 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { IntegrationsManager } from "@/components/integrations/IntegrationsManager";
 
+export const dynamic = "force-dynamic";
+
 export default async function IntegrationsPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("integrations.manage");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   let webhooks: any[] = [];
   let integrationsData = {
@@ -22,11 +32,11 @@ export default async function IntegrationsPage() {
   try {
     const [whs, settings] = await Promise.all([
       prisma.webhookSubscription.findMany({
-        where: orgId ? { organizationId: orgId } : {},
+        where: { organizationId: orgId },
         orderBy: { createdAt: "desc" },
       }),
       prisma.setting.findMany({
-        where: orgId ? { organizationId: orgId, category: "INTEGRATION" } : { category: "INTEGRATION" },
+        where: { organizationId: orgId, category: "INTEGRATION" },
       }),
     ]);
 

@@ -1,7 +1,11 @@
 import QRCode from "qrcode";
 import crypto from "crypto";
 
-const QR_SIGNING_SECRET = process.env.JWT_SECRET || "entrivo_secure_qr_sign_key_9988";
+const secret = process.env.QR_SIGNING_SECRET || process.env.JWT_SECRET;
+if (!secret) {
+  throw new Error("CRITICAL SECURITY ERROR: QR_SIGNING_SECRET or JWT_SECRET environment variable is missing.");
+}
+const QR_SIGNING_SECRET: string = secret;
 
 export interface QRTokenPayload {
   visitorId?: string;

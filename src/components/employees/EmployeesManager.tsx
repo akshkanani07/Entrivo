@@ -186,7 +186,7 @@ export function EmployeesManager({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create employee");
 
-      showNotification(`Employee ${formData.name} added! Login password set to: admin123`);
+      showNotification(`Employee ${formData.name} added! Invitation link dispatched.`);
       setShowAddModal(false);
       setFormData({
         name: "",

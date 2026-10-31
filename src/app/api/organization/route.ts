@@ -1,16 +1,32 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser, requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+import { z } from "zod";
+
+const updateOrgSchema = z.object({
+  name: z.string().optional(),
+  workingHours: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  country: z.string().optional(),
+  contactEmail: z.string().email().optional().or(z.literal("")),
+  contactPhone: z.string().optional(),
+  checkInPolicy: z.string().optional(),
+  policies: z.record(z.any()).optional(),
+});
 
 export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireUser();
+    if (auth.response) return auth.response;
 
-    const org = await prisma.organization.findUnique({
-      where: { id: user.organizationId },
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: organizationId },
       include: {
         branches: {
           include: {
@@ -27,21 +43,28 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ success: true, data: org });
+    return NextResponse.json({ success: true, data: organization });
   } catch (error) {
     console.error("Organization GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch organization details" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch organization details" }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("org.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const body = await request.json();
+    const parsed = updateOrgSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
     const {
       name,
       workingHours,
@@ -51,12 +74,12 @@ export async function PUT(request: Request) {
       contactEmail,
       contactPhone,
       checkInPolicy,
-      policies, // Security policies key-value map
-    } = body;
+      policies,
+    } = parsed.data;
 
     // 1. Update Organization core details
     const updatedOrg = await prisma.organization.update({
-      where: { id: user.organizationId },
+      where: { id: organizationId },
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(workingHours !== undefined ? { workingHours } : {}),
@@ -75,7 +98,7 @@ export async function PUT(request: Request) {
         await prisma.setting.upsert({
           where: {
             organizationId_key: {
-              organizationId: user.organizationId,
+              organizationId,
               key: `policy_${key}`,
             },
           },
@@ -83,7 +106,7 @@ export async function PUT(request: Request) {
             value: String(val),
           },
           create: {
-            organizationId: user.organizationId,
+            organizationId,
             category: "SECURITY_POLICY",
             key: `policy_${key}`,
             value: String(val),
@@ -95,33 +118,18 @@ export async function PUT(request: Request) {
     // 3. Log Audit
     await prisma.auditLog.create({
       data: {
-        organizationId: user.organizationId,
-        userId: user.id,
+        organizationId,
+        userId: auth.user.id,
         action: "ORGANIZATION_SETTINGS_UPDATED",
         entity: "ORGANIZATION",
-        entityId: user.organizationId,
-        details: `Organization profile and security policies updated by ${user.name}`,
+        entityId: organizationId,
+        details: `Organization profile and compliance policies updated by ${auth.user.name}`,
       },
     });
 
-    // Fetch refreshed settings
-    const settings = await prisma.setting.findMany({
-      where: { organizationId: user.organizationId },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: "Organization configuration saved successfully",
-      data: {
-        ...updatedOrg,
-        settings,
-      },
-    });
+    return NextResponse.json({ success: true, data: updatedOrg });
   } catch (error: any) {
     console.error("Organization PUT error:", error);
-    return NextResponse.json(
-      { error: error?.message || "Failed to update organization configuration" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: error.message || "Failed to update organization" }, { status: 500 });
   }
 }

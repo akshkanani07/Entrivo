@@ -1,10 +1,12 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import Link from "next/link";
 import { UserPlus, Search, Filter, ShieldCheck, ShieldAlert, ArrowRight, Clock, CheckCircle2, QrCode } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { VisitorsClientList } from "./VisitorsClientList";
+
+export const dynamic = "force-dynamic";
 
 export default async function VisitorsPage({
   searchParams,
@@ -12,11 +14,19 @@ export default async function VisitorsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("visitors.read");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   const visitors = await prisma.visitor.findMany({
-    where: orgId ? { organizationId: orgId } : {},
+    where: { organizationId: orgId },
     include: {
       visitorType: true,
       checkIns: {
@@ -33,7 +43,7 @@ export default async function VisitorsPage({
   });
 
   const visitorTypes = await prisma.visitorType.findMany({
-    where: orgId ? { organizationId: orgId } : {},
+    where: { organizationId: orgId },
   });
 
   const formattedVisitors = visitors.map((v) => {

@@ -1,18 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+import { z } from "zod";
 
-export async function GET(request: Request) {
+const createRoomSchema = z.object({
+  action: z.string().optional(),
+  name: z.string().optional(),
+  officeId: z.string().optional(),
+  capacity: z.union([z.number(), z.string()]).optional(),
+  floor: z.string().optional(),
+  amenities: z.string().optional(),
+  isAvailable: z.boolean().optional(),
+});
+
+const updateRoomSchema = z.object({
+  id: z.string().min(1, "Room ID is required"),
+  name: z.string().optional(),
+  capacity: z.union([z.number(), z.string()]).optional(),
+  floor: z.string().optional(),
+  amenities: z.string().optional(),
+  isAvailable: z.boolean().optional(),
+});
+
+export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("meetingRooms.read");
+    if (auth.response) return auth.response;
 
-    const orgId = user.organizationId;
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const rooms = await prisma.meetingRoom.findMany({
-      where: orgId ? { office: { branch: { organizationId: orgId } }, deletedAt: null } : { deletedAt: null },
+      where: {
+        office: { branch: { organizationId } },
+        deletedAt: null,
+      },
       include: {
         office: { include: { branch: true } },
         invitations: {
@@ -26,34 +50,40 @@ export async function GET(request: Request) {
     });
 
     const offices = await prisma.office.findMany({
-      where: orgId ? { branch: { organizationId: orgId } } : {},
+      where: { branch: { organizationId } },
       orderBy: { name: "asc" },
     });
 
     return NextResponse.json({ success: true, data: rooms, offices });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Meeting rooms GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch meeting rooms" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch meeting rooms" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("meetingRooms.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const body = await request.json();
-    const { action, name, officeId, capacity, floor, amenities, isAvailable } = body;
-    const orgId = user.organizationId;
+    const parsed = createRoomSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const { action, name, officeId, capacity, floor, amenities, isAvailable } = parsed.data;
 
     // 1-Click Seed Sample Meeting Rooms
     if (action === "seed_sample") {
-      let branch = await prisma.branch.findFirst({ where: { organizationId: orgId } });
+      let branch = await prisma.branch.findFirst({ where: { organizationId } });
       if (!branch) {
         branch = await prisma.branch.create({
-          data: { name: "Headquarters Campus", code: "HQ", organizationId: orgId },
+          data: { name: "Headquarters Campus", code: "HQ", organizationId },
         });
       }
 
@@ -111,17 +141,24 @@ export async function POST(request: Request) {
     }
 
     if (!name?.trim()) {
-      return NextResponse.json({ error: "Meeting room name is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Meeting room name is required" }, { status: 400 });
     }
 
     let finalOfficeId = officeId;
-    if (!finalOfficeId) {
+    if (finalOfficeId) {
+      const office = await prisma.office.findFirst({
+        where: { id: finalOfficeId, branch: { organizationId } },
+      });
+      if (!office) {
+        return NextResponse.json({ success: false, error: "Invalid office ID for your organization" }, { status: 400 });
+      }
+    } else {
       let office = await prisma.office.findFirst({
-        where: { branch: { organizationId: orgId } },
+        where: { branch: { organizationId } },
       });
       if (!office) {
         let branch = await prisma.branch.create({
-          data: { name: "Main Campus", code: "MAIN", organizationId: orgId },
+          data: { name: "Main Campus", code: "MAIN", organizationId },
         });
         office = await prisma.office.create({
           data: { name: "Main Building - Floor 1", branchId: branch.id },
@@ -148,22 +185,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: room });
   } catch (error: any) {
     console.error("Meeting room create error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create meeting room" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to create meeting room" }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("meetingRooms.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const body = await request.json();
-    const { id, name, capacity, floor, amenities, isAvailable } = body;
+    const parsed = updateRoomSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+    }
 
-    if (!id) {
-      return NextResponse.json({ error: "Meeting room ID is required" }, { status: 400 });
+    const { id, name, capacity, floor, amenities, isAvailable } = parsed.data;
+
+    const existing = await prisma.meetingRoom.findFirst({
+      where: { id, office: { branch: { organizationId } } },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Meeting room not found" }, { status: 404 });
     }
 
     const updated = await prisma.meetingRoom.update({
@@ -181,22 +229,32 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
     console.error("Meeting room update error:", error);
-    return NextResponse.json({ error: error.message || "Failed to update meeting room" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to update meeting room" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("meetingRooms.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Meeting room ID is required" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Meeting room ID is required" }, { status: 400 });
+    }
+
+    const existing = await prisma.meetingRoom.findFirst({
+      where: { id, office: { branch: { organizationId } } },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Meeting room not found" }, { status: 404 });
     }
 
     await prisma.meetingRoom.delete({
@@ -206,6 +264,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true, message: "Meeting room deleted successfully" });
   } catch (error: any) {
     console.error("Meeting room delete error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete meeting room" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete meeting room" }, { status: 500 });
   }
 }

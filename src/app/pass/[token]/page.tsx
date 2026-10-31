@@ -1,6 +1,5 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { notFound } from "next/navigation";
 import { generateQRCodeDataUrl } from "@/lib/qr";
 import { formatDate } from "@/lib/utils";
 import {
@@ -11,9 +10,11 @@ import {
   UserCheck,
   MapPin,
   CheckCircle2,
-  AlertCircle,
-  Download,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 
 export default async function PublicPassPage({
   params,
@@ -22,10 +23,9 @@ export default async function PublicPassPage({
 }) {
   const { token } = await params;
 
+  // Strict lookup by qrToken ONLY (no raw ID fallback)
   const invitation = await prisma.invitation.findFirst({
-    where: {
-      OR: [{ qrToken: token }, { id: token }],
-    },
+    where: { qrToken: token },
     include: {
       visitor: { include: { visitorType: true } },
       hostEmployee: { include: { user: true, office: { include: { branch: true } } } },
@@ -34,8 +34,45 @@ export default async function PublicPassPage({
     },
   });
 
-  if (!invitation) {
-    notFound();
+  const isInvalid = !invitation;
+  const isExpired = invitation ? invitation.status === "EXPIRED" || invitation.status === "COMPLETED" : false;
+  const isCancelled = invitation ? invitation.status === "CANCELLED" || invitation.status === "REJECTED" : false;
+
+  if (isInvalid || isExpired || isCancelled) {
+    return (
+      <div className="min-h-screen bg-[#080c14] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
+        <div className="absolute top-1/4 -left-20 w-80 h-80 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="w-full max-w-md relative z-10 glass-card rounded-3xl border border-rose-950/60 p-8 shadow-2xl text-center space-y-5">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+            {isCancelled ? <XCircle className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold uppercase tracking-wider">
+              {isCancelled ? "Invitation Revoked" : isExpired ? "Pass Expired" : "Invalid Pass"}
+            </div>
+            <h1 className="text-xl font-bold text-white tracking-tight">
+              {isCancelled
+                ? "This Visitor Pass Has Been Cancelled"
+                : isExpired
+                ? "This Visitor Pass Has Expired"
+                : "Pass Not Found"}
+            </h1>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {isCancelled
+                ? "The workplace host or security team has cancelled this entry pass. Please contact your host to request a new invitation."
+                : isExpired
+                ? "The scheduled date or validity window for this workplace pass has elapsed. Please request a new pass from your host."
+                : "The access token provided does not match any active visitor pass record."}
+            </p>
+          </div>
+
+          <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-800/80">
+            Entrivo Zero-Trust Workplace Visitor Management
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const qrDataUrl = await generateQRCodeDataUrl(invitation.qrToken);
@@ -43,8 +80,8 @@ export default async function PublicPassPage({
   return (
     <div className="min-h-screen bg-[#080c14] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
       {/* Background Micro Glow */}
-      <div className="absolute top-1/4 -left-20 w-80 h-80 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/4 -left-20 w-80 h-80 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10 space-y-4">
         {/* Pass Top Bar */}

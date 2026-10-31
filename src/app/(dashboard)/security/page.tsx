@@ -1,26 +1,36 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { SecurityGateClient } from "./SecurityGateClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function SecurityPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("securityLogs.read");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   const [blacklists, securityLogs, activeCount] = await Promise.all([
     prisma.blacklistVisitor.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where: { organizationId: orgId },
       orderBy: { createdAt: "desc" },
     }),
     prisma.securityLog.findMany({
-      where: orgId ? { organizationId: orgId } : {},
+      where: { organizationId: orgId },
       orderBy: { createdAt: "desc" },
       take: 30,
     }),
     prisma.checkIn.count({
       where: {
         status: "CHECKED_IN",
-        ...(orgId ? { visitor: { organizationId: orgId } } : {}),
+        visitor: { organizationId: orgId },
       },
     }),
   ]);

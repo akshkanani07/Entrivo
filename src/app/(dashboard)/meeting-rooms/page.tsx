@@ -1,11 +1,21 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePagePermission } from "@/lib/rbac";
 import { MeetingRoomsManager } from "@/components/meeting-rooms/MeetingRoomsManager";
 
+export const dynamic = "force-dynamic";
+
 export default async function MeetingRoomsPage() {
-  const user = await getCurrentUser();
-  const orgId = user?.organizationId;
+  const user = await requirePagePermission("meetingRooms.read");
+  const orgId = user.organizationId;
+
+  if (!orgId) {
+    return (
+      <div className="p-8 text-center text-slate-400">
+        No organization associated with this account.
+      </div>
+    );
+  }
 
   let rooms: any[] = [];
   let offices: any[] = [];
@@ -13,7 +23,7 @@ export default async function MeetingRoomsPage() {
   try {
     const [roomList, officeList] = await Promise.all([
       prisma.meetingRoom.findMany({
-        where: orgId ? { office: { branch: { organizationId: orgId } }, deletedAt: null } : { deletedAt: null },
+        where: { office: { branch: { organizationId: orgId } }, deletedAt: null },
         include: {
           office: { include: { branch: true } },
           invitations: {
@@ -26,7 +36,7 @@ export default async function MeetingRoomsPage() {
         orderBy: { name: "asc" },
       }),
       prisma.office.findMany({
-        where: orgId ? { branch: { organizationId: orgId } } : {},
+        where: { branch: { organizationId: orgId } },
         orderBy: { name: "asc" },
       }),
     ]);

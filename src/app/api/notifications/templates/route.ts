@@ -1,21 +1,43 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { requirePermission } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
+import { z } from "zod";
 
-export async function GET(request: Request) {
+const createTemplateSchema = z.object({
+  action: z.string().optional(),
+  channel: z.enum(["WHATSAPP", "EMAIL"]).optional(),
+  code: z.string().optional(),
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  templateName: z.string().optional(),
+  variables: z.string().optional(),
+});
+
+const updateTemplateSchema = z.object({
+  id: z.string().min(1, "Template ID is required"),
+  channel: z.enum(["WHATSAPP", "EMAIL"]).optional(),
+  subject: z.string().optional(),
+  body: z.string().optional(),
+  templateName: z.string().optional(),
+});
+
+export async function GET() {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("templates.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const [emailTemplates, whatsappTemplates] = await Promise.all([
       prisma.emailTemplate.findMany({
-        where: { organizationId: user.organizationId },
+        where: { organizationId },
         orderBy: { code: "asc" },
       }),
       prisma.whatsappTemplate.findMany({
-        where: { organizationId: user.organizationId },
+        where: { organizationId },
         orderBy: { templateName: "asc" },
       }),
     ]);
@@ -23,46 +45,50 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, emailTemplates, whatsappTemplates });
   } catch (error: any) {
     console.error("Templates GET error:", error);
-    return NextResponse.json({ error: "Failed to fetch templates" }, { status: 500 });
+    return NextResponse.json({ success: false, error: "Failed to fetch templates" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("templates.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const body = await request.json();
-    const { action, channel, code, subject, body: templateBody, templateName, variables } = body;
-    const orgId = user.organizationId;
+    const parsed = createTemplateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const { action, channel, code, subject, body: templateBody, templateName, variables } = parsed.data;
 
     // 1-Click Seed Default Workplace Templates
     if (action === "seed_default") {
-      // 1. WhatsApp Invitation
       await prisma.whatsappTemplate.upsert({
-        where: { id: `wa-inv-${orgId}` },
+        where: { id: `wa-inv-${organizationId}` },
         update: {},
         create: {
-          id: `wa-inv-${orgId}`,
-          organizationId: orgId,
+          id: `wa-inv-${organizationId}`,
+          organizationId,
           code: "VISITOR_INVITE",
           templateName: "visitor_arrival_invite",
           language: "en_US",
-          body: `Hello {{visitor_name}} 👋\n\nYour visit with *{{host_name}}* at ${user.organizationName || "Entrivo Workplace"} is confirmed.\n\n📅 Date: {{date}}\n⏰ Time: {{time}}\n📍 Location: {{location}}\n\nYour Express Digital QR Entry Pass:\n{{qr_link}}\n\nPlease show this QR code at reception upon arrival.`,
+          body: `Hello {{visitor_name}} 👋\n\nYour visit with *{{host_name}}* at ${auth.user.organizationName || "Entrivo Workplace"} is confirmed.\n\n📅 Date: {{date}}\n⏰ Time: {{time}}\n📍 Location: {{location}}\n\nYour Express Digital QR Entry Pass:\n{{qr_link}}\n\nPlease show this QR code at reception upon arrival.`,
           variables: "visitor_name,host_name,date,time,location,qr_link",
           status: "APPROVED",
         },
       });
 
-      // 2. WhatsApp Host Alert
       await prisma.whatsappTemplate.upsert({
-        where: { id: `wa-host-${orgId}` },
+        where: { id: `wa-host-${organizationId}` },
         update: {},
         create: {
-          id: `wa-host-${orgId}`,
-          organizationId: orgId,
+          id: `wa-host-${organizationId}`,
+          organizationId,
           code: "HOST_ALERT",
           templateName: "visitor_host_arrived_alert",
           language: "en_US",
@@ -72,31 +98,29 @@ export async function POST(request: Request) {
         },
       });
 
-      // 3. Email Invitation Template
       await prisma.emailTemplate.upsert({
-        where: { id: `em-inv-${orgId}` },
+        where: { id: `em-inv-${organizationId}` },
         update: {},
         create: {
-          id: `em-inv-${orgId}`,
-          organizationId: orgId,
+          id: `em-inv-${organizationId}`,
+          organizationId,
           code: "VISITOR_INVITATION_EMAIL",
-          subject: `Your Workplace Visitor Pass for ${user.organizationName || "Campus"} on {{date}}`,
+          subject: `Your Workplace Visitor Pass for ${auth.user.organizationName || "Campus"} on {{date}}`,
           body: `Hello {{visitor_name}},\n\n{{host_name}} has scheduled a meeting for you at {{location}} on {{date}} at {{time}}.\n\nPurpose: {{purpose}}\n\nPlease use your pre-registered touchless pass for expedited security clearance: {{qr_link}}`,
           variables: "visitor_name,host_name,date,time,location,purpose,qr_link",
           isActive: true,
         },
       });
 
-      // 4. Email Checkout Feedback Template
       await prisma.emailTemplate.upsert({
-        where: { id: `em-out-${orgId}` },
+        where: { id: `em-out-${organizationId}` },
         update: {},
         create: {
-          id: `em-out-${orgId}`,
-          organizationId: orgId,
+          id: `em-out-${organizationId}`,
+          organizationId,
           code: "VISITOR_CHECKOUT_EMAIL",
-          subject: `Thank you for visiting ${user.organizationName || "Entrivo Workplace"}`,
-          body: `Hello {{visitor_name}},\n\nYour checkout from ${user.organizationName || "Entrivo Workplace"} has been logged. We hope your meeting with {{host_name}} was productive!\n\nDuration: {{duration}}.\nHave a safe onward journey!`,
+          subject: `Thank you for visiting ${auth.user.organizationName || "Entrivo Workplace"}`,
+          body: `Hello {{visitor_name}},\n\nYour checkout from ${auth.user.organizationName || "Entrivo Workplace"} has been logged. We hope your meeting with {{host_name}} was productive!\n\nDuration: {{duration}}.\nHave a safe onward journey!`,
           variables: "visitor_name,host_name,duration",
           isActive: true,
         },
@@ -108,10 +132,14 @@ export async function POST(request: Request) {
       });
     }
 
+    if (!templateBody?.trim()) {
+      return NextResponse.json({ success: false, error: "Template body is required" }, { status: 400 });
+    }
+
     if (channel === "WHATSAPP") {
       const created = await prisma.whatsappTemplate.create({
         data: {
-          organizationId: orgId,
+          organizationId,
           code: code || "CUSTOM_WHATSAPP",
           templateName: templateName || "custom_template",
           body: templateBody,
@@ -123,7 +151,7 @@ export async function POST(request: Request) {
     } else {
       const created = await prisma.emailTemplate.create({
         data: {
-          organizationId: orgId,
+          organizationId,
           code: code || "CUSTOM_EMAIL",
           subject: subject || "Workplace Notification",
           body: templateBody,
@@ -135,21 +163,35 @@ export async function POST(request: Request) {
     }
   } catch (error: any) {
     console.error("Template create error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create template" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to create template" }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("templates.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const body = await request.json();
-    const { id, channel, subject, body: templateBody, templateName } = body;
+    const parsed = updateTemplateSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const { id, channel, subject, body: templateBody, templateName } = parsed.data;
 
     if (channel === "WHATSAPP") {
+      const existing = await prisma.whatsappTemplate.findFirst({
+        where: { id, organizationId },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
+      }
+
       const updated = await prisma.whatsappTemplate.update({
         where: { id },
         data: {
@@ -159,6 +201,13 @@ export async function PUT(request: Request) {
       });
       return NextResponse.json({ success: true, data: updated });
     } else {
+      const existing = await prisma.emailTemplate.findFirst({
+        where: { id, organizationId },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
+      }
+
       const updated = await prisma.emailTemplate.update({
         where: { id },
         data: {
@@ -170,31 +219,45 @@ export async function PUT(request: Request) {
     }
   } catch (error: any) {
     console.error("Template update error:", error);
-    return NextResponse.json({ error: error.message || "Failed to update template" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to update template" }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user || !user.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requirePermission("templates.manage");
+    if (auth.response) return auth.response;
+
+    const org = requireOrg(auth.user);
+    if (org.response) return org.response;
+    const organizationId = org.organizationId;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     const channel = searchParams.get("channel");
 
-    if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+    if (!id) return NextResponse.json({ success: false, error: "ID required" }, { status: 400 });
 
     if (channel === "WHATSAPP") {
+      const existing = await prisma.whatsappTemplate.findFirst({
+        where: { id, organizationId },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
+      }
       await prisma.whatsappTemplate.delete({ where: { id } });
     } else {
+      const existing = await prisma.emailTemplate.findFirst({
+        where: { id, organizationId },
+      });
+      if (!existing) {
+        return NextResponse.json({ success: false, error: "Template not found" }, { status: 404 });
+      }
       await prisma.emailTemplate.delete({ where: { id } });
     }
 
     return NextResponse.json({ success: true, message: "Template deleted" });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to delete" }, { status: 500 });
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete" }, { status: 500 });
   }
 }
