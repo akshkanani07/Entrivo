@@ -1,11 +1,13 @@
 import QRCode from "qrcode";
 import crypto from "crypto";
 
-const secret = process.env.QR_SIGNING_SECRET || process.env.JWT_SECRET;
-if (!secret) {
-  throw new Error("CRITICAL SECURITY ERROR: QR_SIGNING_SECRET or JWT_SECRET environment variable is missing.");
+function getQrSigningSecret(): string {
+  const secret = process.env.QR_SIGNING_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("CRITICAL SECURITY ERROR: QR_SIGNING_SECRET or JWT_SECRET environment variable is missing.");
+  }
+  return secret;
 }
-const QR_SIGNING_SECRET: string = secret;
 
 export interface QRTokenPayload {
   visitorId?: string;
@@ -24,6 +26,7 @@ export function generateSecureToken(prefix = "ENT"): string {
 export const generateVisitorToken = generateSecureToken;
 
 export function createSignedQRPayload(payload: { visitorId: string; meetingId?: string; expiresInHours?: number }): string {
+  const secret = getQrSigningSecret();
   const expiresAt = Date.now() + (payload.expiresInHours || 24) * 60 * 60 * 1000;
   const nonce = crypto.randomBytes(8).toString("hex");
 
@@ -34,7 +37,7 @@ export function createSignedQRPayload(payload: { visitorId: string; meetingId?: 
     nonce,
   });
 
-  const hmac = crypto.createHmac("sha256", QR_SIGNING_SECRET).update(rawData).digest("hex").slice(0, 16);
+  const hmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
   const base64Data = Buffer.from(rawData).toString("base64url");
 
   return `ENTQ1.${base64Data}.${hmac}`;
@@ -52,8 +55,9 @@ export function verifySignedQRPayload(token: string): { valid: boolean; payload?
       return { valid: false, error: "Malformed QR token structure." };
     }
 
+    const secret = getQrSigningSecret();
     const rawData = Buffer.from(base64Data, "base64url").toString("utf-8");
-    const expectedHmac = crypto.createHmac("sha256", QR_SIGNING_SECRET).update(rawData).digest("hex").slice(0, 16);
+    const expectedHmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
 
     if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedHmac))) {
       const parsed = JSON.parse(rawData);

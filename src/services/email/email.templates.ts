@@ -1,9 +1,26 @@
+/**
+ * Secure Email Templates with HTML Escaping
+ *
+ * All user/visitor/organization provided strings are escaped via `escapeHtml`
+ * before interpolation into email HTML bodies to prevent HTML/XSS injection.
+ */
+
 export interface EmailPayload {
   to: string;
   recipientName: string;
   subject: string;
   htmlContent: string;
   textContent?: string;
+}
+
+export function escapeHtml(str: string | number | null | undefined): string {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export function generateVisitorInvitationEmail(data: {
@@ -17,6 +34,15 @@ export function generateVisitorInvitationEmail(data: {
   qrPassUrl: string;
   purpose: string;
 }): EmailPayload {
+  const visitorName = escapeHtml(data.visitorName);
+  const hostName = escapeHtml(data.hostName);
+  const companyName = escapeHtml(data.companyName);
+  const date = escapeHtml(data.date);
+  const time = escapeHtml(data.time);
+  const location = escapeHtml(data.location);
+  const purpose = escapeHtml(data.purpose);
+  const qrPassUrl = escapeHtml(data.qrPassUrl);
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -48,22 +74,22 @@ export function generateVisitorInvitationEmail(data: {
         </div>
         <div class="content">
           <div class="badge">Official Workplace Invitation</div>
-          <h2 style="color: #ffffff; margin-top: 0;">Welcome, ${data.visitorName}</h2>
+          <h2 style="color: #ffffff; margin-top: 0;">Welcome, ${visitorName}</h2>
           <p style="color: #cbd5e1; line-height: 1.6;">
-            <strong>${data.hostName}</strong> has scheduled a visit for you at <strong>${data.companyName}</strong>. 
+            <strong>${hostName}</strong> has scheduled a visit for you at <strong>${companyName}</strong>. 
             Please use your pre-issued digital pass below for expedited touchless check-in.
           </p>
 
           <div class="details-box">
-            <div class="detail-row"><span class="label">Host</span><span class="val">${data.hostName}</span></div>
-            <div class="detail-row"><span class="label">Date</span><span class="val">${data.date}</span></div>
-            <div class="detail-row"><span class="label">Time</span><span class="val">${data.time}</span></div>
-            <div class="detail-row"><span class="label">Location</span><span class="val">${data.location}</span></div>
-            <div class="detail-row"><span class="label">Purpose</span><span class="val">${data.purpose}</span></div>
+            <div class="detail-row"><span class="label">Host</span><span class="val">${hostName}</span></div>
+            <div class="detail-row"><span class="label">Date</span><span class="val">${date}</span></div>
+            <div class="detail-row"><span class="label">Time</span><span class="val">${time}</span></div>
+            <div class="detail-row"><span class="label">Location</span><span class="val">${location}</span></div>
+            <div class="detail-row"><span class="label">Purpose</span><span class="val">${purpose}</span></div>
           </div>
 
           <div class="btn-wrapper">
-            <a href="${data.qrPassUrl}" class="btn" target="_blank">Access Your Digital QR Pass</a>
+            <a href="${qrPassUrl}" class="btn" target="_blank">Access Your Digital QR Pass</a>
           </div>
 
           <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 20px;">
@@ -96,6 +122,13 @@ export function generateVisitorArrivedHostEmail(data: {
   checkInTime: string;
   location: string;
 }): EmailPayload {
+  const hostName = escapeHtml(data.hostName);
+  const visitorName = escapeHtml(data.visitorName);
+  const visitorCompany = escapeHtml(data.visitorCompany);
+  const checkInTime = escapeHtml(data.checkInTime);
+  const badgeNumber = escapeHtml(data.badgeNumber);
+  const location = escapeHtml(data.location);
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -110,13 +143,13 @@ export function generateVisitorArrivedHostEmail(data: {
     <body>
       <div class="container">
         <span class="tag">VISITOR ARRIVED</span>
-        <h2 style="color: #ffffff; margin-top: 12px;">Hello ${data.hostName},</h2>
+        <h2 style="color: #ffffff; margin-top: 12px;">Hello ${hostName},</h2>
         <p style="color: #cbd5e1; font-size: 15px;">
-          Your visitor <strong>${data.visitorName}</strong> (${data.visitorCompany}) has checked in at reception at <strong>${data.checkInTime}</strong>.
+          Your visitor <strong>${visitorName}</strong> (${visitorCompany}) has checked in at reception at <strong>${checkInTime}</strong>.
         </p>
         <p style="color: #94a3b8; font-size: 14px;">
-          Assigned Badge: <strong style="color: #a5b4fc;">${data.badgeNumber}</strong><br>
-          Waiting Area: <strong>Reception Concierge Desk (${data.location})</strong>
+          Assigned Badge: <strong style="color: #a5b4fc;">${badgeNumber}</strong><br>
+          Waiting Area: <strong>Reception Concierge Desk (${location})</strong>
         </p>
       </div>
     </body>
@@ -126,7 +159,7 @@ export function generateVisitorArrivedHostEmail(data: {
   return {
     to: data.hostEmail,
     recipientName: data.hostName,
-    subject: `🔔 Visitor Arrived: ${data.visitorName} is at Reception`,
+    subject: `Visitor Arrived: ${data.visitorName} is at Reception`,
     htmlContent,
   };
 }
@@ -158,6 +191,11 @@ export function generateVisitorCheckoutEmail(data: {
   durationMinutes: number;
   checkOutTime: string;
 }): EmailPayload {
+  const visitorName = escapeHtml(data.visitorName);
+  const companyName = escapeHtml(data.companyName);
+  const checkOutTime = escapeHtml(data.checkOutTime);
+  const durationMinutes = escapeHtml(data.durationMinutes);
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -172,12 +210,12 @@ export function generateVisitorCheckoutEmail(data: {
     <body>
       <div class="container">
         <span class="tag">VISITOR CHECKOUT</span>
-        <h2 style="color: #ffffff; margin-top: 12px;">Thank You for Visiting ${data.companyName}</h2>
+        <h2 style="color: #ffffff; margin-top: 12px;">Thank You for Visiting ${companyName}</h2>
         <p style="color: #cbd5e1; font-size: 15px;">
-          Hello ${data.visitorName}, your check-out has been confirmed at <strong>${data.checkOutTime}</strong>.
+          Hello ${visitorName}, your check-out has been confirmed at <strong>${checkOutTime}</strong>.
         </p>
         <p style="color: #94a3b8; font-size: 14px;">
-          Total Visit Duration: <strong>${data.durationMinutes} minutes</strong>
+          Total Visit Duration: <strong>${durationMinutes} minutes</strong>
         </p>
         <p style="color: #64748b; font-size: 13px; margin-top: 24px;">
           Have a safe journey, and we look forward to welcoming you back soon.
@@ -205,6 +243,14 @@ export function generateHostApprovalEmail(data: {
   purpose: string;
   approvalUrl: string;
 }): EmailPayload {
+  const hostName = escapeHtml(data.hostName);
+  const visitorName = escapeHtml(data.visitorName);
+  const visitorCompany = escapeHtml(data.visitorCompany);
+  const date = escapeHtml(data.date);
+  const time = escapeHtml(data.time);
+  const purpose = escapeHtml(data.purpose);
+  const approvalUrl = escapeHtml(data.approvalUrl);
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -220,15 +266,15 @@ export function generateHostApprovalEmail(data: {
     <body>
       <div class="container">
         <span class="tag">ACTION REQUIRED: VISITOR APPROVAL</span>
-        <h2 style="color: #ffffff; margin-top: 12px;">Hello ${data.hostName},</h2>
+        <h2 style="color: #ffffff; margin-top: 12px;">Hello ${hostName},</h2>
         <p style="color: #cbd5e1; font-size: 15px;">
-          <strong>${data.visitorName}</strong> (${data.visitorCompany}) is requesting access for a visit.
+          <strong>${visitorName}</strong> (${visitorCompany}) is requesting access for a visit.
         </p>
         <p style="color: #94a3b8; font-size: 14px;">
-          Date & Time: <strong>${data.date} at ${data.time}</strong><br>
-          Purpose: <strong>${data.purpose}</strong>
+          Date &amp; Time: <strong>${date} at ${time}</strong><br>
+          Purpose: <strong>${purpose}</strong>
         </p>
-        <a href="${data.approvalUrl}" class="btn">Review & Authorize Entry</a>
+        <a href="${approvalUrl}" class="btn">Review &amp; Authorize Entry</a>
       </div>
     </body>
     </html>

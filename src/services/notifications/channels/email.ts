@@ -6,6 +6,7 @@ import {
   generateVisitorCheckoutEmail,
   generateHostApprovalEmail,
 } from "@/services/email/email.templates";
+import { getAppUrl } from "@/lib/app-url";
 
 export async function sendEmailNotification(
   event: NotificationEvent,
@@ -23,7 +24,7 @@ export async function sendEmailNotification(
           date: payload.date || "Scheduled Date",
           time: payload.time || "Scheduled Time",
           location: payload.location || "Main Reception",
-          qrPassUrl: payload.qrPassUrl || "http://localhost:3000/pass/sample",
+          qrPassUrl: payload.qrPassUrl || `${getAppUrl()}/pass/sample`,
           purpose: payload.purpose || "Business Meeting",
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId);
@@ -65,7 +66,7 @@ export async function sendEmailNotification(
           date: payload.date || "Today",
           time: payload.time || "Scheduled Time",
           purpose: payload.purpose || "Executive Visit",
-          approvalUrl: payload.approvalUrl || "http://localhost:3000/approvals",
+          approvalUrl: payload.approvalUrl || `${getAppUrl()}/approvals`,
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId);
       }

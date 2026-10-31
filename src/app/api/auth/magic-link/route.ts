@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { hashToken, getClientIp } from "@/lib/auth";
 import { magicLinkRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
+import { getAppUrl } from "@/lib/app-url";
 
 const magicLinkRequestSchema = z.object({
   email: z.string().email("A valid work email is required"),
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
         },
       });
 
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+      const appUrl = getAppUrl();
       // Redirect target avoids immediate consumption by security scanners
       const magicUrl = `${appUrl}/magic-link/confirm?token=${rawToken}`;
 

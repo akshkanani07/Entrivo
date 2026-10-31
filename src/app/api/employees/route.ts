@@ -7,6 +7,7 @@ import { requirePermission, canAssignRole, validateRoleChange } from "@/lib/rbac
 import { requireOrg } from "@/lib/tenant";
 import { emailService } from "@/services/email/mailjet.service";
 import { UserRole } from "@/types";
+import { getAppUrl } from "@/lib/app-url";
 
 const createEmployeeSchema = z.object({
   name: z.string().min(1, "Employee name is required"),
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
 
     const orgId = orgCheck.organizationId;
     const currentUser = auth.user;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
 
     const body = await request.json().catch(() => null);
 

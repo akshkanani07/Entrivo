@@ -5,6 +5,7 @@ import { requireAnyPermission, can } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { generateVisitorToken } from "@/lib/qr";
 import { formatDate } from "@/lib/utils";
+import { getAppUrl } from "@/lib/app-url";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
 
     // Generate unique QR token
     const qrToken = generateVisitorToken("INV");
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
     const passUrl = `${appUrl}/pass/${qrToken}`;
 
     const { invitation } = await prisma.$transaction(async (tx) => {

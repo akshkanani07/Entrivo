@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { emailService } from "@/services/email/mailjet.service";
 import { generateVisitorInvitationEmail } from "@/services/email/email.templates";
 import { requirePermission } from "@/lib/rbac";
+import { getAppUrl } from "@/lib/app-url";
 import { z } from "zod";
 
 const testEmailSchema = z.object({
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
         date: "Today",
         time: "11:00 AM",
         location: "Boardroom Alpha",
-        qrPassUrl: "http://localhost:3000/pass/ENTRIVO-INV-APEX-101",
+        qrPassUrl: `${getAppUrl()}/pass/ENTRIVO-INV-APEX-101`,
         purpose: "Mailjet API Transactional Integration Verification",
       })
     );

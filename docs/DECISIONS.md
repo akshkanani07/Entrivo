@@ -38,5 +38,13 @@
 - **Strict API `mustChangePassword` Guarding**: `requireUser()` rejects callers possessing `mustChangePassword === true` with HTTP 403 `{ code: "PASSWORD_CHANGE_REQUIRED" }`, exempting only `/api/auth/change-password`, `/api/auth/logout`, and `/api/auth/me`.
 - **Approval Workflow Minimum**: Invitations specifying a visitor type with `requiresApproval = true` or names referencing VIP, Vendor, or Contractor auto-transition to `status: "PENDING"`, instantiate a corresponding `Approval` record assigned to the host, and dispatch `APPROVAL_REQUESTED` notifications.
 
+## Decision 8: Group 3 Hardening — HTML Escaping, Next.js Production Headers, Tenant Test Suite, Line-Endings
+- **HTML Escaping in Transactional Emails**: Implemented `escapeHtml()` helper in `src/services/email/email.templates.ts` applied to all interpolated visitor, host, company, badge, and URL fields across all email templates.
+- **Production URL Fallbacks**: Created `src/lib/app-url.ts` with `getAppUrl()`. Replaced all `process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"` fallbacks across auth, invitations, employees, and notifications routes. Throws a hard configuration error in production if `NEXT_PUBLIC_APP_URL` is omitted.
+- **Next.js Production Security Headers**: Added `serverExternalPackages: ["bullmq", "ioredis"]` in `next.config.ts`. In production (`NODE_ENV === "production"`), stripped `'unsafe-eval'` from Content Security Policy and enabled `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` (HSTS).
+- **Comprehensive Multi-Tenant Isolation Suite**: Extended `scripts/verify-tenant-isolation.ts` to 16 automated assertions covering visitors, invitations, meeting rooms, approvals, webhooks, notification templates, employees, blacklist, security logs, CSV reports exports, and global search. Registered `pnpm test:tenant` in `package.json`.
+- **Git Line-Ending Configuration Guidance**: Windows environments should set `git config core.autocrlf false` (or `input`) when collaborating on this repository. The project enforces LF line endings via repository-level `.gitattributes`.
+
+
 
 
