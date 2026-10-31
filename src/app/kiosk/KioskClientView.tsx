@@ -58,6 +58,7 @@ export function KioskClientView({
   const [typeId, setTypeId] = useState(visitorTypes[0]?.id || "");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
 
@@ -80,6 +81,7 @@ export function KioskClientView({
     setCompany("");
     setPhotoUrl(null);
     setSignatureUrl(null);
+    setConsentChecked(false);
     setIssuedBadge(null);
     setQrError(null);
   };
@@ -111,6 +113,8 @@ export function KioskClientView({
         body: JSON.stringify({
           invitationId: verifyData.data.invitationId,
           receptionistName: "Lobby Self-Service Kiosk",
+          consentGiven: true,
+          consentVersion: "v1.0",
         }),
       });
 
@@ -144,6 +148,11 @@ export function KioskClientView({
   };
 
   const handleWalkinComplete = async () => {
+    if (!consentChecked) {
+      toast.error("Please review and agree to the Workplace Privacy & Consent Policy");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/visitors/walkin", {
@@ -157,6 +166,8 @@ export function KioskClientView({
           hostEmployeeId: hostId,
           photoUrl,
           signatureUrl,
+          consentGiven: true,
+          consentVersion: "v1.0",
           purpose: "Self-Checkin Workplace Visit",
         }),
       });
@@ -481,6 +492,26 @@ export function KioskClientView({
             </div>
 
             <SignatureCanvas onSave={(url) => setSignatureUrl(url)} />
+
+            {/* Privacy & Security Consent Checkbox */}
+            <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 cursor-pointer hover:border-indigo-500/50 transition-colors">
+              <input
+                type="checkbox"
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+                className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+              />
+              <span className="text-[11px] leading-relaxed text-slate-400">
+                I agree to the collection and processing of my name, photo, and visit record under the{" "}
+                <a href="/privacy" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">
+                  DPDP Act 2023 & Privacy Policy
+                </a>{" "}
+                and accept the workplace{" "}
+                <a href="/terms" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">
+                  Terms of Service
+                </a>.
+              </span>
+            </label>
 
             <div className="flex gap-3 pt-2">
               <button

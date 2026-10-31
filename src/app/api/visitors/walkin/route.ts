@@ -19,6 +19,8 @@ const walkinSchema = z.object({
   idProofNumber: z.string().optional(),
   photoUrl: z.string().optional(),
   signatureUrl: z.string().optional(),
+  consentGiven: z.boolean().optional(),
+  consentVersion: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
       idProofNumber,
       photoUrl,
       signatureUrl,
+      consentGiven,
+      consentVersion,
     } = parsed.data;
 
     // Verify host employee belongs to this organization
@@ -161,6 +165,8 @@ export async function POST(request: Request) {
             idProofType: idProofType || null,
             idProofNumber: idProofNumber?.trim() || null,
             avatarUrl: photoUrl || null,
+            consentGiven: consentGiven ?? true,
+            consentVersion: consentVersion || "v1.0",
             organizationId: orgId,
           },
         });
@@ -173,6 +179,8 @@ export async function POST(request: Request) {
             avatarUrl: photoUrl || visitor.avatarUrl,
             idProofType: idProofType || visitor.idProofType,
             idProofNumber: idProofNumber?.trim() || visitor.idProofNumber,
+            consentGiven: consentGiven ?? true,
+            consentVersion: consentVersion || "v1.0",
           },
         });
       }
@@ -186,6 +194,8 @@ export async function POST(request: Request) {
           badgeNumber,
           badgeIssued: true,
           status: "CHECKED_IN",
+          consentGiven: consentGiven ?? true,
+          consentVersion: consentVersion || "v1.0",
           receptionistName: user.name,
           expectedCheckout: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours
         },

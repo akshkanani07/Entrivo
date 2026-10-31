@@ -78,6 +78,8 @@ export function WalkinForm({
           ...formData,
           photoUrl,
           signatureUrl,
+          consentGiven: true,
+          consentVersion: "v1.0",
         }),
       });
 

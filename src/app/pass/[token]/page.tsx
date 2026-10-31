@@ -174,8 +174,13 @@ export default async function PublicPassPage({
           </div>
         </div>
 
-        <div className="text-center text-[11px] text-slate-500">
-          Powered by Entrivo Workplace Access Platform • Modern Touchless Entry
+        <div className="text-center text-[11px] text-slate-500 space-y-1">
+          <div>Powered by Entrivo Workplace Access Platform • Modern Touchless Entry</div>
+          <div className="flex justify-center gap-3 text-[10px] text-slate-400">
+            <a href="/terms" target="_blank" className="hover:text-indigo-400 underline">Terms of Service</a>
+            <span>•</span>
+            <a href="/privacy" target="_blank" className="hover:text-indigo-400 underline">Privacy Policy (DPDP Act 2023)</a>
+          </div>
         </div>
       </div>
     </div>

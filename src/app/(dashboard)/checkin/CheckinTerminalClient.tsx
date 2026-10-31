@@ -85,7 +85,11 @@ export function CheckinTerminalClient({
       const res = await fetch("/api/visitors/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invitationId }),
+        body: JSON.stringify({
+          invitationId,
+          consentGiven: true,
+          consentVersion: "v1.0",
+        }),
       });
 
       const data = await res.json();

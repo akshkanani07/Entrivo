@@ -129,6 +129,8 @@ export async function POST(request: Request) {
           isEmailVerified: true,
           mustChangePassword: false,
           passwordChangedAt: new Date(),
+          termsAcceptedAt: new Date(),
+          termsVersion: "v1.0",
         },
       });
 

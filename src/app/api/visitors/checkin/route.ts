@@ -12,6 +12,8 @@ const checkinSchema = z.object({
   photoUrl: z.string().optional(),
   signatureUrl: z.string().optional(),
   receptionistName: z.string().optional(),
+  consentGiven: z.boolean().optional(),
+  consentVersion: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { invitationId, photoUrl, signatureUrl, receptionistName } = parsed.data;
+    const { invitationId, photoUrl, signatureUrl, receptionistName, consentGiven, consentVersion } = parsed.data;
 
     // Load invitation strictly scoped by organization
     const invitation = await prisma.invitation.findFirst({
@@ -138,6 +140,8 @@ export async function POST(request: Request) {
           badgeNumber,
           badgeIssued: true,
           status: "CHECKED_IN",
+          consentGiven: consentGiven ?? true,
+          consentVersion: consentVersion || "v1.0",
           photoUrl: photoUrl || invitation.visitor.avatarUrl || null,
           signatureUrl: signatureUrl || null,
           receptionistName: receptionistName || user.name,
@@ -146,6 +150,14 @@ export async function POST(request: Request) {
         include: {
           visitor: { include: { visitorType: true } },
           hostEmployee: { include: { user: true, office: true } },
+        },
+      });
+
+      await tx.visitor.update({
+        where: { id: invitation.visitorId },
+        data: {
+          consentGiven: true,
+          consentVersion: consentVersion || "v1.0",
         },
       });
 
