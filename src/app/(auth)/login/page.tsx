@@ -117,9 +117,8 @@ export default function LoginPage() {
                 setMagicSent(false);
                 setError(null);
               }}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-                authMode === "PASSWORD" ? "bg-indigo-600 text-white shadow-glow-sm" : "text-slate-400 hover:text-white"
-              }`}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${authMode === "PASSWORD" ? "bg-indigo-600 text-white shadow-glow-sm" : "text-slate-400 hover:text-white"
+                }`}
             >
               Password Login
             </button>
@@ -129,9 +128,8 @@ export default function LoginPage() {
                 setAuthMode("MAGIC_LINK");
                 setError(null);
               }}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                authMode === "MAGIC_LINK" ? "bg-indigo-600 text-white shadow-glow-sm" : "text-slate-400 hover:text-white"
-              }`}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-1.5 ${authMode === "MAGIC_LINK" ? "bg-indigo-600 text-white shadow-glow-sm" : "text-slate-400 hover:text-white"
+                }`}
             >
               <Wand2 className="w-3.5 h-3.5" />
               Magic Link

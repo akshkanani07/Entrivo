@@ -162,3 +162,4 @@ export function canAssignRole(callerRole: UserRole, targetRole: UserRole): boole
   }
   return false;
 }
+

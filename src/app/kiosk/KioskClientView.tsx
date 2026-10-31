@@ -15,6 +15,10 @@ import {
   Clock,
   Printer,
   Loader2,
+  Tablet,
+  Key,
+  Lock,
+  LogOut,
 } from "lucide-react";
 import { CameraCapture } from "@/components/visitor/CameraCapture";
 import { SignatureCanvas } from "@/components/visitor/SignatureCanvas";
@@ -62,6 +66,64 @@ export function KioskClientView({
   const [submitting, setSubmitting] = useState(false);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
 
+  // Kiosk Terminal Pairing State
+  const [kioskKey, setKioskKey] = useState<string | null>(null);
+  const [isPaired, setIsPaired] = useState<boolean | null>(null); // null during initial client check
+  const [pairingInput, setPairingInput] = useState("");
+  const [pairingLoading, setPairingLoading] = useState(false);
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? sessionStorage.getItem("entrivo_kiosk_key") : null;
+    if (stored) {
+      setKioskKey(stored);
+      setIsPaired(true);
+    } else {
+      setIsPaired(false);
+    }
+  }, []);
+
+  const handlePairTerminal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const keyToUse = pairingInput.trim();
+    if (!keyToUse) return;
+
+    setPairingLoading(true);
+    try {
+      // Test the key against kiosk verification endpoint with a dummy probe
+      const res = await fetch("/api/kiosk/verify-qr", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiosk-key": keyToUse,
+        },
+        body: JSON.stringify({ token: "PROBE_CHECK" }),
+      });
+
+      // 401 means invalid key; 404/400 means valid key, pass just not found (which is expected)
+      if (res.status === 401) {
+        toast.error("Invalid or revoked kiosk key. Please check the key in Settings.");
+        return;
+      }
+
+      sessionStorage.setItem("entrivo_kiosk_key", keyToUse);
+      setKioskKey(keyToUse);
+      setIsPaired(true);
+      setPairingInput("");
+      toast.success("Kiosk terminal successfully paired!");
+    } catch {
+      toast.error("Failed to connect to kiosk service");
+    } finally {
+      setPairingLoading(false);
+    }
+  };
+
+  const handleUnpair = () => {
+    sessionStorage.removeItem("entrivo_kiosk_key");
+    setKioskKey(null);
+    setIsPaired(false);
+    toast.info("Kiosk terminal unpaired.");
+  };
+
   // Auto-reset timer when on success screen
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -94,29 +156,44 @@ export function KioskClientView({
     setQrError(null);
 
     try {
-      // 1. Verify token
-      const verifyRes = await fetch("/api/invitations/verify-qr", {
+      // 1. Verify token via kiosk-scoped endpoint
+      const verifyRes = await fetch("/api/kiosk/verify-qr", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiosk-key": kioskKey || "",
+        },
         body: JSON.stringify({ token }),
       });
+
+      if (verifyRes.status === 401) {
+        handleUnpair();
+        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+      }
 
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) {
         throw new Error(verifyData.error || "Invalid invitation QR pass");
       }
 
-      // 2. Perform Checkin
-      const checkinRes = await fetch("/api/visitors/checkin", {
+      // 2. Perform Checkin via kiosk-scoped endpoint
+      const checkinRes = await fetch("/api/kiosk/checkin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiosk-key": kioskKey || "",
+        },
         body: JSON.stringify({
           invitationId: verifyData.data.invitationId,
-          receptionistName: "Lobby Self-Service Kiosk",
           consentGiven: true,
           consentVersion: "v1.0",
         }),
       });
+
+      if (checkinRes.status === 401) {
+        handleUnpair();
+        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+      }
 
       const checkinData = await checkinRes.json();
       if (!checkinRes.ok) {
@@ -127,16 +204,17 @@ export function KioskClientView({
         confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
       } catch {}
 
+      const item = checkinData.data;
       setIssuedBadge({
-        badgeNumber: checkinData.checkIn.badgeNumber,
-        visitorName: checkinData.checkIn.visitor.name,
-        visitorCompany: checkinData.checkIn.visitor.company,
-        visitorTypeName: checkinData.checkIn.visitor.visitorTypeName,
-        badgeColor: checkinData.checkIn.visitor.badgeColor,
-        hostName: checkinData.checkIn.host.name,
-        hostOffice: checkinData.checkIn.host.office,
-        photoUrl: checkinData.checkIn.visitor.avatarUrl,
-        issueDate: formatDateTime(checkinData.checkIn.checkInTime),
+        badgeNumber: item.badgeNumber,
+        visitorName: item.visitorName,
+        visitorCompany: item.visitorCompany,
+        visitorTypeName: "Visitor",
+        badgeColor: "#6366f1",
+        hostName: item.hostName,
+        hostOffice: "Main Office",
+        photoUrl: null,
+        issueDate: formatDateTime(item.checkInTime),
       });
 
       setStep("SUCCESS");
@@ -155,9 +233,12 @@ export function KioskClientView({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/visitors/walkin", {
+      const res = await fetch("/api/kiosk/walkin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-kiosk-key": kioskKey || "",
+        },
         body: JSON.stringify({
           name,
           phone,
@@ -172,6 +253,11 @@ export function KioskClientView({
         }),
       });
 
+      if (res.status === 401) {
+        handleUnpair();
+        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+      }
+
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Check-in failed");
@@ -181,16 +267,17 @@ export function KioskClientView({
         confetti({ particleCount: 80, spread: 70, colors: ["#6366f1", "#10b981", "#06b6d4"] });
       } catch {}
 
+      const item = data.data;
       setIssuedBadge({
-        badgeNumber: data.checkIn.badgeNumber,
-        visitorName: data.checkIn.visitor.name,
-        visitorCompany: data.checkIn.visitor.company,
-        visitorTypeName: data.checkIn.visitor.visitorTypeName,
-        badgeColor: data.checkIn.visitor.badgeColor,
-        hostName: data.checkIn.host.name,
-        hostOffice: data.checkIn.host.office,
-        photoUrl: data.checkIn.visitor.avatarUrl,
-        issueDate: formatDateTime(data.checkIn.checkInTime),
+        badgeNumber: item.badgeNumber,
+        visitorName: item.visitorName,
+        visitorCompany: item.visitorCompany,
+        visitorTypeName: "Visitor",
+        badgeColor: "#6366f1",
+        hostName: item.hostName,
+        hostOffice: "Main Office",
+        photoUrl: null,
+        issueDate: formatDateTime(item.checkInTime),
       });
 
       setStep("SUCCESS");
@@ -200,6 +287,51 @@ export function KioskClientView({
       setSubmitting(false);
     }
   };
+
+  if (isPaired === false) {
+    return (
+      <div className="relative z-10 max-w-md w-full mx-auto my-auto flex-1 flex flex-col justify-center">
+        <div className="glass-card rounded-3xl border border-indigo-950/70 p-8 space-y-6 text-center shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto shadow-glow">
+            <Tablet className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Pair Lobby Kiosk Terminal</h2>
+            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
+              This terminal is not paired with an Entrivo workplace organization. An administrator must enter the Kiosk Secret Key generated in <strong className="text-slate-200">Settings &gt; Kiosks</strong>.
+            </p>
+          </div>
+
+          <form onSubmit={handlePairTerminal} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Kiosk Secret Key
+              </label>
+              <input
+                type="password"
+                required
+                value={pairingInput}
+                onChange={(e) => setPairingInput(e.target.value)}
+                placeholder="Paste key here..."
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={pairingLoading}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-glow-sm disabled:opacity-50"
+            >
+              {pairingLoading ? "Verifying..." : "Pair & Activate Kiosk"}
+            </button>
+          </form>
+
+          <p className="text-[11px] text-slate-500">
+            The key is stored in this browser&apos;s sessionStorage and authenticates self-service check-ins.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative z-10 max-w-4xl w-full mx-auto flex-1 flex flex-col justify-between">
@@ -215,15 +347,24 @@ export function KioskClientView({
           </div>
         </div>
 
-        {step !== "WELCOME" && (
+        <div className="flex items-center gap-2">
+          {step !== "WELCOME" && (
+            <button
+              onClick={resetKiosk}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Start Over
+            </button>
+          )}
           <button
-            onClick={resetKiosk}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
+            onClick={handleUnpair}
+            title="Unpair Terminal"
+            className="p-2 rounded-xl text-slate-600 hover:text-slate-400 transition-colors"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Start Over
+            <LogOut className="w-4 h-4" />
           </button>
-        )}
+        </div>
       </div>
 
       {/* Screen 1: Welcome Options */}

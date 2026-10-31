@@ -98,3 +98,4 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 1. **Dynamic Navigation (`src/components/layout/Sidebar.tsx`)**: Each navigation item defines its required `Permission`. Items for which the current user lacks permission are omitted from the DOM entirely.
 2. **Server Page Guards (`src/lib/rbac.ts` `requirePagePermission`)**: Each dashboard page executes `requirePagePermission(perm)` on the server before database queries occur. Unauthorized requests are immediately redirected to `/forbidden`.
 3. **Forbidden Page (`/forbidden`)**: A production-grade glass-card UI displaying user credentials, requested action, and contact link to the organization administrator.
+

@@ -52,3 +52,4 @@ startWorker().catch((err) => {
   console.error("Worker startup error:", err);
   process.exit(1);
 });
+

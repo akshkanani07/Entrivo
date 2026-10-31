@@ -152,3 +152,4 @@ Expected output:
 [Worker] Connected to Redis queue. Listening for jobs...
 ```
 When Redis is stopped, notifications continue seamlessly via the in-process fallback runner with retry intervals at 5s, 30s, and 120s.
+

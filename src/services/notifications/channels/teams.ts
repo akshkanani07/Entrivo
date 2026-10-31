@@ -2,12 +2,27 @@ import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { NotificationEvent, NotificationPayload } from "../events";
 
+/**
+ * Teams webhook strict allow-list.
+ * Accepted hosts: *.webhook.office.com, *.logic.azure.com,
+ *                 *.powerplatform.com, *.api.powerplatform.com
+ * https only, no userinfo, no custom port, redirect: "manual".
+ */
+const TEAMS_ALLOWED_HOSTS: RegExp[] = [
+  /^[a-z0-9-]+\.webhook\.office\.com$/,
+  /^[a-z0-9-]+\.logic\.azure\.com$/,
+  /^[a-z0-9-]+\.powerplatform\.com$/,
+  /^[a-z0-9-]+\.api\.powerplatform\.com$/,
+];
+
 function isValidTeamsWebhook(url: string): boolean {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return false;
-    const hostname = parsed.hostname.toLowerCase();
-    return hostname.endsWith(".office.com") || hostname.endsWith(".office365.com");
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port) return false;
+    const host = parsed.hostname.toLowerCase();
+    return TEAMS_ALLOWED_HOSTS.some((re) => re.test(host));
   } catch {
     return false;
   }
@@ -19,7 +34,6 @@ export async function sendTeamsNotification(
   content: { title: string; body: string; url?: string }
 ) {
   try {
-    // 1. Load organization Teams Webhook setting
     const setting = await prisma.setting.findUnique({
       where: {
         organizationId_key: {
@@ -29,7 +43,7 @@ export async function sendTeamsNotification(
       },
     });
 
-    if (!setting || !setting.value) {
+    if (!setting?.value) {
       return { success: false, reason: "Teams webhook not configured" };
     }
 
@@ -47,54 +61,32 @@ export async function sendTeamsNotification(
 
     const webhookUrl = decrypt(setting.value);
     if (!isValidTeamsWebhook(webhookUrl)) {
-      console.warn("[Teams Channel] Blocked invalid or untrusted webhook URL (SSRF protection).");
+      console.warn("[Teams] Blocked non-allowlisted webhook URL (SSRF protection).");
       return { success: false, reason: "Invalid Teams webhook URL" };
     }
 
-    // 2. Build Teams Adaptive Card Payload
-    const cardBody: any[] = [
+    const cardBody = [
       {
         type: "TextBlock",
         size: "Medium",
         weight: "Bolder",
-        text: `🔔 ${content.title}`,
+        text: content.title,
       },
-      {
-        type: "TextBlock",
-        text: content.body,
-        wrap: true,
-      },
+      { type: "TextBlock", text: content.body, wrap: true },
       {
         type: "FactSet",
         facts: [
-          {
-            title: "Visitor:",
-            value: `${payload.visitorName} (${payload.visitorCompany || "Guest"})`,
-          },
-          {
-            title: "Host:",
-            value: payload.hostName,
-          },
-          {
-            title: "Location:",
-            value: payload.location || "Main Reception",
-          },
-          {
-            title: "Time:",
-            value: payload.time || new Date().toLocaleTimeString(),
-          },
+          { title: "Visitor:", value: `${payload.visitorName} (${payload.visitorCompany ?? "Guest"})` },
+          { title: "Host:", value: payload.hostName },
+          { title: "Location:", value: payload.location ?? "Main Reception" },
+          { title: "Time:", value: payload.time ?? new Date().toLocaleTimeString() },
         ],
       },
     ];
 
-    const actions: any[] = [];
-    if (content.url) {
-      actions.push({
-        type: "Action.OpenUrl",
-        title: "View in Entrivo",
-        url: content.url,
-      });
-    }
+    const actions = content.url
+      ? [{ type: "Action.OpenUrl", title: "View in Entrivo", url: content.url }]
+      : [];
 
     const message = {
       type: "message",
@@ -113,22 +105,32 @@ export async function sendTeamsNotification(
       ],
     };
 
-    // 3. Post to Teams
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(message),
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
     });
 
+    if (response.type === "opaqueredirect") {
+      console.warn("[Teams] Webhook redirected — blocked (SSRF protection).");
+      return { success: false, reason: "Webhook redirect blocked" };
+    }
+
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("[Teams Channel] Teams HTTP error:", response.status, errText);
-      return { success: false, error: errText };
+      const errText = await response.text().catch(() => "(unreadable)");
+      console.error("[Teams] HTTP error:", response.status, errText.slice(0, 200));
+      return { success: false, error: `HTTP ${response.status}` };
     }
 
     return { success: true };
   } catch (error) {
-    console.error("[Teams Channel] Dispatch error:", error);
-    return { success: false, error };
+    if (error instanceof Error && error.name === "TimeoutError") {
+      console.error("[Teams] Webhook timed out after 5 s");
+      return { success: false, error: "Webhook timeout" };
+    }
+    console.error("[Teams] Dispatch error:", error);
+    return { success: false, error: "Dispatch error" };
   }
 }

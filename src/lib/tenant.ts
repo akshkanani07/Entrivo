@@ -34,3 +34,4 @@ export function requireOrg(user: CurrentUser | null | undefined): TenantResult {
 
   return { organizationId: user.organizationId };
 }
+

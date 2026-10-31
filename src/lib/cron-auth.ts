@@ -32,3 +32,4 @@ export function verifyCronSecret(request: Request): boolean {
     return false;
   }
 }
+

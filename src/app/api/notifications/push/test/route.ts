@@ -54,3 +54,4 @@ export async function POST() {
     return NextResponse.json({ success: false, error: error.message || "Failed to dispatch test push notification" }, { status: 500 });
   }
 }
+

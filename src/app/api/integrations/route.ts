@@ -12,34 +12,72 @@ const ALLOWED_INTEGRATION_KEYS: Record<string, string[]> = {
   GOOGLE_CAL: ["GOOGLE_CAL_ID", "GOOGLE_CAL_ENABLED"],
 };
 
-function isPrivateOrLoopback(urlStr: string): boolean {
+// Per-integration webhook allow-lists (SSRF protection)
+const SLACK_WEBHOOK_REGEX = /^https:\/\/hooks\.slack\.com\/services\//;
+const TEAMS_ALLOWED_HOSTS: RegExp[] = [
+  /^[a-z0-9-]+\.webhook\.office\.com$/,
+  /^[a-z0-9-]+\.logic\.azure\.com$/,
+  /^[a-z0-9-]+\.powerplatform\.com$/,
+  /^[a-z0-9-]+\.api\.powerplatform\.com$/,
+];
+
+function validateWebhookUrl(key: string, url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "Invalid URL";
+  }
+  if (parsed.protocol !== "https:") return "Webhook URL must use https://";
+  if (parsed.username || parsed.password) return "Webhook URL must not contain credentials";
+  if (parsed.port) return "Webhook URL must not specify a custom port";
+
+  if (key === "SLACK_WEBHOOK") {
+    if (!SLACK_WEBHOOK_REGEX.test(url)) {
+      return "Slack webhook must start with https://hooks.slack.com/services/";
+    }
+    return null;
+  }
+
+  if (key === "TEAMS_WEBHOOK") {
+    const host = parsed.hostname.toLowerCase();
+    if (!TEAMS_ALLOWED_HOSTS.some((re) => re.test(host))) {
+      return "Teams webhook host is not in the allowed list (*.webhook.office.com, *.logic.azure.com, *.powerplatform.com)";
+    }
+    return null;
+  }
+
+  return null; // not a webhook key
+}
+
+// Generic SSRF check for ad-hoc webhook subscriptions (non-integration webhooks)
+function isGenericWebhookSafe(urlStr: string): boolean {
   try {
     const parsed = new URL(urlStr);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port) return false;
     const host = parsed.hostname.toLowerCase();
+    // Block loopback and RFC-1918 ranges
     if (
       host === "localhost" ||
       host === "127.0.0.1" ||
       host === "::1" ||
       host.startsWith("10.") ||
       host.startsWith("192.168.") ||
-      host.startsWith("172.16.") ||
-      host.startsWith("172.17.") ||
-      host.startsWith("172.18.") ||
-      host.startsWith("172.19.") ||
-      host.startsWith("172.2") ||
-      host.startsWith("172.30.") ||
-      host.startsWith("172.31.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
       host.startsWith("169.254.") ||
       host.endsWith(".local") ||
       host.endsWith(".internal")
     ) {
-      return true;
+      return false;
     }
-    return false;
-  } catch {
     return true;
+  } catch {
+    return false;
   }
 }
+
 
 export async function GET() {
   try {
@@ -121,7 +159,7 @@ export async function POST(request: Request) {
         );
       }
 
-      if (isPrivateOrLoopback(webhookUrl)) {
+      if (isGenericWebhookSafe(webhookUrl) === false) {
         return NextResponse.json(
           { success: false, error: "Security restriction: Webhooks cannot target internal or loopback IP addresses." },
           { status: 400 }
@@ -152,8 +190,16 @@ export async function POST(request: Request) {
             "User-Agent": "Entrivo-Webhook-Agent/1.0",
           },
           body: JSON.stringify(payload),
+          redirect: "manual",
           signal: AbortSignal.timeout(5000),
         });
+
+        if (response.type === "opaqueredirect") {
+          return NextResponse.json({
+            success: false,
+            error: "Webhook target redirected. Redirects are blocked for security.",
+          });
+        }
 
         const latency = Date.now() - startTime;
         return NextResponse.json({
@@ -182,7 +228,7 @@ export async function POST(request: Request) {
         );
       }
 
-      if (isPrivateOrLoopback(webhookUrl)) {
+      if (isGenericWebhookSafe(webhookUrl) === false) {
         return NextResponse.json(
           { success: false, error: "Security restriction: Webhooks cannot target internal or loopback IP addresses." },
           { status: 400 }
@@ -237,11 +283,12 @@ export async function POST(request: Request) {
         }
 
         let storedValue = String(value);
-        // If webhook url, validate SSRF and encrypt at rest with AES-256-GCM
+        // If webhook url, validate SSRF with strict allow-list and encrypt at rest with AES-256-GCM
         if (key.includes("WEBHOOK") && typeof value === "string" && value.length > 0) {
-          if (!value.startsWith("https://") || isPrivateOrLoopback(value)) {
+          const webhookErr = validateWebhookUrl(key, value);
+          if (webhookErr) {
             return NextResponse.json(
-              { success: false, error: `Invalid or unsafe webhook URL provided for ${key}.` },
+              { success: false, error: webhookErr },
               { status: 400 }
             );
           }

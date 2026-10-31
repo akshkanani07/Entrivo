@@ -669,7 +669,7 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Teams Webhook URL</label>
                 <input
                   type="url"
-                  placeholder="https://outlook.office.com/webhook/..."
+                  placeholder="https://your-org.webhook.office.com/webhookb2/... or *.logic.azure.com"
                   value={teamsForm.webhook}
                   onChange={(e) => setTeamsForm({ ...teamsForm, webhook: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500"

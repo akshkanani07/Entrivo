@@ -45,3 +45,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: "Failed to fetch notifications" }, { status: 500 });
   }
 }
+

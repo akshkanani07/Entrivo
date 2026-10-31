@@ -60,3 +60,4 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 - `/pass/[token]`: Requires secret signed or unique random `qrToken`. Removed legacy fallback to raw database `id`. Does not expose tenant internal IDs or credentials.
 - `/kiosk`: Kiosk registration generates touchless check-ins scoped to the organization hosting the kiosk terminal.
 - `/api/cron/auto-checkout`: Protected by constant-time Bearer token comparison (`CRON_SECRET`). Operates system-wide to close stale open visits safely.
+

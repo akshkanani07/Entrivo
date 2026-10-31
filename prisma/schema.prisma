@@ -70,6 +70,7 @@ model Organization {
   contactPhone    String?
   checkInPolicy   String?
   workingHours    String?           @default("08:30 - 19:30")
+  timezone        String            @default("Asia/Kolkata")
   deletedAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -93,6 +94,7 @@ model Organization {
   webhooks        WebhookSubscription[]
   settings        Setting[]
   reports         Report[]
+  kiosks          Kiosk[]
 
   @@index([slug])
 }
@@ -673,4 +675,19 @@ model Report {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+}
+
+model Kiosk {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  keyHash        String       @unique  // SHA-256 of the raw kiosk key
+  lastUsedAt     DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([keyHash])
 }

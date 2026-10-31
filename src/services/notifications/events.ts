@@ -27,3 +27,4 @@ export interface NotificationPayload {
   severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
   entityId?: string; // e.g. invitationId or checkInId for dedupe
 }
+

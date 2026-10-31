@@ -71,3 +71,4 @@ Entrivo is an enterprise workplace visitor management platform. This plan detail
 5. [ ] **Default Passwords**: Grep codebase for `admin123` -> 0 occurrences outside changelog; verify employee invite flow.
 6. [ ] **Password Reset**: Complete forgot -> email link -> reset flow -> sessions revoked.
 7. [ ] **Cron Security**: Call `/api/cron/auto-checkout` without Bearer secret -> 401 Unauthorized.
+

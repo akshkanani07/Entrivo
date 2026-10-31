@@ -52,6 +52,10 @@ const PUBLIC_ROUTES = [
   "/api/auth/reset-password",
   // Cron endpoints (manage their own Bearer CRON_SECRET auth):
   "/api/cron",
+  // Kiosk endpoints authenticate via x-kiosk-key header (no staff session):
+  "/api/kiosk",
+  // accept-terms is authenticated but not guarded by middleware (layout enforces):
+  "/accept-terms",
 ];
 
 export function middleware(request: NextRequest) {

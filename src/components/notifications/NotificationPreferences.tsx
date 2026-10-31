@@ -132,3 +132,4 @@ export function NotificationPreferences({ initialPreferences }: Props) {
     </div>
   );
 }
+

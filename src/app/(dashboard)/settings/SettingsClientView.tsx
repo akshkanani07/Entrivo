@@ -28,6 +28,7 @@ import { formatDateTime } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { KioskManager } from "./KioskManager";
 
 interface SessionItem {
   id: string;
@@ -44,7 +45,7 @@ export function SettingsClientView({
   initialOrg: any;
 }) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"PROFILE" | "SECURITY" | "SESSIONS" | "WORKERS">("PROFILE");
+  const [activeTab, setActiveTab] = useState<"PROFILE" | "SECURITY" | "SESSIONS" | "WORKERS" | "KIOSKS">("PROFILE");
 
   // Profile Form State
   const [profileData, setProfileData] = useState({
@@ -272,6 +273,14 @@ export function SettingsClientView({
           }`}
         >
           Background Workers
+        </button>
+        <button
+          onClick={() => setActiveTab("KIOSKS")}
+          className={`flex-1 py-2.5 rounded-xl transition-all ${
+            activeTab === "KIOSKS" ? "bg-indigo-600 text-white shadow-glow-sm" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Kiosks
         </button>
       </div>
 
@@ -740,6 +749,9 @@ export function SettingsClientView({
           )}
         </div>
       )}
+
+      {/* Tab 5: Lobby Kiosks */}
+      {activeTab === "KIOSKS" && <KioskManager />}
 
       {/* Reusable Premium Custom Confirmation Dialog */}
       <ConfirmDialog

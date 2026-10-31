@@ -92,3 +92,4 @@ fs.writeFileSync(path.join(ICONS_DIR, "icon-192x192.png"), createPngBuffer(192, 
 fs.writeFileSync(path.join(ICONS_DIR, "icon-512x512.png"), createPngBuffer(512, 512));
 
 console.log("✅ App icons generated in public/icons/: icon-192x192.png, icon-512x512.png, icon.svg");
+
