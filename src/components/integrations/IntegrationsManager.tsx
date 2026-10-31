@@ -38,8 +38,6 @@ interface IntegrationSettings {
   teamsEnabled: boolean;
   googleCalId: string;
   googleCalEnabled: boolean;
-  whatsappPhoneNumberId: string;
-  whatsappEnabled: boolean;
 }
 
 interface Props {
@@ -52,7 +50,7 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
   const [integrations, setIntegrations] = useState<IntegrationSettings>(initialIntegrations);
 
   // Modals
-  const [activeModal, setActiveModal] = useState<"SLACK" | "TEAMS" | "GOOGLE" | "WHATSAPP" | "WEBHOOK" | null>(null);
+  const [activeModal, setActiveModal] = useState<"SLACK" | "TEAMS" | "GOOGLE" | "WEBHOOK" | null>(null);
 
   // Webhook Test & Registration State
   const [testUrl, setTestUrl] = useState("");
@@ -76,11 +74,6 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
   const [googleForm, setGoogleForm] = useState({
     calId: integrations.googleCalId || "",
     enabled: integrations.googleCalEnabled,
-  });
-
-  const [whatsappForm, setWhatsappForm] = useState({
-    phoneId: integrations.whatsappPhoneNumberId || "",
-    enabled: integrations.whatsappEnabled,
   });
 
   // Delete Dialog
@@ -359,39 +352,38 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
           </div>
         </div>
 
-        {/* Meta WhatsApp Cloud Card */}
+        {/* Web Push Notification Card */}
         <div className="glass-card rounded-2xl border border-indigo-950/70 p-5 space-y-4 flex flex-col justify-between hover:border-indigo-500/40 transition-all">
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-950/50 border border-emerald-500/40 flex items-center justify-center font-bold text-emerald-400">
-                  <MessageSquare className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-xl bg-cyan-950/50 border border-cyan-500/40 flex items-center justify-center font-bold text-cyan-400">
+                  <Share2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Meta WhatsApp Cloud API</h3>
-                  <p className="text-[11px] text-slate-400">Direct QR passes via WhatsApp Business</p>
+                  <h3 className="text-sm font-bold text-white">Web Push & VAPID</h3>
+                  <p className="text-[11px] text-slate-400">Desktop & Mobile Chrome notifications</p>
                 </div>
               </div>
 
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">
                 ACTIVE
               </span>
             </div>
             <p className="text-xs text-slate-300">
-              Sends instant QR entry passes, meeting confirmations, and checkout thank-you alerts to visitors' phones.
+              Dispatches native desktop and mobile push notification toasts to Chrome, Edge, and Safari upon visitor check-in.
             </p>
           </div>
 
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">Meta Graph API v21.0</span>
-            <button
-              type="button"
-              onClick={() => setActiveModal("WHATSAPP")}
+            <span className="text-[11px] text-slate-400">W3C Push API / RFC 8292</span>
+            <a
+              href="/notifications"
               className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors flex items-center gap-1.5"
             >
-              <Settings className="w-3.5 h-3.5 text-indigo-400" />
-              Configure
-            </button>
+              <Settings className="w-3.5 h-3.5 text-cyan-400" />
+              Manage Push
+            </a>
           </div>
         </div>
       </div>
@@ -777,70 +769,6 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
                       ...prev,
                       googleCalId: googleForm.calId,
                       googleCalEnabled: googleForm.enabled,
-                    }));
-                  }}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-glow"
-                >
-                  Save Settings
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: WHATSAPP */}
-      {activeModal === "WHATSAPP" && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">WhatsApp Business Cloud Settings</h3>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Meta Phone Number ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 109847120938471"
-                  value={whatsappForm.phoneId}
-                  onChange={(e) => setWhatsappForm({ ...whatsappForm, phoneId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-semibold text-white">Enable WhatsApp Cloud Messaging</span>
-                <input
-                  type="checkbox"
-                  checked={whatsappForm.enabled}
-                  onChange={(e) => setWhatsappForm({ ...whatsappForm, enabled: e.target.checked })}
-                  className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    saveIntegrationSetting("WhatsApp Cloud", {
-                      WHATSAPP_PHONE_ID: whatsappForm.phoneId,
-                      WHATSAPP_ENABLED: whatsappForm.enabled,
-                    });
-                    setIntegrations((prev) => ({
-                      ...prev,
-                      whatsappPhoneNumberId: whatsappForm.phoneId,
-                      whatsappEnabled: whatsappForm.enabled,
                     }));
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-glow"

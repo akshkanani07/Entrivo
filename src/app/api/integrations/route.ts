@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { encrypt, decrypt } from "@/lib/encryption";
 import crypto from "crypto";
 
 const ALLOWED_INTEGRATION_KEYS: Record<string, string[]> = {
@@ -80,9 +81,9 @@ export async function GET() {
       success: true,
       webhooks: maskedWebhooks,
       integrations: {
-        slackWebhook: maskUrl(settingsMap["SLACK_WEBHOOK"]),
+        slackWebhook: maskUrl(decrypt(settingsMap["SLACK_WEBHOOK"] || "")),
         slackEnabled: settingsMap["SLACK_ENABLED"] === "true",
-        teamsWebhook: maskUrl(settingsMap["TEAMS_WEBHOOK"]),
+        teamsWebhook: maskUrl(decrypt(settingsMap["TEAMS_WEBHOOK"] || "")),
         teamsEnabled: settingsMap["TEAMS_ENABLED"] === "true",
         googleCalId: settingsMap["GOOGLE_CAL_ID"] || "",
         googleCalEnabled: settingsMap["GOOGLE_CAL_ENABLED"] === "true",
@@ -235,7 +236,8 @@ export async function POST(request: Request) {
           );
         }
 
-        // If webhook url, validate SSRF
+        let storedValue = String(value);
+        // If webhook url, validate SSRF and encrypt at rest with AES-256-GCM
         if (key.includes("WEBHOOK") && typeof value === "string" && value.length > 0) {
           if (!value.startsWith("https://") || isPrivateOrLoopback(value)) {
             return NextResponse.json(
@@ -243,6 +245,7 @@ export async function POST(request: Request) {
               { status: 400 }
             );
           }
+          storedValue = encrypt(value);
         }
 
         await prisma.setting.upsert({
@@ -252,12 +255,12 @@ export async function POST(request: Request) {
               key,
             },
           },
-          update: { value: String(value) },
+          update: { value: storedValue },
           create: {
             organizationId: orgId,
             category: "INTEGRATION",
             key,
-            value: String(value),
+            value: storedValue,
           },
         });
       }

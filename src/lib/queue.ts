@@ -1,75 +1,102 @@
-import { Queue, Worker } from "bullmq";
+import { Queue, Worker, Job } from "bullmq";
 import Redis from "ioredis";
 import { prisma } from "./db";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 
-let redisConnection: Redis | null = null;
+let redisClient: Redis | null = null;
+let redisChecked = false;
 let isRedisAvailable = false;
 
-try {
-  redisConnection = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    retryStrategy: () => null, // don't spam if local redis is off
-    lazyConnect: true,
-  });
+export async function getRedisConnection(): Promise<Redis | null> {
+  if (redisChecked) {
+    return isRedisAvailable ? redisClient : null;
+  }
 
-  redisConnection.connect().then(() => {
+  try {
+    const client = new Redis(REDIS_URL, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+      retryStrategy: () => null, // don't hang if redis is not running
+      lazyConnect: true,
+      connectTimeout: 2000,
+    });
+
+    await client.connect();
+    redisClient = client;
     isRedisAvailable = true;
-    console.log("⚡ Connected to Redis for BullMQ queues.");
-  }).catch(() => {
+    redisChecked = true;
+    console.log("⚡ Lazy connected to Redis for BullMQ queues.");
+    return redisClient;
+  } catch {
     isRedisAvailable = false;
-  });
-} catch {
-  isRedisAvailable = false;
+    redisChecked = true;
+    return null;
+  }
 }
 
-// Resilient queue wrapper
-class BullMQResilientQueue<T = any> {
+export interface QueueJob<T = any> {
+  name: string;
+  data: T;
+  retryCount?: number;
+}
+
+const RETRY_DELAYS = [5000, 30000, 120000]; // 5s, 30s, 2m
+
+export class ResilientQueue<T = any> {
   private queueName: string;
-  private bullQueue?: Queue;
+  private bullQueue: Queue | null = null;
   private processor?: (data: T) => Promise<void>;
 
   constructor(name: string) {
     this.queueName = name;
-    if (isRedisAvailable && redisConnection) {
-      try {
-        this.bullQueue = new Queue(name, { connection: redisConnection });
-      } catch {}
-    }
   }
 
   process(fn: (data: T) => Promise<void>) {
     this.processor = fn;
-    if (isRedisAvailable && redisConnection) {
-      try {
-        new Worker(this.queueName, async (job) => fn(job.data), { connection: redisConnection });
-      } catch {}
-    }
   }
 
   async add(jobName: string, data: T) {
-    if (isRedisAvailable && this.bullQueue) {
-      return this.bullQueue.add(jobName, data);
+    const connection = await getRedisConnection();
+    if (connection) {
+      try {
+        if (!this.bullQueue) {
+          this.bullQueue = new Queue(this.queueName, { connection });
+        }
+        return await this.bullQueue.add(jobName, data, {
+          attempts: 3,
+          backoff: { type: "exponential", delay: 5000 },
+        });
+      } catch (err) {
+        console.warn(`[BullMQ:${this.queueName}] Fallback to in-process runner:`, err);
+      }
     }
-    // Asynchronous non-blocking background fallback
+
+    // In-process resilient fallback runner with retries
+    this.runInProcess(jobName, data, 0);
+    return { id: `inproc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` };
+  }
+
+  private runInProcess(jobName: string, data: T, attempt: number) {
     setTimeout(async () => {
-      if (this.processor) {
-        try {
-          await this.processor(data);
-        } catch (err) {
-          console.error(`[Queue ${this.queueName}] Error:`, err);
+      if (!this.processor) return;
+      try {
+        await this.processor(data);
+      } catch (err) {
+        console.error(`[InProcess:${this.queueName}] Error on attempt ${attempt + 1}:`, err);
+        if (attempt < RETRY_DELAYS.length) {
+          const delay = RETRY_DELAYS[attempt];
+          console.log(`[InProcess:${this.queueName}] Scheduling retry #${attempt + 1} in ${delay / 1000}s`);
+          setTimeout(() => this.runInProcess(jobName, data, attempt + 1), delay);
         }
       }
-    }, 20);
-    return { id: `job-${Date.now()}` };
+    }, attempt === 0 ? 10 : 0);
   }
 }
 
-export const emailQueue = new BullMQResilientQueue("email-jobs");
-export const whatsappQueue = new BullMQResilientQueue("whatsapp-jobs");
-export const reportQueue = new BullMQResilientQueue("report-jobs");
+export const emailQueue = new ResilientQueue("email-jobs");
+export const notificationQueue = new ResilientQueue("notification-jobs");
+export const reportQueue = new ResilientQueue("report-jobs");
 
 // Auto Checkout Background Worker
 export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number }> {
@@ -98,7 +125,7 @@ export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number
           logType: "VISITOR_OVERSTAYED",
           description: `Visitor ${c.visitor.name} (Badge: ${c.badgeNumber}) exceeded expected checkout time. Status updated to OVERSTAYED.`,
           severity: "HIGH",
-          reportedBy: "System Background Worker",
+          guardName: "System Worker",
         },
       });
     }

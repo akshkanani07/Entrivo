@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
+import { notify } from "@/services/notifications/dispatcher";
+import { NotificationEvent } from "@/services/notifications/events";
 
 const checkinSchema = z.object({
   invitationId: z.string().min(1, "Invitation ID is required"),
@@ -174,6 +176,20 @@ export async function POST(request: Request) {
 
       return createdCheckIn;
     });
+
+    // Notify host via Multi-Channel Notification Platform (In-app, Push, Email, Slack/Teams)
+    await notify(NotificationEvent.VISITOR_ARRIVED, {
+      organizationId: orgId,
+      visitorName: invitation.visitor.name,
+      visitorCompany: invitation.visitor.company || undefined,
+      hostName: invitation.hostEmployee.user.name,
+      hostEmail: invitation.hostEmployee.user.email,
+      hostUserId: invitation.hostEmployee.userId,
+      badgeNumber,
+      location: invitation.meetingRoom?.name || invitation.hostEmployee.office?.name || "Front Desk",
+      time: new Date().toLocaleTimeString(),
+      entityId: checkIn.id,
+    }).catch(console.error);
 
     return NextResponse.json({
       success: true,

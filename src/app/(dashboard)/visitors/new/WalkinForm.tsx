@@ -124,7 +124,7 @@ export function WalkinForm({
         <div>
           <h2 className="text-xl font-black text-white">Walk-in Check-in Successful!</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Badge <strong className="text-indigo-400">{issuedBadge.badgeNumber}</strong> issued. Host notified via Email & WhatsApp.
+            Badge <strong className="text-indigo-400">{issuedBadge.badgeNumber}</strong> issued. Host notified via In-app, Email & Push.
           </p>
         </div>
 

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { notify } from "@/services/notifications/dispatcher";
+import { NotificationEvent } from "@/services/notifications/events";
 
 const checkoutSchema = z.object({
   checkInId: z.string().optional(),
@@ -107,6 +109,20 @@ export async function POST(request: Request) {
         },
       });
     });
+
+    // Notify about visitor checkout
+    await notify(NotificationEvent.VISITOR_CHECKED_OUT, {
+      organizationId: orgId,
+      visitorName: checkIn.visitor.name,
+      visitorEmail: checkIn.visitor.email,
+      visitorCompany: checkIn.visitor.company || undefined,
+      hostName: checkIn.hostEmployee?.user?.name || "Host",
+      hostEmail: checkIn.hostEmployee?.user?.email,
+      hostUserId: checkIn.hostEmployee?.userId,
+      time: checkOutTime.toLocaleTimeString(),
+      badgeNumber: checkIn.badgeNumber || undefined,
+      entityId: checkIn.id,
+    }).catch(console.error);
 
     return NextResponse.json({
       success: true,

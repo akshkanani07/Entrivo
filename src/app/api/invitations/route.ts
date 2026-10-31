@@ -4,9 +4,9 @@ import { prisma } from "@/lib/db";
 import { requireAnyPermission, can } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { generateVisitorToken } from "@/lib/qr";
-import { emailService } from "@/services/email/mailjet.service";
-import { generateVisitorInvitationEmail } from "@/services/email/email.templates";
 import { formatDate } from "@/lib/utils";
+import { notify } from "@/services/notifications/dispatcher";
+import { NotificationEvent } from "@/services/notifications/events";
 
 const createInvitationSchema = z.object({
   visitorName: z.string().min(1, "Visitor name is required"),
@@ -217,23 +217,25 @@ export async function POST(request: Request) {
       },
     });
 
-    // Send Email Invitation
+    // Dispatch multi-channel notification (Email to visitor, Slack/Teams, etc.)
     const formattedDate = formatDate(invitation.scheduledDate);
     const location = invitation.meetingRoom?.name || invitation.hostEmployee.office?.name || invitation.organization.name;
 
-    await emailService.sendEmail(
-      generateVisitorInvitationEmail({
-        visitorName: visitor.name,
-        visitorEmail: visitor.email,
-        hostName: hostEmployee.user.name,
-        companyName: invitation.organization.name,
-        date: formattedDate,
-        time: `${invitation.startTime} - ${invitation.endTime}`,
-        location,
-        qrPassUrl: passUrl,
-        purpose: invitation.purpose,
-      })
-    ).catch(console.error);
+    await notify(NotificationEvent.VISITOR_INVITED, {
+      organizationId: orgId,
+      visitorName: visitor.name,
+      visitorEmail: visitor.email,
+      visitorCompany: visitor.company || undefined,
+      hostName: hostEmployee.user.name,
+      hostEmail: hostEmployee.user.email,
+      hostUserId: hostEmployee.userId,
+      date: formattedDate,
+      time: `${invitation.startTime} - ${invitation.endTime}`,
+      location,
+      qrPassUrl: passUrl,
+      purpose: invitation.purpose,
+      entityId: invitation.id,
+    }).catch(console.error);
 
     return NextResponse.json({
       success: true,

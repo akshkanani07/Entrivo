@@ -1,10 +1,12 @@
 import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
-import { Mail, MessageSquare, BellRing } from "lucide-react";
+import { BellRing, ShieldCheck, Mail, Send, Bell, Share2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { NotificationTestClient } from "./NotificationTestClient";
 import { TemplatesManager } from "@/components/notifications/TemplatesManager";
+import { PushSubscriptionManager } from "@/components/notifications/PushSubscriptionManager";
+import { NotificationPreferences } from "@/components/notifications/NotificationPreferences";
 
 export const dynamic = "force-dynamic";
 
@@ -21,60 +23,80 @@ export default async function NotificationsPage() {
   }
 
   let notifications: any[] = [];
-  let emailTemplates: any[] = [];
-  let whatsappTemplates: any[] = [];
+  let templates: any[] = [];
+  let preferences: any[] = [];
 
   try {
-    const [notifs, emTpls, waTpls] = await Promise.all([
+    const [notifs, tpls, prefs] = await Promise.all([
       prisma.notification.findMany({
+        where: { organizationId: orgId },
         orderBy: { createdAt: "desc" },
-        take: 25,
+        take: 30,
       }),
-      prisma.emailTemplate.findMany({
+      prisma.notificationTemplate.findMany({
         where: { organizationId: orgId },
-        orderBy: { code: "asc" },
+        orderBy: [{ event: "asc" }, { channel: "asc" }],
       }),
-      prisma.whatsappTemplate.findMany({
-        where: { organizationId: orgId },
-        orderBy: { templateName: "asc" },
+      prisma.notificationPreference.findMany({
+        where: { userId: user.id },
       }),
     ]);
     notifications = notifs;
-    emailTemplates = emTpls;
-    whatsappTemplates = waTpls;
+    templates = tpls;
+    preferences = prefs;
   } catch (err: any) {
     console.error("Notifications fetch error:", err?.message);
   }
+
+  const getChannelBadge = (channel: string) => {
+    switch (channel) {
+      case "WEB_PUSH":
+        return "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+      case "EMAIL":
+        return "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
+      case "SLACK":
+        return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+      case "TEAMS":
+        return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+      default:
+        return "bg-slate-800 text-slate-300 border-slate-700";
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          Notification Engine & Templates
+          Enterprise Notification Platform
         </h1>
         <p className="text-xs text-slate-400 mt-1">
-          Monitor Mailjet transactional email delivery, Meta WhatsApp Cloud Business API logs, and manage dynamic templates.
+          Multi-channel delivery: Desktop & Mobile Chrome Push, Mailjet Email, Slack Block Kit, Microsoft Teams & In-App Alerts.
         </p>
       </div>
 
-      {/* Interactive Test Simulator */}
+      {/* 1. Push Subscription Manager */}
+      <PushSubscriptionManager />
+
+      {/* 2. Interactive Test Simulator */}
       <NotificationTestClient />
 
-      {/* Two Columns: Full Templates Manager + Outgoing Activity Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Interactive Templates Manager */}
-        <TemplatesManager
-          initialEmailTemplates={emailTemplates}
-          initialWaTemplates={whatsappTemplates}
-        />
+      {/* 3. Notification Preferences Matrix */}
+      <NotificationPreferences initialPreferences={preferences} />
 
-        {/* Live Outgoing Notifications Feed */}
+      {/* 4. Two Columns: Templates Manager + Real-time Logs */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Templates Manager */}
+        <div className="glass-card p-5 rounded-2xl border border-indigo-950/70">
+          <TemplatesManager initialTemplates={templates} />
+        </div>
+
+        {/* Live Notification Logs */}
         <div className="glass-card rounded-2xl border border-indigo-950/70 p-5 space-y-4 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <BellRing className="w-4 h-4 text-indigo-400" />
-                Live Notification Logs ({notifications.length})
+                Live Notification Stream ({notifications.length})
               </h3>
               <span className="text-[11px] text-slate-400 font-mono">Real-time Stream</span>
             </div>
@@ -86,31 +108,30 @@ export default async function NotificationsPage() {
                 </div>
               ) : (
                 notifications.map((n) => (
-                  <div key={n.id} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 hover:border-slate-700 transition-colors">
+                  <div
+                    key={n.id}
+                    className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 hover:border-slate-700 transition-colors"
+                  >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
-                        {n.channel === "WHATSAPP" ? (
-                          <MessageSquare className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        ) : (
-                          <Mail className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                        )}
-                        <span className="truncate max-w-[280px]">{n.title}</span>
-                      </span>
-                      <span
-                        className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase border flex-shrink-0 ${
-                          n.status === "SENT" || n.status === "DELIVERED"
-                            ? "bg-emerald-950/80 text-emerald-400 border-emerald-800"
-                            : "bg-amber-950/80 text-amber-400 border-amber-800"
-                        }`}
-                      >
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${getChannelBadge(n.channel)}`}>
+                          {n.channel.replace("_", " ")}
+                        </span>
+                        <span className="text-xs font-bold text-slate-200">
+                          {n.title}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase border bg-emerald-950/80 text-emerald-400 border-emerald-800">
                         {n.status}
                       </span>
                     </div>
+
                     <p className="text-xs text-slate-300 font-mono whitespace-pre-line bg-slate-950/80 p-2 rounded-lg border border-slate-800/60 text-[11px] leading-relaxed">
-                      {n.message}
+                      {n.body}
                     </p>
+
                     <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-0.5">
-                      <span>Channel: {n.channel}</span>
+                      <span>Event: {n.event}</span>
                       <span>{formatDateTime(n.createdAt)}</span>
                     </div>
                   </div>

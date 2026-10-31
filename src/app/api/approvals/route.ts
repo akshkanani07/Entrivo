@@ -3,6 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { notify } from "@/services/notifications/dispatcher";
+import { NotificationEvent } from "@/services/notifications/events";
 
 const approvalActionSchema = z.object({
   approvalId: z.string().min(1, "Approval ID is required"),
@@ -82,7 +84,10 @@ export async function POST(request: Request) {
       },
       include: {
         invitation: {
-          include: { visitor: true },
+          include: {
+            visitor: true,
+            hostEmployee: { include: { user: true } },
+          },
         },
       },
     });
@@ -144,6 +149,20 @@ export async function POST(request: Request) {
 
       return updated;
     });
+
+    // Notify participants about approval decision
+    await notify(NotificationEvent.APPROVAL_DECIDED, {
+      organizationId: orgId,
+      visitorName: approval.invitation?.visitor?.name || "Visitor",
+      visitorEmail: approval.invitation?.visitor?.email,
+      visitorCompany: approval.invitation?.visitor?.company || undefined,
+      hostName: approval.invitation?.hostEmployee?.user?.name || user.name,
+      hostEmail: approval.invitation?.hostEmployee?.user?.email || user.email,
+      hostUserId: approval.invitation?.hostEmployee?.userId || user.id,
+      decision: action,
+      reason: comments?.trim(),
+      entityId: approval.id,
+    }).catch(console.error);
 
     return NextResponse.json({
       success: true,

@@ -19,34 +19,38 @@ export class MailjetEmailService {
       !this.apiKey.startsWith("mock_");
   }
 
-  async sendEmail(payload: EmailPayload, userId?: string): Promise<{ success: boolean; messageId?: string }> {
+  async sendEmail(
+    payload: EmailPayload,
+    userId?: string,
+    organizationId?: string
+  ): Promise<{ success: boolean; messageId?: string }> {
     try {
-      // ── Guard: validate "to" is a proper email address before anything else ──
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!payload.to || !emailRegex.test(payload.to)) {
-        console.error(
-          `[Email Service] Aborted: invalid "to" address — "${payload.to}". ` +
-          `Check that email templates receive a visitorEmail/hostEmail field, not a name string.`
-        );
+        console.error(`[Email Service] Aborted: invalid recipient "${payload.to}".`);
         return { success: false };
       }
+
       if (!this.isConfigured) {
         console.log(`[Email Service - Simulated Mailjet Output]`);
-        console.log(`To: ${payload.to} (${payload.recipientName})`);
+        console.log(`To: ${payload.to} (${payload.recipientName || "Recipient"})`);
         console.log(`Subject: ${payload.subject}`);
         console.log(`-------------------------------------------`);
 
-        // Record notification in DB for audit trail
-        await prisma.notification.create({
-          data: {
-            userId: userId || null,
-            channel: "EMAIL",
-            title: payload.subject,
-            message: payload.textContent || payload.subject,
-            status: "SENT",
-            metadata: JSON.stringify({ to: payload.to, mode: "simulation" }),
-          },
-        });
+        if (organizationId) {
+          await prisma.notification.create({
+            data: {
+              organizationId,
+              userId: userId || null,
+              channel: "EMAIL",
+              event: "EMAIL_NOTIFICATION",
+              title: payload.subject,
+              body: payload.textContent || payload.subject,
+              status: "SENT",
+              data: { to: payload.to, simulated: true },
+            },
+          });
+        }
 
         return { success: true, messageId: `mock-email-${Date.now()}` };
       }
@@ -87,16 +91,20 @@ export class MailjetEmailService {
       }
 
       const resData = await response.json();
-      await prisma.notification.create({
-        data: {
-          userId: userId || null,
-          channel: "EMAIL",
-          title: payload.subject,
-          message: payload.textContent || payload.subject,
-          status: "SENT",
-          metadata: JSON.stringify(resData),
-        },
-      });
+      if (organizationId) {
+        await prisma.notification.create({
+          data: {
+            organizationId,
+            userId: userId || null,
+            channel: "EMAIL",
+            event: "EMAIL_NOTIFICATION",
+            title: payload.subject,
+            body: payload.textContent || payload.subject,
+            status: "SENT",
+            data: resData,
+          },
+        });
+      }
 
       return { success: true, messageId: resData?.Messages?.[0]?.To?.[0]?.MessageID?.toString() };
     } catch (error) {

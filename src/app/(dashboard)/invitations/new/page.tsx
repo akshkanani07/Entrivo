@@ -40,7 +40,7 @@ export default async function NewInvitationPage() {
           Create & Send Visitor Invitation
         </h1>
         <p className="text-xs text-slate-400 mt-1">
-          Issue a pre-registered digital pass. The visitor will automatically receive an express QR invitation via Mailjet email and WhatsApp.
+          Issue a pre-registered digital pass. The visitor will automatically receive an express QR invitation via email and multi-channel notifications.
         </p>
       </div>
 

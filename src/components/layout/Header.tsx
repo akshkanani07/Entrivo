@@ -5,6 +5,7 @@ import Link from "next/link";
 import { UserPlus, QrCode, Clock, Search, ExternalLink, Users, Calendar, ShieldCheck, X } from "lucide-react";
 import { CurrentUser } from "@/types";
 import { QRScannerModal } from "@/components/visitor/QRScannerModal";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useRouter } from "next/navigation";
 
 interface SearchResult {
@@ -135,6 +136,9 @@ export function Header({ currentUser }: { currentUser?: CurrentUser | null }) {
 
         {/* Right: Actions, Live Clock, Scanner */}
         <div className="flex items-center gap-3 ml-auto">
+          {/* Notification Bell */}
+          <NotificationBell />
+
           {/* Live Clock */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono text-indigo-300">
             <Clock className="w-3.5 h-3.5 text-indigo-400" />

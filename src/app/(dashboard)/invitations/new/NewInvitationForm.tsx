@@ -96,7 +96,7 @@ export function NewInvitationForm({
         <div>
           <h2 className="text-xl font-bold text-white">Invitation Issued & Dispatched!</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Express digital entry pass has been emailed to the visitor and synced with WhatsApp notifications.
+            Express digital entry pass has been emailed to the visitor with multi-channel push and email notifications enabled.
           </p>
         </div>
 

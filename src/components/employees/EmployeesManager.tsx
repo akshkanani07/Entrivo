@@ -683,7 +683,7 @@ export function EmployeesManager({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Phone / WhatsApp Number
+                    Contact Phone Number
                   </label>
                   <input
                     type="tel"

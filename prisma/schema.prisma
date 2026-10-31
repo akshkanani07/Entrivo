@@ -38,8 +38,10 @@ enum ApprovalStatus {
 
 enum NotificationChannel {
   EMAIL
-  WHATSAPP
   IN_APP
+  WEB_PUSH
+  SLACK
+  TEAMS
 }
 
 enum NotificationStatus {
@@ -81,10 +83,11 @@ model Organization {
   invitations     Invitation[]
   blacklists      BlacklistVisitor[]
   securityLogs    SecurityLog[]
-  auditLogs       AuditLog[]
-  emailTemplates  EmailTemplate[]
-  whatsappTemplates WhatsappTemplate[]
-  badgeTemplates  BadgeTemplate[]
+  auditLogs             AuditLog[]
+  notifications         Notification[]
+  notificationTemplates NotificationTemplate[]
+  pushSubscriptions     PushSubscription[]
+  badgeTemplates        BadgeTemplate[]
   holidays        Holiday[]
   apiKeys         ApiKey[]
   webhooks        WebhookSubscription[]
@@ -156,16 +159,20 @@ model User {
   isActive           Boolean      @default(true)
   organizationId     String?
   organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  mustChangePassword Boolean      @default(false)
-  passwordChangedAt  DateTime?
-  deletedAt          DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  mustChangePassword      Boolean                  @default(false)
+  passwordChangedAt       DateTime?
+  termsAcceptedAt         DateTime?
+  termsVersion            String?
+  deletedAt               DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 
-  employee           Employee?
-  sessions           Session[]
-  auditLogs          AuditLog[]
-  notifications      Notification[]
+  employee                Employee?
+  sessions                Session[]
+  auditLogs               AuditLog[]
+  notifications           Notification[]
+  pushSubscriptions       PushSubscription[]
+  notificationPreferences NotificationPreference[]
 
   @@index([email])
   @@index([organizationId])
@@ -272,6 +279,8 @@ model Visitor {
   idProofUrl      String?
   isBlacklisted   Boolean       @default(false)
   blacklistReason String?
+  consentGiven    Boolean       @default(true)
+  consentVersion  String?       @default("v1.0")
   organizationId  String
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   visitorTypeId   String?
@@ -335,6 +344,9 @@ model CheckIn {
   signatureUrl       String?
   badgeNumber        String?
   badgeIssued        Boolean       @default(false)
+  ndaSigned          Boolean       @default(false)
+  consentGiven       Boolean       @default(true)
+  consentVersion     String?       @default("v1.0")
   status             CheckInStatus @default(CHECKED_IN)
   receptionistName   String?
   securityGuardName  String?
@@ -522,49 +534,74 @@ model AuditLog {
 }
 
 model Notification {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel        NotificationChannel @default(IN_APP)
+  event          String
+  title          String
+  body           String
+  data           Json?
+  readAt         DateTime?
+  status         NotificationStatus  @default(SENT)
+  error          String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
+}
+
+model NotificationTemplate {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event          String
+  channel        NotificationChannel
+  subject        String?
+  body           String
+  variables      String              @default("visitor_name,host_name,date,time,location,qr_link")
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([event, channel])
+}
+
+model PushSubscription {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpoint       String       @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model NotificationPreference {
   id        String              @id @default(cuid())
-  userId    String?
-  user      User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   NotificationChannel @default(IN_APP)
-  title     String
-  message   String
-  status    NotificationStatus  @default(SENT)
-  metadata  String?
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel
+  event     String
+  enabled   Boolean             @default(true)
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
+  @@unique([userId, channel, event])
   @@index([userId])
-}
-
-model EmailTemplate {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  code           String
-  subject        String
-  body           String
-  variables      String       @default("visitor_name,host_name,date,time,location,qr_code")
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-}
-
-model WhatsappTemplate {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  code           String
-  templateName   String
-  language       String       @default("en_US")
-  body           String
-  variables      String       @default("visitor_name,host_name,date,time,location,qr_link")
-  status         String       @default("APPROVED")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
 }
 
 model Holiday {

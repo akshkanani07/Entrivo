@@ -226,7 +226,7 @@ export function KioskClientView({
               Please Select Check-In Option
             </h2>
             <p className="text-slate-400 text-sm mt-2 max-w-lg mx-auto">
-              Fast, touchless entry. If you received an invitation on email or WhatsApp, scan your QR pass.
+              Fast, touchless entry. If you received an invitation on email or phone, scan your QR pass.
             </p>
           </div>
 

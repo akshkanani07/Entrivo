@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
+import { ServiceWorkerRegistrar } from "@/components/notifications/ServiceWorkerRegistrar";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-[#080c14] text-slate-100 antialiased selection:bg-indigo-600 selection:text-white">
+        <ServiceWorkerRegistrar />
         {children}
         <Toaster richColors position="top-right" theme="dark" closeButton />
       </body>

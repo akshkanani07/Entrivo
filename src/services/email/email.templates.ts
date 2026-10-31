@@ -130,3 +130,114 @@ export function generateVisitorArrivedHostEmail(data: {
     htmlContent,
   };
 }
+
+export function generateHostArrivalEmail(data: {
+  hostName: string;
+  hostEmail: string;
+  visitorName: string;
+  visitorCompany: string;
+  badgeNumber: string;
+  location: string;
+  time: string;
+}): EmailPayload {
+  return generateVisitorArrivedHostEmail({
+    hostName: data.hostName,
+    hostEmail: data.hostEmail,
+    visitorName: data.visitorName,
+    visitorCompany: data.visitorCompany,
+    badgeNumber: data.badgeNumber,
+    checkInTime: data.time,
+    location: data.location,
+  });
+}
+
+export function generateVisitorCheckoutEmail(data: {
+  visitorName: string;
+  visitorEmail: string;
+  companyName: string;
+  durationMinutes: number;
+  checkOutTime: string;
+}): EmailPayload {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0b0f19; color: #f1f5f9; padding: 24px; }
+        .container { max-width: 580px; margin: 0 auto; background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; }
+        .tag { background: #1e3a8a; color: #60a5fa; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <span class="tag">VISITOR CHECKOUT</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Thank You for Visiting ${data.companyName}</h2>
+        <p style="color: #cbd5e1; font-size: 15px;">
+          Hello ${data.visitorName}, your check-out has been confirmed at <strong>${data.checkOutTime}</strong>.
+        </p>
+        <p style="color: #94a3b8; font-size: 14px;">
+          Total Visit Duration: <strong>${data.durationMinutes} minutes</strong>
+        </p>
+        <p style="color: #64748b; font-size: 13px; margin-top: 24px;">
+          Have a safe journey, and we look forward to welcoming you back soon.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    to: data.visitorEmail,
+    recipientName: data.visitorName,
+    subject: `Thank you for visiting ${data.companyName}`,
+    htmlContent,
+  };
+}
+
+export function generateHostApprovalEmail(data: {
+  hostName: string;
+  hostEmail: string;
+  visitorName: string;
+  visitorCompany: string;
+  date: string;
+  time: string;
+  purpose: string;
+  approvalUrl: string;
+}): EmailPayload {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0b0f19; color: #f1f5f9; padding: 24px; }
+        .container { max-width: 580px; margin: 0 auto; background: #111827; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; }
+        .tag { background: #78350f; color: #fbbf24; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+        .btn { display: inline-block; background: #4f46e5; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; margin-top: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <span class="tag">ACTION REQUIRED: VISITOR APPROVAL</span>
+        <h2 style="color: #ffffff; margin-top: 12px;">Hello ${data.hostName},</h2>
+        <p style="color: #cbd5e1; font-size: 15px;">
+          <strong>${data.visitorName}</strong> (${data.visitorCompany}) is requesting access for a visit.
+        </p>
+        <p style="color: #94a3b8; font-size: 14px;">
+          Date & Time: <strong>${data.date} at ${data.time}</strong><br>
+          Purpose: <strong>${data.purpose}</strong>
+        </p>
+        <a href="${data.approvalUrl}" class="btn">Review & Authorize Entry</a>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return {
+    to: data.hostEmail,
+    recipientName: data.hostName,
+    subject: `Action Required: Visitor Approval for ${data.visitorName}`,
+    htmlContent,
+  };
+}

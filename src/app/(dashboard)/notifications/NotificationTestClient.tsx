@@ -1,16 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import { Mail, MessageSquare, Send, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { Mail, Send, Loader2, Bell, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 export function NotificationTestClient() {
   const router = useRouter();
   const [testEmail, setTestEmail] = useState("");
-  const [testPhone, setTestPhone] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
-  const [waLoading, setWaLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   const handleSendTestEmail = async () => {
     if (!testEmail || !testEmail.includes("@")) {
@@ -37,83 +36,82 @@ export function NotificationTestClient() {
     }
   };
 
-  const handleSendTestWhatsApp = async () => {
-    if (!testPhone || testPhone.length < 10) {
-      toast.error("Please enter a valid mobile number with country code (e.g. +91 98765 00000)");
-      return;
-    }
-
-    setWaLoading(true);
+  const handleSendTestPush = async () => {
+    setPushLoading(true);
     try {
-      const res = await fetch("/api/notifications/test-whatsapp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: testPhone }),
-      });
+      const res = await fetch("/api/notifications/push/test", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "WhatsApp delivery failed");
-
-      toast.success(`WhatsApp Cloud test notification dispatched to ${testPhone}!`);
-      router.refresh();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Web push notification test failed");
+      }
+      toast.success(data.message || "Push notification sent! Check your desktop notification tray.");
     } catch (err: any) {
-      toast.error(err.message || "WhatsApp test failed");
+      toast.error(err.message || "Push notification test failed");
     } finally {
-      setWaLoading(false);
+      setPushLoading(false);
     }
   };
 
   return (
-    <div className="glass-card rounded-2xl border border-indigo-500/20 p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-indigo-400" />
-        <h3 className="text-sm font-bold text-white">Live Notification Dispatch Simulator</h3>
+    <div className="glass-card p-5 rounded-2xl border border-indigo-950/70">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            Multi-Channel Dispatch Simulator
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Send end-to-end verification payloads across Mailjet transactional email and Web Push notifications.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
         {/* Email test */}
-        <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-          <label className="block text-xs font-semibold text-slate-300">
-            Mailjet Transactional Test
-          </label>
+        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+          <div className="flex items-center gap-2 text-indigo-400">
+            <Mail className="w-4 h-4" />
+            <h4 className="text-xs font-bold text-white">Mailjet Transactional Email Test</h4>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Verify real Mailjet template rendering, QR pass token attachment, and SMTP delivery.
+          </p>
           <div className="flex gap-2">
             <input
               type="email"
-              placeholder="recipient@yourcompany.com"
               value={testEmail}
               onChange={(e) => setTestEmail(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              placeholder="recipient@example.com"
+              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
             <button
               onClick={handleSendTestEmail}
               disabled={emailLoading}
-              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-glow-sm transition-all disabled:opacity-50"
             >
-              {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+              {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
               Send Email
             </button>
           </div>
         </div>
 
-        {/* WhatsApp test */}
-        <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
-          <label className="block text-xs font-semibold text-slate-300">
-            WhatsApp Business Cloud API Test
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="tel"
-              placeholder="+91 98765 43210"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
+        {/* Web Push test */}
+        <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+          <div className="flex items-center gap-2 text-cyan-400">
+            <Bell className="w-4 h-4" />
+            <h4 className="text-xs font-bold text-white">Desktop & Mobile Web Push Test</h4>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Simulate a real visitor arrival push alert dispatched to your active browser subscription.
+          </p>
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-xs text-slate-300">Target: Current Device</span>
             <button
-              onClick={handleSendTestWhatsApp}
-              disabled={waLoading}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              onClick={handleSendTestPush}
+              disabled={pushLoading}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all disabled:opacity-50 shadow-glow-sm"
             >
-              {waLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-              Send WhatsApp
+              {pushLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Send Push Alert
             </button>
           </div>
         </div>

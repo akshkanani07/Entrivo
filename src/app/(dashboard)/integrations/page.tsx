@@ -25,8 +25,6 @@ export default async function IntegrationsPage() {
     teamsEnabled: false,
     googleCalId: "",
     googleCalEnabled: false,
-    whatsappPhoneNumberId: "",
-    whatsappEnabled: true,
   };
 
   try {
@@ -57,8 +55,6 @@ export default async function IntegrationsPage() {
       teamsEnabled: settingsMap["TEAMS_ENABLED"] === "true",
       googleCalId: settingsMap["GOOGLE_CAL_ID"] || "",
       googleCalEnabled: settingsMap["GOOGLE_CAL_ENABLED"] === "true",
-      whatsappPhoneNumberId: settingsMap["WHATSAPP_PHONE_ID"] || "",
-      whatsappEnabled: settingsMap["WHATSAPP_ENABLED"] !== "false",
     };
   } catch (err: any) {
     console.error("Integrations fetch error:", err?.message);

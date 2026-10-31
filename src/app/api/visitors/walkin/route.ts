@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
+import { notify } from "@/services/notifications/dispatcher";
+import { NotificationEvent } from "@/services/notifications/events";
 
 const walkinSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -215,6 +217,20 @@ export async function POST(request: Request) {
 
       return createdCheckIn;
     });
+
+    // Notify host about walkin arrival
+    await notify(NotificationEvent.VISITOR_ARRIVED, {
+      organizationId: orgId,
+      visitorName: checkIn.visitor.name,
+      visitorCompany: checkIn.visitor.company || undefined,
+      hostName: hostEmp.user.name,
+      hostEmail: hostEmp.user.email,
+      hostUserId: hostEmp.userId,
+      badgeNumber,
+      location: hostEmp.office?.name || "Main Reception Desk",
+      time: new Date().toLocaleTimeString(),
+      entityId: checkIn.id,
+    }).catch(console.error);
 
     return NextResponse.json({
       success: true,

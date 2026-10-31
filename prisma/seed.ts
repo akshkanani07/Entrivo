@@ -28,8 +28,8 @@ async function main() {
   await prisma.office.deleteMany({});
   await prisma.branch.deleteMany({});
   await prisma.setting.deleteMany({});
-  await prisma.emailTemplate.deleteMany({});
-  await prisma.whatsappTemplate.deleteMany({});
+  await prisma.notificationTemplate.deleteMany({});
+  await prisma.notification.deleteMany({});
   await prisma.report.deleteMany({});
   await prisma.organization.deleteMany({});
 
@@ -483,33 +483,37 @@ async function main() {
     },
   });
 
-  // 13. Templates
-  await prisma.emailTemplate.create({
+  // 13. Notification Templates
+  await prisma.notificationTemplate.create({
     data: {
       organizationId: org.id,
-      code: "VISITOR_INVITE",
+      event: "VISITOR_INVITED",
+      channel: "EMAIL",
       subject: "Your Visit Invitation to Entrivo - {{date}}",
       body: "Hello {{visitor_name}},\n\nYou are invited by {{host_name}} for {{purpose}} at {{location}}.\n\nDate: {{date}}\nTime: {{time}}\n\nPlease show your QR Pass at the security gate for instant check-in:\n{{qr_pass_url}}\n\nWarm regards,\nEntrivo Workplace Concierge",
+      variables: "visitor_name,host_name,purpose,location,date,time,qr_pass_url",
     },
   });
 
-  await prisma.whatsappTemplate.create({
+  await prisma.notificationTemplate.create({
     data: {
       organizationId: org.id,
-      code: "WHATSAPP_INVITE",
-      templateName: "visitor_invitation_v1",
-      language: "en_US",
-      body: "Hello {{visitor_name}} 👋\n\nYour visit with *{{host_name}}* at *Entrivo Global* is confirmed.\n\n📅 Date: {{date}}\n⏰ Time: {{time}}\n📍 Location: {{location}}\n\nYour digital check-in QR code:\n{{qr_link}}\n\nHave a great visit!",
+      event: "VISITOR_ARRIVED",
+      channel: "IN_APP",
+      subject: "Visitor Arrived",
+      body: "Visitor {{visitor_name}} from {{company}} has checked in at reception with Badge #{{badge_number}}.",
+      variables: "visitor_name,company,badge_number,location,time",
     },
   });
 
-  await prisma.whatsappTemplate.create({
+  await prisma.notificationTemplate.create({
     data: {
       organizationId: org.id,
-      code: "WHATSAPP_HOST_ALERT",
-      templateName: "host_visitor_arrived_v1",
-      language: "en_US",
-      body: "🔔 Visitor Alert: *{{visitor_name}}* from *{{company}}* has arrived at reception and checked in for your meeting.\n\nMeeting Room: {{room}}",
+      event: "VISITOR_ARRIVED",
+      channel: "WEB_PUSH",
+      subject: "Visitor Arrived",
+      body: "Visitor {{visitor_name}} has arrived at the reception desk.",
+      variables: "visitor_name,location",
     },
   });
 
@@ -520,7 +524,7 @@ async function main() {
     { category: "CHECKIN", key: "AUTO_PRINT_BADGE", value: "true" },
     { category: "SECURITY", key: "BLACKLIST_CHECK_STRICT", value: "true" },
     { category: "SECURITY", key: "SESSION_TIMEOUT_MINUTES", value: "60" },
-    { category: "NOTIFICATION", key: "ENABLE_WHATSAPP", value: "true" },
+    { category: "NOTIFICATION", key: "ENABLE_PUSH", value: "true" },
     { category: "NOTIFICATION", key: "ENABLE_MAILJET", value: "true" },
   ];
 
