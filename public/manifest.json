@@ -1,0 +1,21 @@
+{
+  "name": "Entrivo — Modern Workplace Visitor Management",
+  "short_name": "Entrivo",
+  "description": "Production-ready enterprise visitor management, QR passes and security workplace check-in.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080c14",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://api.dicebear.com/7.x/identicon/svg?seed=entrivo&backgroundColor=4f46e5",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://api.dicebear.com/7.x/identicon/svg?seed=entrivo&backgroundColor=4f46e5",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
