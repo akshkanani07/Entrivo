@@ -105,9 +105,9 @@ export function WalkinForm({
       } catch {}
 
       // Prepare issued badge data
-      const checkIn = data.checkIn || data.data;
+      const checkIn = data?.checkIn || data?.data;
       if (!checkIn) {
-        throw new Error(data.error || "Walk-in registration did not return check-in data");
+        throw new Error(data?.error || "Walk-in registration did not return check-in data");
       }
 
       setIssuedBadge({
@@ -120,6 +120,7 @@ export function WalkinForm({
         hostOffice: checkIn.host?.office || checkIn.hostEmployee?.office?.name || "Main Reception",
         photoUrl: checkIn.visitor?.avatarUrl || photoUrl,
         issueDate: formatDateTime(checkIn.checkInTime || new Date()),
+        token: checkIn.badgeNumber || checkIn.id,
       });
     } catch (err: any) {
       setError(err.message || "Failed to complete registration");

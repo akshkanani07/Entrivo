@@ -45,12 +45,12 @@ export async function GET(request: Request) {
 
       const rows = checkIns.map((c) => [
         `"${c.badgeNumber || ""}"`,
-        `"${c.visitor.name}"`,
-        `"${c.visitor.company || ""}"`,
-        `"${c.visitor.phone}"`,
-        `"${c.visitor.email}"`,
-        `"${c.visitor.visitorType?.name || "General"}"`,
-        `"${c.hostEmployee.user.name}"`,
+        `"${c.visitor?.name || "Guest"}"`,
+        `"${c.visitor?.company || ""}"`,
+        `"${c.visitor?.phone || ""}"`,
+        `"${c.visitor?.email || ""}"`,
+        `"${c.visitor?.visitorType?.name || "General"}"`,
+        `"${c.hostEmployee?.user?.name || "Host"}"`,
         `"${new Date(c.checkInTime).toLocaleString()}"`,
         `"${c.checkOut ? new Date(c.checkOut.checkOutTime).toLocaleString() : "ACTIVE"}"`,
         `"${c.checkOut?.durationMinutes || ""}"`,

@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       success: true,
       data: result.checkIn,
       checkIn: result.checkIn,
-      message: `Visitor ${result.checkIn.visitor.name} checked in successfully. Badge #${result.checkIn.badgeNumber}`,
+      message: `Visitor ${result.checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn.badgeNumber || ""}`,
     });
   } catch (error: any) {
     console.error("Check-in error:", error);

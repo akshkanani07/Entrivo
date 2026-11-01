@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashPassword, createDatabaseSession, validatePasswordStrength, getClientIp } from "@/lib/auth";
 import { registerRateLimiter } from "@/lib/rate-limit";
+import { emailVerificationService } from "@/services/auth/email-verification.service";
 
 const registerSchema = z.object({
   companyName: z.string().min(2, "Company name must be at least 2 characters"),
@@ -126,7 +127,7 @@ export async function POST(request: Request) {
           role: "ORG_ADMIN",
           phone: phone?.trim() || null,
           organizationId: org.id,
-          isEmailVerified: true,
+          isEmailVerified: false,
           mustChangePassword: false,
           passwordChangedAt: new Date(),
           termsAcceptedAt: new Date(),
@@ -164,6 +165,11 @@ export async function POST(request: Request) {
       });
 
       return { org, user };
+    });
+
+    // Send email verification link
+    emailVerificationService.sendVerificationEmail(result.user).catch((err) => {
+      console.error("[Register] Error sending email verification:", err);
     });
 
     const { token } = await createDatabaseSession(result.user.id, {

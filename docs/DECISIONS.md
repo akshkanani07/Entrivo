@@ -55,10 +55,14 @@
   5. **Kiosk Authentication (`requireKiosk`)**: Reads the `kiosk_token` cookie (with fallback support), verifies `deviceTokenHash` using constant-time comparison (`timingSafeEqual`), checks `isActive` and `expiresAt`, enforces per-device rate limiting (30 req / 60 s), scopes queries strictly to the kiosk's organization, and strips all visitor PII.
   6. **Kiosk UI Experience**: The `/kiosk` page checks the cookie on the server component; if missing or invalid, it redirects to `/kiosk/pair`. The `/kiosk/pair` screen allows staff to enter the 8-digit code once. Admin UI in `Settings > Lobby Kiosks` allows registering new kiosks, generating re-pairing codes, and instant revocation.
 
-## Decision 10: Server-Only Boundary Enforcement & Production Safety Guards
-- **`server-only` Imports**: Added `import "server-only";` to all core security and backend modules (`src/lib/auth.ts`, `src/lib/rbac.ts`, `src/lib/tenant.ts`, `src/lib/encryption.ts`, `src/lib/db.ts`, `src/lib/rate-limit.ts`, `src/lib/kiosk-auth.ts`, `src/lib/qr.ts`, and services). Client components rendering QR codes import from `src/lib/qr-client.ts` to prevent bundler leaks of server secrets or Node native modules (`crypto`).
-- **CSS Typo & Transactional Email Hardening**: Corrected CSS property typo (`pt: 16px;` -> `padding-top: 16px;`) and applied `escapeHtml` to dynamic user and host variables inside transactional auth emails (`/api/auth/magic-link`, `/api/auth/forgot-password`).
-- **Repo Hygiene & Compliance Configuration**: Added `.uploads/`, `*.tsbuildinfo`, and `.env*` (except `.env.example`) to `.gitignore`. Updated `.env.example` with compliance and proxy variables (`CONTACT_EMAIL`, `GRIEVANCE_EMAIL`, `TRUST_PROXY`). Updated privacy policy and legal layouts to align with India's DPDP Act 2023.
+## Decision 11: Universal Zod Input Resilience & Safe Navigation Across All Endpoints
+- **Context**: Form submissions (e.g. Walk-in Visitor registration, Invitations, Kiosk) caused `Expected string, received null` when optional fields were submitted with `null` or `""`, because schemas defined `z.string().min(...)` or `z.string().optional()` without handling nulls. In addition, unhandled relation navigations caused runtime crashes such as `Cannot read properties of undefined (reading 'badgeNumber')`.
+- **Decision**:
+  1. Created `src/lib/zod-helpers.ts` exporting `requiredString`, `optionalString`, `optionalNullableString`, `requiredEmail`, and `optionalEmail`. These pre-processors normalize `null`, `undefined`, and empty strings before validation, ensuring custom, human-readable error messages and correct TypeScript types without Zod throwing `Expected string, received null`.
+  2. Applied these helpers across all API routes (`/api/visitors/walkin`, `/api/kiosk/walkin`, `/api/invitations`, `/api/employees`, `/api/visitors`, `/api/meeting-rooms`, `/api/auth/*`, `/api/organization/*`, `/api/documents`, `/api/security/*`).
+  3. Made `OrgPolicySchema` completely resilient to nulls and invalid settings values, and updated `getOrgPolicy()` in `src/lib/settings-registry.ts` to use `OrgPolicySchema.safeParse()` with fallback to `DefaultOrgPolicy`.
+  4. Added safe navigation (`?.`) and fallback defaults across all components (`WalkinForm`, `KioskClientView`, `CheckinTerminalClient`, `BadgeCard`, `/badge/[id]`, `/reports`, `/visitors`, `/dashboard`), preventing `Cannot read properties of undefined` errors.
+
 
 
 

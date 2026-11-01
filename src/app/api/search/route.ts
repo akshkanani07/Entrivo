@@ -151,20 +151,20 @@ export async function GET(request: Request) {
       })),
       ...(resultsMap.employees ?? []).map((e) => ({
         type: "EMPLOYEE",
-        title: e.user.name,
-        subtitle: `${e.employeeCode} · ${e.office?.name ?? "Office"}`,
+        title: e.user?.name || "Employee",
+        subtitle: `${e.employeeCode || "EMP"} · ${e.office?.name ?? "Office"}`,
         url: `/employees`,
       })),
       ...(resultsMap.invitations ?? []).map((i) => ({
         type: "INVITATION",
-        title: i.visitor.name,
-        subtitle: `Hosted by ${i.hostEmployee.user.name} — ${i.status}`,
+        title: i.visitor?.name || "Visitor",
+        subtitle: `Hosted by ${i.hostEmployee?.user?.name || "Host"} — ${i.status}`,
         url: `/invitations`,
       })),
       ...(resultsMap.checkIns ?? []).map((c) => ({
         type: "ACTIVE_BADGE",
         title: `Badge: ${c.badgeNumber ?? "N/A"}`,
-        subtitle: `Active: ${c.visitor.name}`,
+        subtitle: `Active: ${c.visitor?.name || "Guest"}`,
         url: `/badge/${c.id}`,
       })),
     ];

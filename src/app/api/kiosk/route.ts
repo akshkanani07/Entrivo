@@ -13,8 +13,13 @@ import { prisma } from "@/lib/db";
 import { requirePermission, requireAnyPermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 
+import { requiredString } from "@/lib/zod-helpers";
+
 const createKioskSchema = z.object({
-  name: z.string().min(1, "Kiosk name is required").max(80),
+  name: requiredString("Kiosk name is required (max 80 characters)").refine(
+    (v) => v.length <= 80,
+    { message: "Kiosk name must be at most 80 characters" }
+  ),
 });
 
 export async function GET() {

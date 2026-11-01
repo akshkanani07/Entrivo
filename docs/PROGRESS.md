@@ -19,3 +19,43 @@ Tracking checklist for Phase 0 review findings closure.
 | **P0-13** | next.config.ts: serverExternalPackages, production HSTS, CSP without unsafe-eval, import "server-only" guards | [x] | 2026-11-01 | `1dc6733` |
 | **P0-14** | Repo hygiene: .gitattributes, update .gitignore (.env*, .uploads/, tsbuildinfo), update .env.example | [x] | 2026-11-01 | `1dc6733` |
 | **P0-15** | Approval workflow: minimum trigger in place, full configurable workflow engine handled in P2-04 | [x] | 2026-10-31 | `400efb4` |
+
+---
+
+# Entrivo — Phase 1 Implementation Progress
+
+Identity, storage foundation, organization structure, holidays, working hours, typed policies, and universal Zod input resilience.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P1-00** | Storage adapter (local, cloudinary, s3), File model, private download route /api/files/[id], upload API with magic bytes & sharp re-encode | [x] | 2026-11-01 | `phase-1` |
+| **P1-01** | Email verification: EmailVerificationToken, /verify-email, resend rate limit, register flow, requireVerifiedEmail policy | [x] | 2026-11-01 | `phase-1` |
+| **P1-02** | Two-Factor Auth (TOTP via otplib, RFC 6238): enrol, 10 backup codes, login challenge token, encrypted secret, audit | [x] | 2026-11-01 | `phase-1` |
+| **P1-03** | Password policy: min length, complexity, history (PasswordHistory last N), optional max age enforcement | [x] | 2026-11-01 | `phase-1` |
+| **P1-04** | Session policy: idle timeout + absolute lifetime server-side enforcement, client idle warning modal, revoke session | [x] | 2026-11-01 | `phase-1` |
+| **P1-05** | Organization profile: logo upload via storage adapter, brand color, timezone, locale, branding in login/badges/emails | [x] | 2026-11-01 | `phase-1` |
+| **P1-06** | Org structure CRUD: Branch, Office, Floor, Zone, Department with 409 reference blocking & audit logging | [x] | 2026-11-01 | `phase-1` |
+| **P1-07** | Holidays: CRUD per branch, date ranges, recurring yearly, CSV import, calendar view | [x] | 2026-11-01 | `phase-1` |
+| **P1-08** | Working hours: structured JSON per branch/office, timezone-aware enforcement (ALLOW, WARN, BLOCK) | [x] | 2026-11-01 | `phase-1` |
+| **P1-09** | Typed policies registry (src/lib/settings-schema.ts, zod) + getOrgPolicy(orgId) cached resolver | [x] | 2026-11-01 | `phase-1` |
+
+---
+
+# Entrivo — Phase 2 Implementation Progress
+
+Visitor core, invitations, approvals, security, rooms.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P2-01** | Visitor types CRUD: name, color, icon, requiresApproval, requiresNda, requiresEscort, defaultDurationMinutes, isActive; seeded types protected; flags enforced in invitation/walk-in/kiosk/check-in | [ ] | | |
+| **P2-02** | Invitation lifecycle: PATCH reschedule and DELETE/POST cancel (with reason); EMPLOYEE self-only; validation matrix; InvitationEvent history table; QR revoked/reissued + notifications; UI actions & timeline | [ ] | | |
+| **P2-03** | Approval workflow engine: ApprovalRule model, multi-step sequential approvals, walk-in WAITING_APPROVAL, timeouts/escalation, OOO delegation, /approvals UI & Settings rule builder | [ ] | | |
+| **P2-04** | QR passes (QRCode model): token hash, slot window (validFrom/validUntil), maxUses, usedCount, revocation, full 256-bit HMAC, rate limiting, pass public page without PII | [ ] | | |
+| **P2-05** | Camera QR scanner component: BarcodeDetector with jsqr fallback, camera switch, torch, permission help, manual fallback, scan debounce | [ ] | | |
+| **P2-06** | Check-in/out completion: verify details step, ID verification flow (masked number + sha256 + private storage + verified flag), exit confirmation, auto-checkout worker | [ ] | | |
+| **P2-07** | Central scheduler (src/services/scheduler): recurring jobs for reminders, overstay, auto-checkout, doc expiry, reports; BullMQ + in-process fallback + /api/cron/*; Admin Jobs panel | [ ] | | |
+| **P2-08** | Badges: BadgeTemplate CRUD UI, field toggles, orientation, size CR80/A6, live preview, exact print CSS, digital badge page | [ ] | | |
+| **P2-09** | Host management: availability (AVAILABLE, BUSY, AWAY, OUT_OF_OFFICE + backup approver), meeting history per employee, "My visitors" self-service for EMPLOYEE | [ ] | | |
+| **P2-10** | Security module completion: blacklist edit/remove/expiry, Watchlist (security+host alerts, approval gate), unified E.164 match logic, security notes & incident logs | [ ] | | |
+| **P2-11** | Meeting-room booking: RoomBooking model, overlap-safe transaction, capacity check, day/week grid, invitation linkage, cancel/reschedule sync | [ ] | | |
+| **P2-12** | Employee management polish: CSV import with preview & error report, deactivate flow (session revocation + invitation reassignment), self profile & avatar upload | [ ] | | |

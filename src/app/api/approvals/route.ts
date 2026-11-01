@@ -6,10 +6,12 @@ import { requireOrg } from "@/lib/tenant";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 
+import { requiredString, optionalString } from "@/lib/zod-helpers";
+
 const approvalActionSchema = z.object({
-  approvalId: z.string().min(1, "Approval ID is required"),
+  approvalId: requiredString("Approval ID is required"),
   action: z.enum(["APPROVED", "REJECTED"]),
-  comments: z.string().optional().nullable().or(z.literal("")),
+  comments: optionalString(),
 });
 
 export async function GET() {

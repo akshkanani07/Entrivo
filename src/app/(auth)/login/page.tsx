@@ -25,12 +25,52 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handle2FAVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFactorCode.trim()) {
+      setError("Please enter the 6-digit authenticator code or backup code");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/auth/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challengeToken,
+          code: twoFactorCode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "2FA verification failed");
+      }
+
+      toast.success("Identity verified! Welcome back.");
+      router.push("/");
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to verify 2FA code");
+      toast.error(err.message || "Failed to verify 2FA code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (challengeToken) {
+      return handle2FAVerify(e);
+    }
     if (!email) {
       setError("Please enter your work email address");
       return;
@@ -76,6 +116,12 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Authentication failed");
+      }
+
+      if (data.requires2FA && data.challengeToken) {
+        setChallengeToken(data.challengeToken);
+        toast.info("Two-factor authentication required. Enter your 6-digit code.");
+        return;
       }
 
       toast.success("Welcome back to Entrivo!");
@@ -143,7 +189,64 @@ export default function LoginPage() {
             </div>
           )}
 
-          {magicSent ? (
+          {challengeToken ? (
+            <form onSubmit={handle2FAVerify} className="space-y-5">
+              <div className="text-center mb-2">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-950/80 border border-indigo-800 text-indigo-400 mb-2 shadow-inner">
+                  <KeyRound className="w-6 h-6" />
+                </div>
+                <h2 className="text-base font-bold text-white">Two-Factor Challenge</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Enter the 6-digit authenticator code or one of your 10 backup codes.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Security Code / Backup Code
+                </label>
+                <input
+                  type="text"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  placeholder="123456 or XXXX-XXXX"
+                  autoFocus
+                  required
+                  className="w-full px-4 py-3 bg-slate-950 border border-slate-700/80 rounded-xl text-center text-lg tracking-widest font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-glow flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying code...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify & Continue</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setChallengeToken(null);
+                  setTwoFactorCode("");
+                  setError(null);
+                }}
+                className="w-full text-center text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                &larr; Cancel and try another login method
+              </button>
+            </form>
+          ) : magicSent ? (
             <div className="p-4 rounded-xl bg-slate-950 text-center space-y-3">
               <div className="w-10 h-10 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-5 h-5" />

@@ -5,21 +5,23 @@ import { requireOrg } from "@/lib/tenant";
 import { NotificationChannel } from "@prisma/client";
 import { z } from "zod";
 
+import { requiredString, optionalString } from "@/lib/zod-helpers";
+
 const createTemplateSchema = z.object({
-  action: z.string().optional().nullable(),
-  event: z.string().optional().nullable(),
+  action: optionalString(),
+  event: optionalString(),
   channel: z.nativeEnum(NotificationChannel).optional().nullable(),
-  subject: z.string().optional().nullable().or(z.literal("")),
-  body: z.string().optional().nullable().or(z.literal("")),
-  variables: z.string().optional().nullable().or(z.literal("")),
+  subject: optionalString(),
+  body: optionalString(),
+  variables: optionalString(),
   isActive: z.boolean().optional().nullable(),
 });
 
 const updateTemplateSchema = z.object({
-  id: z.string().min(1, "Template ID is required"),
-  subject: z.string().optional().nullable().or(z.literal("")),
-  body: z.string().optional().nullable().or(z.literal("")),
-  variables: z.string().optional().nullable().or(z.literal("")),
+  id: requiredString("Template ID is required"),
+  subject: optionalString(),
+  body: optionalString(),
+  variables: optionalString(),
   isActive: z.boolean().optional().nullable(),
 });
 

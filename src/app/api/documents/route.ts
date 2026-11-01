@@ -4,11 +4,13 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
+import { requiredString, optionalString } from "@/lib/zod-helpers";
+
 const createDocSchema = z.object({
-  visitorId: z.string().optional().nullable(),
-  title: z.string().min(1, "Document title is required"),
-  docType: z.string().optional().nullable().or(z.literal("")),
-  fileUrl: z.string().optional().nullable().or(z.literal("")),
+  visitorId: optionalString(),
+  title: requiredString("Document title is required"),
+  docType: optionalString(),
+  fileUrl: optionalString(),
   expiryDate: z.string().datetime().optional().nullable(),
 });
 

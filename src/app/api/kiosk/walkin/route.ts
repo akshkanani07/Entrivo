@@ -10,21 +10,22 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
 import { performWalkIn } from "@/services/visitors/walkin.service";
+import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
 
 const kioskWalkinSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  phone: z.string().min(5, "Phone is required"),
-  email: z.string().email().optional().nullable().or(z.literal("")),
-  company: z.string().optional().nullable().or(z.literal("")),
-  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
-  hostEmployeeId: z.string().min(1, "Host employee is required"),
-  purpose: z.string().optional().nullable().or(z.literal("")),
-  photoUrl: z.string().optional().nullable().or(z.literal("")),
-  signatureUrl: z.string().optional().nullable().or(z.literal("")),
-  idProofType: z.string().optional().nullable().or(z.literal("")),
-  idProofNumber: z.string().optional().nullable().or(z.literal("")),
+  name: requiredString("Name is required"),
+  phone: requiredString("Phone is required", 5),
+  email: optionalEmail("Invalid email address"),
+  company: optionalString(),
+  visitorTypeId: optionalString(),
+  hostEmployeeId: requiredString("Host employee is required"),
+  purpose: optionalString(),
+  photoUrl: optionalString(),
+  signatureUrl: optionalString(),
+  idProofType: optionalString(),
+  idProofNumber: optionalString(),
   consentGiven: z.boolean().optional().nullable(),
-  consentVersion: z.string().optional().nullable(),
+  consentVersion: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -79,11 +80,11 @@ export async function POST(request: Request) {
         badgeNumber: checkIn.badgeNumber,
         status: checkIn.status,
         checkInTime: checkIn.checkInTime,
-        visitorName: checkIn.visitor.name,
-        visitorCompany: checkIn.visitor.company,
-        hostName: checkIn.hostEmployee.user.name,
+        visitorName: checkIn.visitor?.name || "Guest",
+        visitorCompany: checkIn.visitor?.company || "",
+        hostName: checkIn.hostEmployee?.user?.name || "Host",
       },
-      message: `Walk-in visitor ${checkIn.visitor.name} checked in successfully. Badge #${checkIn.badgeNumber}`,
+      message: `Walk-in visitor ${checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn.badgeNumber || ""}`,
     });
 
     // Rolling renewal: refresh kiosk_token cookie

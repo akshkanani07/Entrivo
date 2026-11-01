@@ -28,6 +28,7 @@ export async function GET() {
       ipAddress: s.ipAddress || "127.0.0.1",
       userAgent: s.userAgent || "Unknown",
       createdAt: s.createdAt,
+      lastActiveAt: s.lastActiveAt,
       isCurrent: decoded?.sessionId === s.id,
     }));
 

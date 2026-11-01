@@ -177,6 +177,30 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       return null;
     }
 
+    const now = Date.now();
+    // Idle timeout check (default: 30 minutes, 1800000 ms)
+    // Absolute lifetime check (default: 24 hours, 86400000 ms)
+    const idleTimeoutMs = 30 * 60 * 1000;
+    const absoluteLifetimeMs = 24 * 60 * 60 * 1000;
+
+    const lastActive = dbSession.lastActiveAt ? dbSession.lastActiveAt.getTime() : dbSession.createdAt.getTime();
+    const sessionAge = now - dbSession.createdAt.getTime();
+    const idleDuration = now - lastActive;
+
+    if (sessionAge > absoluteLifetimeMs || idleDuration > idleTimeoutMs) {
+      // Session has expired due to idle timeout or absolute lifetime cap
+      prisma.session.delete({ where: { id: dbSession.id } }).catch(() => {});
+      return null;
+    }
+
+    // Throttle lastActiveAt update (update at most once every 60 seconds)
+    if (idleDuration > 60 * 1000) {
+      prisma.session.update({
+        where: { id: dbSession.id },
+        data: { lastActiveAt: new Date() },
+      }).catch(() => {});
+    }
+
     const user = dbSession.user;
     if (!user || !user.isActive || user.deletedAt) return null;
 

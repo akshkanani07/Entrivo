@@ -39,13 +39,13 @@ export default async function BadgePage({
 
   const badgeData = {
     badgeNumber: checkIn.badgeNumber || "BADGE-101",
-    visitorName: checkIn.visitor.name,
-    visitorCompany: checkIn.visitor.company,
-    visitorTypeName: checkIn.visitor.visitorType?.name,
-    badgeColor: checkIn.visitor.visitorType?.badgeColor || "#6366f1",
-    hostName: checkIn.hostEmployee.user.name,
-    hostOffice: checkIn.hostEmployee.office?.name,
-    photoUrl: checkIn.photoUrl || checkIn.visitor.avatarUrl,
+    visitorName: checkIn.visitor?.name || "Visitor",
+    visitorCompany: checkIn.visitor?.company || "Guest",
+    visitorTypeName: checkIn.visitor?.visitorType?.name || "Visitor",
+    badgeColor: checkIn.visitor?.visitorType?.badgeColor || "#6366f1",
+    hostName: checkIn.hostEmployee?.user?.name || "Host",
+    hostOffice: checkIn.hostEmployee?.office?.name || "Main Reception",
+    photoUrl: checkIn.photoUrl || checkIn.visitor?.avatarUrl || null,
     issueDate: formatDateTime(checkIn.checkInTime),
     token: checkIn.badgeNumber || checkIn.id,
   };

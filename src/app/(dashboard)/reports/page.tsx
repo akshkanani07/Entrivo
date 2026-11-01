@@ -118,19 +118,19 @@ export default async function ReportsPage() {
                     {c.badgeNumber || "BADGE"}
                   </td>
                   <td className="py-3 px-4">
-                    <span className="font-bold text-white block">{c.visitor.name}</span>
-                    <span className="text-[11px] text-slate-400">{c.visitor.company}</span>
+                    <span className="font-bold text-white block">{c.visitor?.name || "Guest"}</span>
+                    <span className="text-[11px] text-slate-400">{c.visitor?.company || ""}</span>
                   </td>
                   <td className="py-3 px-4">
                     <span
                       className="text-[9px] font-bold px-2 py-0.5 rounded uppercase text-white inline-block"
-                      style={{ backgroundColor: c.visitor.visitorType?.badgeColor || "#6366f1" }}
+                      style={{ backgroundColor: c.visitor?.visitorType?.badgeColor || "#6366f1" }}
                     >
-                      {c.visitor.visitorType?.name || "Guest"}
+                      {c.visitor?.visitorType?.name || "Guest"}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-slate-300 font-semibold">
-                    {c.hostEmployee.user.name}
+                    {c.hostEmployee?.user?.name || "Host"}
                   </td>
                   <td className="py-3 px-4 text-slate-300 font-mono">
                     {formatDate(c.checkInTime)} {formatTime(c.checkInTime)}

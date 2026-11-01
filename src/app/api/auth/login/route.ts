@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
 import { verifyPassword, createDatabaseSession, getClientIp } from "@/lib/auth";
 import { loginRateLimiter, clearLoginEmailRateLimit } from "@/lib/rate-limit";
@@ -86,6 +87,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // Org policy: require verified email
+    if (!user.isEmailVerified && user.organizationId) {
+      const requireVerifiedSetting = await prisma.setting.findFirst({
+        where: { organizationId: user.organizationId, key: "REQUIRE_VERIFIED_EMAIL" },
+      });
+      if (requireVerifiedSetting?.value === "true") {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "EMAIL_NOT_VERIFIED",
+            error: "Your organization requires email verification before signing in. Please verify your email or request a new link.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // Clear per-email rate limit counter on successful login
     clearLoginEmailRateLimit(cleanEmail);
 
@@ -97,6 +115,24 @@ export async function POST(request: Request) {
           termsAcceptedAt: new Date(),
           termsVersion: LEGAL_VERSION,
         },
+      });
+    }
+
+    // Two-factor authentication challenge step (short-lived partial auth token)
+    if (user.isTwoFactorEnabled) {
+      const JWT_SECRET = process.env.JWT_SECRET;
+      if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
+      const challengeToken = jwt.sign(
+        { userId: user.id, email: user.email, type: "2fa_challenge" },
+        JWT_SECRET,
+        { expiresIn: "5m" }
+      );
+
+      return NextResponse.json({
+        success: true,
+        requires2FA: true,
+        challengeToken,
+        message: "Two-factor authentication code required.",
       });
     }
 

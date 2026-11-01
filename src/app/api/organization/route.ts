@@ -6,6 +6,10 @@ import { z } from "zod";
 
 const updateOrgSchema = z.object({
   name: z.string().optional().nullable(),
+  logo: z.string().optional().nullable().or(z.literal("")),
+  brandColor: z.string().optional().nullable().or(z.literal("")),
+  timezone: z.string().optional().nullable().or(z.literal("")),
+  locale: z.string().optional().nullable().or(z.literal("")),
   workingHours: z.string().optional().nullable().or(z.literal("")),
   address: z.string().optional().nullable().or(z.literal("")),
   city: z.string().optional().nullable().or(z.literal("")),
@@ -67,6 +71,10 @@ export async function PUT(request: Request) {
 
     const {
       name,
+      logo,
+      brandColor,
+      timezone,
+      locale,
       workingHours,
       address,
       city,
@@ -82,6 +90,10 @@ export async function PUT(request: Request) {
       where: { id: organizationId },
       data: {
         ...(name ? { name } : {}),
+        ...(logo !== undefined ? { logo: logo || null } : {}),
+        ...(brandColor !== undefined ? { brandColor: brandColor || null } : {}),
+        ...(timezone !== undefined ? { timezone: timezone || "Asia/Kolkata" } : {}),
+        ...(locale !== undefined ? { locale: locale || "en-IN" } : {}),
         ...(workingHours !== undefined ? { workingHours: workingHours || null } : {}),
         ...(address !== undefined ? { address: address || null } : {}),
         ...(city !== undefined ? { city: city || null } : {}),

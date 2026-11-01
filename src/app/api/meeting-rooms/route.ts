@@ -3,23 +3,24 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const createRoomSchema = z.object({
-  action: z.string().optional().nullable(),
-  name: z.string().optional().nullable(),
-  officeId: z.string().optional().nullable(),
+  action: optionalString(),
+  name: requiredString("Room name is required"),
+  officeId: optionalString(),
   capacity: z.union([z.number(), z.string()]).optional().nullable(),
-  floor: z.string().optional().nullable().or(z.literal("")),
-  amenities: z.string().optional().nullable().or(z.literal("")),
+  floor: optionalString(),
+  amenities: optionalString(),
   isAvailable: z.boolean().optional().nullable(),
 });
 
 const updateRoomSchema = z.object({
-  id: z.string().min(1, "Room ID is required"),
-  name: z.string().optional().nullable(),
+  id: requiredString("Room ID is required"),
+  name: optionalString(),
   capacity: z.union([z.number(), z.string()]).optional().nullable(),
-  floor: z.string().optional().nullable().or(z.literal("")),
-  amenities: z.string().optional().nullable().or(z.literal("")),
+  floor: optionalString(),
+  amenities: optionalString(),
   isAvailable: z.boolean().optional().nullable(),
 });
 

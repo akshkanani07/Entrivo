@@ -3,21 +3,22 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { performWalkIn } from "@/services/visitors/walkin.service";
+import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
 
 const walkinSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email().optional().nullable().or(z.literal("")),
-  phone: z.string().min(5, "Phone is required"),
-  company: z.string().optional().nullable().or(z.literal("")),
-  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
-  hostEmployeeId: z.string().min(1, "Host employee is required"),
-  purpose: z.string().optional().nullable().or(z.literal("")),
-  idProofType: z.string().optional().nullable().or(z.literal("")),
-  idProofNumber: z.string().optional().nullable().or(z.literal("")),
-  photoUrl: z.string().optional().nullable().or(z.literal("")),
-  signatureUrl: z.string().optional().nullable().or(z.literal("")),
+  name: requiredString("Name is required"),
+  email: optionalEmail("Invalid email address"),
+  phone: requiredString("Phone is required", 5),
+  company: optionalString(),
+  visitorTypeId: optionalString(),
+  hostEmployeeId: requiredString("Host employee is required"),
+  purpose: optionalString(),
+  idProofType: optionalString(),
+  idProofNumber: optionalString(),
+  photoUrl: optionalString(),
+  signatureUrl: optionalString(),
   consentGiven: z.boolean().optional().nullable(),
-  consentVersion: z.string().optional().nullable(),
+  consentVersion: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
       success: true,
       data: result.checkIn,
       checkIn: result.checkIn,
-      message: `Walk-in visitor ${result.checkIn.visitor.name} checked in successfully. Badge #${result.checkIn.badgeNumber}`,
+      message: `Walk-in visitor ${result.checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn.badgeNumber || ""}`,
     });
   } catch (error: any) {
     console.error("Walkin error:", error);

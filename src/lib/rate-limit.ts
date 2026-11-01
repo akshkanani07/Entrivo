@@ -167,3 +167,18 @@ export const forgotPasswordRateLimiter = (ip: string, email: string): RateLimitR
 
 export const registerRateLimiter = (ip: string): RateLimitResult =>
   checkRateLimit(`register:${ip}`, { maxRequests: 10, windowMs: 60 * 60 * 1000 });
+
+// 3 resend attempts per 15 min per email, 5 per IP
+export const resendVerificationRateLimiter = (email: string, ip: string): RateLimitResult => {
+  const ipCheck = checkRateLimit(`resend-verif:ip:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+  if (!ipCheck.allowed) return ipCheck;
+  return checkRateLimit(`resend-verif:email:${email.toLowerCase().trim()}`, {
+    maxRequests: 3,
+    windowMs: 15 * 60 * 1000,
+  });
+};
+
+// 5 attempts per 15 min for 2FA challenges
+export const twoFactorRateLimiter = (identifier: string): RateLimitResult => {
+  return checkRateLimit(`2fa:${identifier}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
+};

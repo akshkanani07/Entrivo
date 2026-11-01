@@ -8,29 +8,30 @@ import { requireOrg } from "@/lib/tenant";
 import { emailService } from "@/services/email/mailjet.service";
 import { UserRole } from "@/types";
 import { getAppUrl } from "@/lib/app-url";
+import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
 
 const createEmployeeSchema = z.object({
-  name: z.string().min(1, "Employee name is required"),
-  email: z.string().email("A valid work email is required"),
-  phone: z.string().optional().nullable().or(z.literal("")),
-  designation: z.string().optional().nullable().or(z.literal("")),
-  departmentId: z.string().optional().nullable().or(z.literal("")),
-  departmentName: z.string().optional().nullable().or(z.literal("")),
-  officeId: z.string().optional().nullable().or(z.literal("")),
-  employeeCode: z.string().optional().nullable().or(z.literal("")),
-  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional(),
-  autoApproveVisitors: z.boolean().optional(),
-  action: z.string().optional().nullable(),
+  name: requiredString("Employee name is required"),
+  email: requiredEmail("A valid work email is required"),
+  phone: optionalString(),
+  designation: optionalString(),
+  departmentId: optionalString(),
+  departmentName: optionalString(),
+  officeId: optionalString(),
+  employeeCode: optionalString(),
+  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional().nullable(),
+  autoApproveVisitors: z.boolean().optional().nullable(),
+  action: optionalString(),
 });
 
 const updateEmployeeSchema = z.object({
-  id: z.string().min(1, "Employee ID is required"),
-  designation: z.string().optional().nullable().or(z.literal("")),
-  phone: z.string().optional().nullable().or(z.literal("")),
-  departmentId: z.string().optional().nullable().or(z.literal("")),
-  status: z.string().optional().nullable().or(z.literal("")),
-  autoApproveVisitors: z.boolean().optional(),
-  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional(),
+  id: requiredString("Employee ID is required"),
+  designation: optionalString(),
+  phone: optionalString(),
+  departmentId: optionalString(),
+  status: optionalString(),
+  autoApproveVisitors: z.boolean().optional().nullable(),
+  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional().nullable(),
 });
 
 export async function GET(request: Request) {

@@ -71,6 +71,8 @@ model Organization {
   checkInPolicy   String?
   workingHours    String?           @default("08:30 - 19:30")
   timezone        String            @default("Asia/Kolkata")
+  brandColor      String?           @default("#4f46e5")
+  locale          String?           @default("en-IN")
   deletedAt       DateTime?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -95,6 +97,7 @@ model Organization {
   settings        Setting[]
   reports         Report[]
   kiosks          Kiosk[]
+  files           File[]
 
   @@index([slug])
 }
@@ -104,6 +107,7 @@ model Branch {
   name            String
   code            String
   address         String?
+  workingHours    Json?
   organizationId  String
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deletedAt       DateTime?
@@ -111,6 +115,7 @@ model Branch {
   updatedAt       DateTime     @updatedAt
 
   offices         Office[]
+  holidays        Holiday[]
 
   @@index([organizationId])
 }
@@ -120,6 +125,7 @@ model Office {
   name        String
   floor       String?
   building    String?
+  workingHours Json?
   branchId    String
   branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   deletedAt   DateTime?
@@ -128,6 +134,7 @@ model Office {
 
   meetingRooms MeetingRoom[]
   employees    Employee[]
+  floors       Floor[]
 
   @@index([branchId])
 }
@@ -157,6 +164,8 @@ model User {
   role               UserRole     @default(EMPLOYEE)
   isTwoFactorEnabled Boolean      @default(false)
   twoFactorSecret    String?
+  twoFactorBackupCodes String?    // JSON array of hashed single-use codes
+  twoFactorConfirmedAt DateTime?
   isEmailVerified    Boolean      @default(false)
   isActive           Boolean      @default(true)
   organizationId     String?
@@ -171,6 +180,7 @@ model User {
 
   employee                Employee?
   sessions                Session[]
+  passwordHistories       PasswordHistory[]
   auditLogs               AuditLog[]
   notifications           Notification[]
   pushSubscriptions       PushSubscription[]
@@ -188,6 +198,7 @@ model Session {
   device         String?
   ipAddress      String?
   userAgent      String?
+  lastActiveAt   DateTime  @default(now())
   expiresAt      DateTime
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -455,6 +466,10 @@ model MeetingRoom {
   office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
   capacity    Int          @default(6)
   floor       String?
+  floorId     String?
+  floorRef    Floor?       @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  zoneId      String?
+  zoneRef     Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   amenities   String?      @default("Display, Conference Phone, Whiteboard")
   isAvailable Boolean      @default(true)
   deletedAt   DateTime?
@@ -464,6 +479,8 @@ model MeetingRoom {
   invitations Invitation[]
 
   @@index([officeId])
+  @@index([floorId])
+  @@index([zoneId])
 }
 
 model Document {
@@ -610,12 +627,18 @@ model Holiday {
   id             String       @id @default(cuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branchId       String?
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
   name           String
   date           DateTime
+  endDate        DateTime?
+  isRecurring    Boolean      @default(false)
+  description    String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+  @@index([branchId])
 }
 
 model ApiKey {
@@ -695,4 +718,78 @@ model Kiosk {
   @@index([organizationId])
   @@index([deviceTokenHash])
   @@index([pairingCodeHash])
+}
+
+model Floor {
+  id          String       @id @default(cuid())
+  name        String
+  number      Int          @default(1)
+  officeId    String
+  office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  zones        Zone[]
+  meetingRooms MeetingRoom[]
+
+  @@index([officeId])
+}
+
+model Zone {
+  id          String       @id @default(cuid())
+  name        String
+  code        String?
+  floorId     String
+  floor       Floor        @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  meetingRooms MeetingRoom[]
+
+  @@index([floorId])
+}
+
+model File {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerType      String       // "VISITOR_PHOTO" | "ID_PROOF" | "NDA_DOCUMENT" | "ORG_LOGO" | "SIGNATURE"
+  ownerId        String?
+  key            String
+  mime           String
+  size           Int
+  sha256         String
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([ownerType, ownerId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }

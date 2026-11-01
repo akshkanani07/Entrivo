@@ -17,11 +17,13 @@ import { prisma } from "@/lib/db";
 import { getClientIp } from "@/lib/auth";
 import { KIOSK_COOKIE_MAX_AGE } from "@/lib/kiosk-auth";
 
+import { requiredString } from "@/lib/zod-helpers";
+
 const pairSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .regex(/^\d{8}$/, "Pairing code must be exactly 8 digits"),
+  code: requiredString("Pairing code must be exactly 8 digits").refine(
+    (v) => /^\d{8}$/.test(v),
+    { message: "Pairing code must be exactly 8 digits" }
+  ),
 });
 
 // In-memory rate limiting for pairing attempts per IP

@@ -11,6 +11,7 @@ import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
+import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
 
 export interface CheckInInput {
   invitationId: string;
@@ -97,6 +98,18 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       success: false,
       error: `Cannot check in visitor: Invitation is currently ${invitation.status}. Only APPROVED invitations can be checked in.`,
       status: 400,
+    };
+  }
+
+  // Working Hours & Holiday Enforcement Check
+  const scheduleCheck = await checkScheduleAndHolidayPolicy(orgId, new Date(), {
+    officeId: invitation.hostEmployee.officeId || undefined,
+  });
+  if (!scheduleCheck.canProceed) {
+    return {
+      success: false,
+      error: scheduleCheck.reason || "Check-in is currently blocked by workplace schedule policy.",
+      status: 403,
     };
   }
 

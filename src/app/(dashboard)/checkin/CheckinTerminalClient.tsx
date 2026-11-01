@@ -165,8 +165,11 @@ export function CheckinTerminalClient({
         throw new Error(data.error || "Checkout failed");
       }
 
+      const checkedOutVisitor = data?.data?.visitorName || "Visitor";
+      const checkedOutBadge = data?.data?.badgeNumber || badgeOrId.trim();
+      const checkoutDuration = data?.data?.durationFormatted || "N/A";
       toast.success(
-        `Visitor ${data.data.visitorName} (Badge: ${data.data.badgeNumber}) checked out. Duration: ${data.data.durationFormatted}`
+        `Visitor ${checkedOutVisitor} (Badge: ${checkedOutBadge}) checked out. Duration: ${checkoutDuration}`
       );
       setCheckoutBadgeInput("");
       setActiveList((prev) => prev.filter((a) => a.badgeNumber !== badgeOrId.trim() && a.id !== badgeOrId.trim()));

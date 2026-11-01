@@ -312,11 +312,11 @@ export default async function DashboardPage() {
                           className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase text-white"
                           style={{ backgroundColor: ci.visitor.visitorType?.badgeColor || "#6366f1" }}
                         >
-                          {ci.visitor.visitorType?.name || "Guest"}
+                          {ci.visitor?.visitorType?.name || "Guest"}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400 truncate">
-                        {ci.visitor.company} • Host: {ci.hostEmployee.user.name}
+                        {ci.visitor?.company || "Guest"} • Host: {ci.hostEmployee?.user?.name || "Host"}
                       </p>
                     </div>
                   </div>
@@ -324,7 +324,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3 text-right">
                     <div>
                       <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/40 block">
-                        {ci.badgeNumber}
+                        {ci.badgeNumber || "BADGE"}
                       </span>
                       <span className="text-[10px] text-slate-400 block mt-0.5">
                         In {formatTime(ci.checkInTime)}

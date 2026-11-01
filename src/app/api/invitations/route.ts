@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAnyPermission, can } from "@/lib/rbac";
@@ -157,6 +158,27 @@ export async function POST(request: Request) {
 
     if (!hostEmployee) {
       return NextResponse.json({ success: false, error: "Host employee not found in organization." }, { status: 400 });
+    }
+
+    // Working Hours & Holiday Policy Check
+    const targetDate = new Date(scheduledDate);
+    if (startTime) {
+      const [h, m] = startTime.split(":").map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        targetDate.setHours(h, m, 0, 0);
+      }
+    }
+    const scheduleCheck = await checkScheduleAndHolidayPolicy(orgId, targetDate, {
+      officeId: hostEmployee.officeId || undefined,
+    });
+    if (!scheduleCheck.canProceed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: scheduleCheck.reason || "Invitations cannot be scheduled outside permitted operating schedule.",
+        },
+        { status: 403 }
+      );
     }
 
     // Verify meeting room if supplied

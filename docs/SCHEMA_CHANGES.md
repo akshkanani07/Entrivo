@@ -48,4 +48,49 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+---
+
+# Entrivo Schema Changes (Phase 1)
+
+## 1. Storage & Files Foundation
+- Added `model File`:
+  - `id`: CUID identifier
+  - `organizationId`: Tenant scoping
+  - `ownerType`: Identifier for file purpose (`VISITOR_PHOTO`, `ID_PROOF`, `NDA_DOCUMENT`, `ORG_LOGO`, `SIGNATURE`)
+  - `ownerId`: Foreign key / reference ID
+  - `key`: Storage adapter object path
+  - `mime`: Verified MIME type (validated with magic bytes)
+  - `size`: Byte count
+  - `sha256`: Cryptographic content checksum
+  - `createdById`: Author / uploader
+  - `deletedAt`: Soft delete tracking
+
+## 2. Authentication & Security
+- `EmailVerificationToken`: Token hash, 24-hour expiration, and atomic single-use status for user email validation.
+- `User`:
+  - `twoFactorBackupCodes`: JSON string of hashed single-use backup recovery codes.
+  - `twoFactorConfirmedAt`: Timestamp when 2FA was activated.
+- `Session`:
+  - `lastActiveAt`: Tracking timestamp for server-side idle timeout enforcement.
+- `PasswordHistory`:
+  - `userId`, `passwordHash`, `createdAt`: Tracks historical bcrypt hashes to prevent immediate password reuse.
+
+## 3. Organization Profile & Spatial Structure
+- `Organization`:
+  - `brandColor`: Hex brand color code (default `#4f46e5`).
+  - `locale`: Locale code (default `en-IN`).
+- `Branch`:
+  - `workingHours`: JSON configuration for weekday operating hours.
+- `Office`:
+  - `workingHours`: JSON configuration for weekday operating hours.
+- `Floor`:
+  - Represents building floors linked to `Office`, with floor name and integer number.
+- `Zone`:
+  - Represents spatial wings/zones on a `Floor`.
+- `MeetingRoom`:
+  - Added `floorId` (`floorRef`) and `zoneId` (`zoneRef`) relations.
+- `Holiday`:
+  - Added `branchId` (branch-specific holidays), `endDate` (date ranges), `isRecurring` (annual recurrence), and `description`.
 ```
+

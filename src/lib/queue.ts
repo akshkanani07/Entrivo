@@ -121,9 +121,9 @@ export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number
 
       await prisma.securityLog.create({
         data: {
-          organizationId: c.visitor.organizationId,
+          organizationId: c.visitor?.organizationId || "",
           logType: "VISITOR_OVERSTAYED",
-          description: `Visitor ${c.visitor.name} (Badge: ${c.badgeNumber}) exceeded expected checkout time. Status updated to OVERSTAYED.`,
+          description: `Visitor ${c.visitor?.name || "Guest"} (Badge: ${c.badgeNumber || ""}) exceeded expected checkout time. Status updated to OVERSTAYED.`,
           severity: "HIGH",
           guardName: "System Worker",
         },

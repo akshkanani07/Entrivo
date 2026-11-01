@@ -21,9 +21,12 @@ export function BadgeCard({ data }: { data: BadgeData }) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
 
   useEffect(() => {
-    const qrPayload = data.token || data.badgeNumber;
+    if (!data) return;
+    const qrPayload = data.token || data.badgeNumber || "BADGE";
     generateQRCodeDataUrl(qrPayload).then(setQrCodeUrl).catch(console.error);
   }, [data]);
+
+  if (!data) return null;
 
   const handlePrint = () => {
     window.print();

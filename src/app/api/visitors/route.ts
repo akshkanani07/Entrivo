@@ -3,26 +3,27 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
 
 const createVisitorSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("A valid email is required"),
-  phone: z.string().min(5, "Phone is required"),
-  company: z.string().optional().nullable().or(z.literal("")),
-  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
-  idProofType: z.string().optional().nullable().or(z.literal("")),
-  idProofNumber: z.string().optional().nullable().or(z.literal("")),
-  avatarUrl: z.string().optional().nullable().or(z.literal("")),
+  name: requiredString("Name is required"),
+  email: requiredEmail("A valid email is required"),
+  phone: requiredString("Phone is required", 5),
+  company: optionalString(),
+  visitorTypeId: optionalString(),
+  idProofType: optionalString(),
+  idProofNumber: optionalString(),
+  avatarUrl: optionalString(),
 });
 
 const patchVisitorSchema = z.object({
-  id: z.string().min(1, "Visitor ID is required"),
+  id: requiredString("Visitor ID is required"),
   isBlacklisted: z.boolean().optional().nullable(),
-  blacklistReason: z.string().optional().nullable().or(z.literal("")),
-  company: z.string().optional().nullable().or(z.literal("")),
-  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
-  name: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
+  blacklistReason: optionalString(),
+  company: optionalString(),
+  visitorTypeId: optionalString(),
+  name: optionalString(),
+  phone: optionalString(),
 });
 
 export async function GET(request: Request) {

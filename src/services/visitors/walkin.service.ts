@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
+import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
 
 export interface WalkInInput {
   organizationId: string;
@@ -73,6 +74,18 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
 
   if (!hostEmp) {
     return { success: false, error: "Host employee not found in organization.", status: 400 };
+  }
+
+  // Working Hours & Holiday Enforcement Check
+  const scheduleCheck = await checkScheduleAndHolidayPolicy(orgId, new Date(), {
+    officeId: hostEmp.officeId || undefined,
+  });
+  if (!scheduleCheck.canProceed) {
+    return {
+      success: false,
+      error: scheduleCheck.reason || "Walk-in check-in is currently blocked by workplace schedule policy.",
+      status: 403,
+    };
   }
 
   if (input.visitorTypeId) {

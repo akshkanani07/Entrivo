@@ -146,17 +146,21 @@ export function KioskClientView({
         confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
       } catch {}
 
-      const item = checkinData.data;
+      const item = checkinData?.data || checkinData?.checkIn;
+      if (!item) {
+        throw new Error(checkinData?.error || "Check-in failed to return confirmation");
+      }
       setIssuedBadge({
-        badgeNumber: item.badgeNumber,
-        visitorName: item.visitorName,
-        visitorCompany: item.visitorCompany,
+        badgeNumber: item.badgeNumber || "BADGE",
+        visitorName: item.visitorName || item.visitor?.name || "Guest",
+        visitorCompany: item.visitorCompany || item.visitor?.company || "Visitor",
         visitorTypeName: "Visitor",
         badgeColor: "#6366f1",
-        hostName: item.hostName,
-        hostOffice: "Main Office",
-        photoUrl: null,
-        issueDate: formatDateTime(item.checkInTime),
+        hostName: item.hostName || item.hostEmployee?.user?.name || "Host",
+        hostOffice: item.hostOffice || "Main Office",
+        photoUrl: item.photoUrl || null,
+        issueDate: formatDateTime(item.checkInTime || new Date()),
+        token: item.badgeNumber || item.id,
       });
 
       setStep("SUCCESS");
@@ -207,17 +211,21 @@ export function KioskClientView({
         confetti({ particleCount: 80, spread: 70, colors: ["#6366f1", "#10b981", "#06b6d4"] });
       } catch {}
 
-      const item = data.data;
+      const item = data?.data || data?.checkIn;
+      if (!item) {
+        throw new Error(data?.error || "Walk-in registration did not return confirmation");
+      }
       setIssuedBadge({
-        badgeNumber: item.badgeNumber,
-        visitorName: item.visitorName,
-        visitorCompany: item.visitorCompany,
+        badgeNumber: item.badgeNumber || "BADGE",
+        visitorName: item.visitorName || item.visitor?.name || "Guest",
+        visitorCompany: item.visitorCompany || item.visitor?.company || "Visitor",
         visitorTypeName: "Visitor",
         badgeColor: "#6366f1",
-        hostName: item.hostName,
-        hostOffice: "Main Office",
-        photoUrl: null,
-        issueDate: formatDateTime(item.checkInTime),
+        hostName: item.hostName || item.hostEmployee?.user?.name || "Host",
+        hostOffice: item.hostOffice || "Main Office",
+        photoUrl: item.photoUrl || null,
+        issueDate: formatDateTime(item.checkInTime || new Date()),
+        token: item.badgeNumber || item.id,
       });
 
       setStep("SUCCESS");

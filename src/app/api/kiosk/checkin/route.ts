@@ -58,11 +58,11 @@ export async function POST(request: Request) {
         badgeNumber: checkIn.badgeNumber,
         status: checkIn.status,
         checkInTime: checkIn.checkInTime,
-        visitorName: checkIn.visitor.name,
-        visitorCompany: checkIn.visitor.company,
-        hostName: checkIn.hostEmployee.user.name,
+        visitorName: checkIn.visitor?.name || "Guest",
+        visitorCompany: checkIn.visitor?.company || "",
+        hostName: checkIn.hostEmployee?.user?.name || "Host",
       },
-      message: `Visitor ${checkIn.visitor.name} checked in successfully. Badge #${checkIn.badgeNumber}`,
+      message: `Visitor ${checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn.badgeNumber || ""}`,
     });
 
     // Rolling renewal: refresh kiosk_token cookie

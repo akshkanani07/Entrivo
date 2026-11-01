@@ -80,12 +80,14 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!user.termsAcceptedAt) {
+    // Ensure isEmailVerified is true for verified Google identities
+    if (!user.isEmailVerified || !user.termsAcceptedAt) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          termsAcceptedAt: new Date(),
-          termsVersion: LEGAL_VERSION,
+          isEmailVerified: true,
+          termsAcceptedAt: user.termsAcceptedAt || new Date(),
+          termsVersion: user.termsVersion || LEGAL_VERSION,
         },
       });
     }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { hashToken, hashPassword, validatePasswordStrength } from "@/lib/auth";
+import { hashToken, hashPassword } from "@/lib/auth";
+import { passwordPolicyService } from "@/services/auth/password-policy.service";
 import { emailService } from "@/services/email/mailjet.service";
 
 const resetPasswordSchema = z.object({
@@ -65,8 +66,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate password strength against policy
-    const strengthCheck = validatePasswordStrength(password, user.email);
+    // Validate password strength against policy and historical reuse
+    const strengthCheck = await passwordPolicyService.validatePassword(password, {
+      id: user.id,
+      email: user.email,
+      organizationId: user.organizationId,
+    });
     if (!strengthCheck.valid) {
       return NextResponse.json(
         { success: false, error: strengthCheck.error || "Password does not meet complexity requirements." },
@@ -84,6 +89,14 @@ export async function POST(request: Request) {
           passwordHash: newHash,
           mustChangePassword: false,
           passwordChangedAt: new Date(),
+        },
+      });
+
+      // Record password history
+      await tx.passwordHistory.create({
+        data: {
+          userId: user.id,
+          passwordHash: newHash,
         },
       });
 

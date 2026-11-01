@@ -4,12 +4,14 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
+import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
+
 const createBlacklistSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  phone: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable().or(z.literal("")),
-  idProofNumber: z.string().optional().nullable(),
-  reason: z.string().min(1, "Reason is required"),
+  name: requiredString("Name is required"),
+  phone: optionalString(),
+  email: optionalEmail("Valid email is required"),
+  idProofNumber: optionalString(),
+  reason: requiredString("Reason is required"),
 });
 
 export async function GET() {

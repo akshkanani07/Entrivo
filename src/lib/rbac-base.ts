@@ -30,6 +30,9 @@ export type Permission =
   | "meetingRooms.manage"
   | "reports.view"
   | "reports.export"
+  | "files.read"
+  | "files.write"
+  | "files.delete"
   | "sessions.self"
   | "notifications.self";
 
@@ -63,6 +66,9 @@ export const ALL_PERMISSIONS: Permission[] = [
   "meetingRooms.manage",
   "reports.view",
   "reports.export",
+  "files.read",
+  "files.write",
+  "files.delete",
   "sessions.self",
   "notifications.self",
 ];
@@ -99,6 +105,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "meetingRooms.manage",
     "reports.view",
     "reports.export",
+    "files.read",
+    "files.write",
+    "files.delete",
     "sessions.self",
     "notifications.self",
   ],
@@ -118,6 +127,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "documents.manage",
     "meetingRooms.read",
     "reports.view",
+    "files.read",
+    "files.write",
     "sessions.self",
     "notifications.self",
   ],
@@ -136,6 +147,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "employees.read",
     "documents.read",
     "meetingRooms.read",
+    "files.read",
+    "files.write",
     "sessions.self",
     "notifications.self",
   ],
@@ -146,6 +159,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "approvals.act",
     "employees.read",
     "meetingRooms.read",
+    "files.read",
     "sessions.self",
     "notifications.self",
   ],

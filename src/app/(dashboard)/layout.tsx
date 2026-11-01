@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { LEGAL_VERSION } from "@/lib/legal";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { IdleSessionGuard } from "@/components/auth/IdleSessionGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#080c14] flex">
+      <IdleSessionGuard />
       {/* Sidebar */}
       <Sidebar currentUser={currentUser} />
 

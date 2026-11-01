@@ -64,10 +64,10 @@ export default async function VisitorsPage({
       typeName: v.visitorType?.name || "General",
       typeColor: v.visitorType?.badgeColor || "#6366f1",
       isCheckedIn,
-      activeCheckInId: isCheckedIn ? latest.id : null,
-      activeBadgeNumber: isCheckedIn ? latest.badgeNumber : null,
+      activeCheckInId: isCheckedIn && latest ? latest.id : null,
+      activeBadgeNumber: isCheckedIn && latest ? latest.badgeNumber : null,
       checkInTime: latest ? formatTime(latest.checkInTime) : null,
-      hostName: latest?.hostEmployee.user.name || "None",
+      hostName: latest?.hostEmployee?.user?.name || "None",
     };
   });
 

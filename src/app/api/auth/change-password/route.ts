@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { getCurrentUser, verifyPassword, hashPassword, validatePasswordStrength, verifyToken } from "@/lib/auth";
+import { getCurrentUser, verifyPassword, hashPassword, verifyToken } from "@/lib/auth";
+import { passwordPolicyService } from "@/services/auth/password-policy.service";
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -50,11 +51,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate new password strength
-    const strengthCheck = validatePasswordStrength(newPassword, dbUser.email);
-    if (!strengthCheck.valid) {
+    // Validate new password against organization policy and history
+    const policyCheck = await passwordPolicyService.validatePassword(newPassword, {
+      id: user.id,
+      email: dbUser.email,
+      organizationId: user.organizationId,
+    });
+    if (!policyCheck.valid) {
       return NextResponse.json(
-        { success: false, error: strengthCheck.error || "Password does not meet security requirements" },
+        { success: false, error: policyCheck.error || "Password does not meet security requirements" },
         { status: 400 }
       );
     }
@@ -75,6 +80,14 @@ export async function POST(request: Request) {
           passwordHash: newPasswordHash,
           mustChangePassword: false,
           passwordChangedAt: new Date(),
+        },
+      });
+
+      // Record password history
+      await tx.passwordHistory.create({
+        data: {
+          userId: user.id,
+          passwordHash: newPasswordHash,
         },
       });
 
