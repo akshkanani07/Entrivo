@@ -22,7 +22,7 @@ export function BadgeCard({ data }: { data: BadgeData }) {
 
   useEffect(() => {
     if (!data) return;
-    const qrPayload = data.token || data.badgeNumber || "BADGE";
+    const qrPayload = data?.token || data?.badgeNumber || "BADGE";
     generateQRCodeDataUrl(qrPayload).then(setQrCodeUrl).catch(console.error);
   }, [data]);
 
@@ -49,31 +49,31 @@ export function BadgeCard({ data }: { data: BadgeData }) {
           </div>
           <div
             className="text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
-            style={{ backgroundColor: data.badgeColor || "#4f46e5" }}
+            style={{ backgroundColor: data?.badgeColor || "#4f46e5" }}
           >
-            {data.visitorTypeName || "GUEST"}
+            {data?.visitorTypeName || "GUEST"}
           </div>
         </div>
 
         {/* Center: Photo & Details */}
         <div className="flex gap-4 items-center mb-4">
           <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-800 border-2 border-slate-700 flex-shrink-0 shadow-md">
-            {data.photoUrl ? (
-              <img src={data.photoUrl} alt={data.visitorName} className="w-full h-full object-cover" />
+            {data?.photoUrl ? (
+              <img src={data.photoUrl} alt={data?.visitorName || "Visitor"} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-indigo-950/60 text-indigo-300 font-bold text-xl">
-                {data.visitorName.charAt(0)}
+                {(data?.visitorName || "V").charAt(0)}
               </div>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-white print:text-black truncate">{data.visitorName}</h3>
+            <h3 className="text-base font-bold text-white print:text-black truncate">{data?.visitorName || "Guest"}</h3>
             <p className="text-xs text-indigo-300 print:text-indigo-800 font-medium truncate">
-              {data.visitorCompany || "Independent"}
+              {data?.visitorCompany || "Independent"}
             </p>
             <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono bg-slate-800/80 print:bg-slate-200 px-2 py-0.5 rounded border border-slate-700 print:border-slate-300">
               <span className="text-slate-400 print:text-slate-600">ID:</span>
-              <span className="font-bold text-indigo-400 print:text-black">{data.badgeNumber}</span>
+              <span className="font-bold text-indigo-400 print:text-black">{data?.badgeNumber || "BADGE"}</span>
             </div>
           </div>
         </div>
@@ -84,21 +84,21 @@ export function BadgeCard({ data }: { data: BadgeData }) {
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
               <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Host
             </span>
-            <span className="font-semibold text-white print:text-black truncate max-w-[170px]">{data.hostName}</span>
+            <span className="font-semibold text-white print:text-black truncate max-w-[170px]">{data?.hostName || "Host"}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
               <Building2 className="w-3.5 h-3.5 text-indigo-400" /> Office / Area
             </span>
             <span className="font-medium text-slate-300 print:text-slate-800 truncate max-w-[170px]">
-              {data.hostOffice || "Campus Suite"}
+              {data?.hostOffice || "Campus Suite"}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
               <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Date
             </span>
-            <span className="text-slate-300 print:text-slate-800 font-mono text-[11px]">{data.issueDate}</span>
+            <span className="text-slate-300 print:text-slate-800 font-mono text-[11px]">{data?.issueDate || "Today"}</span>
           </div>
         </div>
 

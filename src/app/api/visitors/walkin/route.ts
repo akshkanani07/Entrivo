@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       success: true,
       data: result.checkIn,
       checkIn: result.checkIn,
-      message: `Walk-in visitor ${result.checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn.badgeNumber || ""}`,
+      message: `Walk-in visitor ${result.checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn?.badgeNumber || ""}`,
     });
   } catch (error: any) {
     console.error("Walkin error:", error);

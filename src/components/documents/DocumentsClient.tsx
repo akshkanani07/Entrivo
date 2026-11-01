@@ -182,12 +182,12 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
 
   // Filter
   const filtered = docs.filter((doc) => {
-    const q = search.toLowerCase();
+    const q = (search || "").toLowerCase();
     const matchSearch =
-      doc.title.toLowerCase().includes(q) ||
-      doc.visitor.name.toLowerCase().includes(q) ||
-      (doc.visitor.company || "").toLowerCase().includes(q) ||
-      doc.docType.toLowerCase().includes(q);
+      (doc.title || "").toLowerCase().includes(q) ||
+      (doc.visitor?.name || "").toLowerCase().includes(q) ||
+      (doc.visitor?.company || "").toLowerCase().includes(q) ||
+      (doc.docType || "").toLowerCase().includes(q);
     const matchType = filterType === "ALL" || doc.docType === filterType;
     return matchSearch && matchType;
   });

@@ -227,11 +227,11 @@ export function MeetingRoomsManager({ initialRooms, offices }: Props) {
   };
 
   const filtered = rooms.filter((r) => {
-    const q = search.toLowerCase();
+    const q = (search || "").toLowerCase();
     const matchSearch =
-      r.name.toLowerCase().includes(q) ||
-      (r.floor && r.floor.toLowerCase().includes(q)) ||
-      (r.amenities && r.amenities.toLowerCase().includes(q));
+      (r.name || "").toLowerCase().includes(q) ||
+      (r.floor ? r.floor.toLowerCase().includes(q) : false) ||
+      (r.amenities ? r.amenities.toLowerCase().includes(q) : false);
 
     const matchStatus =
       statusFilter === "ALL" ||

@@ -77,13 +77,13 @@ export function VisitorsClientList({
   });
 
   const filteredVisitors = visitors.filter((v) => {
-    const q = searchTerm.toLowerCase();
+    const q = (searchTerm || "").toLowerCase();
     const matchesSearch =
-      v.name.toLowerCase().includes(q) ||
-      v.company.toLowerCase().includes(q) ||
-      v.phone.includes(q) ||
-      v.email.toLowerCase().includes(q) ||
-      (v.activeBadgeNumber && v.activeBadgeNumber.toLowerCase().includes(q));
+      (v.name || "").toLowerCase().includes(q) ||
+      (v.company || "").toLowerCase().includes(q) ||
+      (v.phone || "").includes(q) ||
+      (v.email || "").toLowerCase().includes(q) ||
+      (v.activeBadgeNumber ? v.activeBadgeNumber.toLowerCase().includes(q) : false);
 
     if (!matchesSearch) return false;
     if (selectedType !== "ALL" && v.typeName !== selectedType) return false;
@@ -484,7 +484,7 @@ export function VisitorsClientList({
               <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
                 <span className="text-slate-400">Current Campus Status</span>
                 <span className={inspectVisitor.isCheckedIn ? "text-emerald-400 font-bold" : "text-slate-400"}>
-                  {inspectVisitor.isCheckedIn ? `Inside (Badge ${inspectVisitor.activeBadgeNumber})` : "Checked Out"}
+                  {inspectVisitor.isCheckedIn ? `Inside (Badge ${inspectVisitor.activeBadgeNumber || "Assigned"})` : "Checked Out"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5">

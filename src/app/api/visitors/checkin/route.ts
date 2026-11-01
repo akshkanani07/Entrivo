@@ -3,14 +3,15 @@ import { z } from "zod";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { performCheckin } from "@/services/visitors/checkin.service";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const checkinSchema = z.object({
-  invitationId: z.string().min(1, "Invitation ID is required"),
-  photoUrl: z.string().optional().nullable().or(z.literal("")),
-  signatureUrl: z.string().optional().nullable().or(z.literal("")),
-  receptionistName: z.string().optional().nullable().or(z.literal("")),
+  invitationId: requiredString("Invitation ID is required"),
+  photoUrl: optionalString(),
+  signatureUrl: optionalString(),
+  receptionistName: optionalString(),
   consentGiven: z.boolean().optional().nullable(),
-  consentVersion: z.string().optional().nullable(),
+  consentVersion: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
       success: true,
       data: result.checkIn,
       checkIn: result.checkIn,
-      message: `Visitor ${result.checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn.badgeNumber || ""}`,
+      message: `Visitor ${result.checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn?.badgeNumber || ""}`,
     });
   } catch (error: any) {
     console.error("Check-in error:", error);

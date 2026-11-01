@@ -5,12 +5,13 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
+import { optionalString } from "@/lib/zod-helpers";
 
 const checkoutSchema = z.object({
-  checkInId: z.string().optional().nullable().or(z.literal("")),
-  badgeNumber: z.string().optional().nullable().or(z.literal("")),
-  exitNotes: z.string().optional().nullable().or(z.literal("")),
-  checkoutMethod: z.string().optional().nullable().or(z.literal("")),
+  checkInId: optionalString(),
+  badgeNumber: optionalString(),
+  exitNotes: optionalString(),
+  checkoutMethod: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
         data: {
           organizationId: orgId,
           logType: "VISITOR_CHECKOUT",
-          description: `Visitor ${checkIn.visitor.name} (Badge: ${checkIn.badgeNumber}) checked out. Duration: ${durationFormatted}.`,
+          description: `Visitor ${checkIn.visitor?.name || "Guest"} (Badge: ${checkIn.badgeNumber || "N/A"}) checked out. Duration: ${durationFormatted}.`,
           severity: "LOW",
           guardName: user.name,
         },
@@ -113,9 +114,9 @@ export async function POST(request: Request) {
     // Notify about visitor checkout
     await notify(NotificationEvent.VISITOR_CHECKED_OUT, {
       organizationId: orgId,
-      visitorName: checkIn.visitor.name,
-      visitorEmail: checkIn.visitor.email,
-      visitorCompany: checkIn.visitor.company || undefined,
+      visitorName: checkIn.visitor?.name || "Guest",
+      visitorEmail: checkIn.visitor?.email,
+      visitorCompany: checkIn.visitor?.company || undefined,
       hostName: checkIn.hostEmployee?.user?.name || "Host",
       hostEmail: checkIn.hostEmployee?.user?.email,
       hostUserId: checkIn.hostEmployee?.userId,
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
         checkOutTime,
         durationMinutes,
         durationFormatted,
-        visitorName: checkIn.visitor.name,
+        visitorName: checkIn.visitor?.name || "Guest",
         badgeNumber: checkIn.badgeNumber,
       },
     });

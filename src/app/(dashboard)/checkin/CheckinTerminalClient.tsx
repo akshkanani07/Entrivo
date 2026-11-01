@@ -182,12 +182,12 @@ export function CheckinTerminalClient({
   };
 
   const filteredScheduled = scheduledList.filter((s) => {
-    const q = searchFilter.toLowerCase();
+    const q = (searchFilter || "").toLowerCase();
     return (
-      s.visitorName.toLowerCase().includes(q) ||
-      s.company.toLowerCase().includes(q) ||
-      s.hostName.toLowerCase().includes(q) ||
-      s.token.toLowerCase().includes(q)
+      (s.visitorName || "").toLowerCase().includes(q) ||
+      (s.company || "").toLowerCase().includes(q) ||
+      (s.hostName || "").toLowerCase().includes(q) ||
+      (s.token || "").toLowerCase().includes(q)
     );
   });
 

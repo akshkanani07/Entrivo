@@ -290,12 +290,12 @@ export function EmployeesManager({
 
   // Filter Employees
   const filteredEmployees = employees.filter((emp) => {
-    const q = searchQuery.toLowerCase();
+    const q = (searchQuery || "").toLowerCase();
     const matchesSearch =
-      emp.user.name.toLowerCase().includes(q) ||
-      emp.user.email.toLowerCase().includes(q) ||
-      emp.employeeCode.toLowerCase().includes(q) ||
-      (emp.designation && emp.designation.toLowerCase().includes(q));
+      (emp.user?.name || "").toLowerCase().includes(q) ||
+      (emp.user?.email || "").toLowerCase().includes(q) ||
+      (emp.employeeCode || "").toLowerCase().includes(q) ||
+      (emp.designation ? emp.designation.toLowerCase().includes(q) : false);
 
     const matchesDept = selectedDept === "ALL" || emp.department?.id === selectedDept;
     const matchesStatus = selectedStatus === "ALL" || emp.status === selectedStatus;

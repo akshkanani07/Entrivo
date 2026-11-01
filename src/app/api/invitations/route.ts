@@ -9,31 +9,32 @@ import { formatDate } from "@/lib/utils";
 import { getAppUrl } from "@/lib/app-url";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
+import { requiredString, requiredEmail, optionalString } from "@/lib/zod-helpers";
 
 const createInvitationSchema = z.object({
-  visitorName: z.string().min(1, "Visitor name is required"),
-  visitorEmail: z.string().email("Valid visitor email is required"),
-  visitorPhone: z.string().min(5, "Visitor phone is required"),
-  visitorCompany: z.string().optional().nullable().or(z.literal("")),
-  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
-  hostEmployeeId: z.string().optional().nullable().or(z.literal("")),
-  scheduledDate: z.string().min(1, "Scheduled date is required"),
-  startTime: z.string().optional().nullable().or(z.literal("")),
-  endTime: z.string().optional().nullable().or(z.literal("")),
-  purpose: z.string().min(1, "Purpose is required"),
-  meetingRoomId: z.string().optional().nullable().or(z.literal("")),
-  notes: z.string().optional().nullable().or(z.literal("")),
+  visitorName: requiredString("Visitor name is required"),
+  visitorEmail: requiredEmail("Valid visitor email is required"),
+  visitorPhone: requiredString("Visitor phone is required", 5),
+  visitorCompany: optionalString(),
+  visitorTypeId: optionalString(),
+  hostEmployeeId: optionalString(),
+  scheduledDate: requiredString("Scheduled date is required"),
+  startTime: optionalString(),
+  endTime: optionalString(),
+  purpose: requiredString("Purpose is required"),
+  meetingRoomId: optionalString(),
+  notes: optionalString(),
 });
 
 const patchInvitationSchema = z.object({
-  id: z.string().min(1, "Invitation ID is required"),
-  scheduledDate: z.string().optional().nullable(),
-  startTime: z.string().optional().nullable().or(z.literal("")),
-  endTime: z.string().optional().nullable().or(z.literal("")),
-  purpose: z.string().optional().nullable(),
+  id: requiredString("Invitation ID is required"),
+  scheduledDate: optionalString(),
+  startTime: optionalString(),
+  endTime: optionalString(),
+  purpose: optionalString(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "EXPIRED"]).optional().nullable(),
-  meetingRoomId: z.string().optional().nullable().or(z.literal("")),
-  notes: z.string().optional().nullable().or(z.literal("")),
+  meetingRoomId: optionalString(),
+  notes: optionalString(),
 });
 
 export async function GET(request: Request) {

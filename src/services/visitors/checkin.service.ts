@@ -298,14 +298,14 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {
     organizationId: orgId,
-    visitorName: invitation.visitor.name,
-    visitorCompany: invitation.visitor.company ?? undefined,
-    hostName: invitation.hostEmployee.user.name,
-    hostEmail: invitation.hostEmployee.user.email,
-    hostUserId: invitation.hostEmployee.userId,
+    visitorName: invitation.visitor?.name || "Guest",
+    visitorCompany: invitation.visitor?.company ?? undefined,
+    hostName: invitation.hostEmployee?.user?.name || "Host",
+    hostEmail: invitation.hostEmployee?.user?.email || "",
+    hostUserId: invitation.hostEmployee?.userId,
     badgeNumber,
     location:
-      invitation.meetingRoom?.name ?? invitation.hostEmployee.office?.name ?? "Main Reception",
+      invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
     entityId: invitation.id,
   }).catch(console.error);
 
@@ -317,22 +317,22 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       status: checkIn.status,
       checkInTime: checkIn.checkInTime,
       visitor: {
-        id: checkIn.visitor.id,
-        name: checkIn.visitor.name,
-        company: checkIn.visitor.company,
-        avatarUrl: checkIn.visitor.avatarUrl,
-        visitorTypeName: checkIn.visitor.visitorType?.name,
-        badgeColor: checkIn.visitor.visitorType?.badgeColor,
+        id: checkIn.visitor?.id,
+        name: checkIn.visitor?.name || "Guest",
+        company: checkIn.visitor?.company ?? null,
+        avatarUrl: checkIn.visitor?.avatarUrl ?? null,
+        visitorTypeName: checkIn.visitor?.visitorType?.name ?? "Visitor",
+        badgeColor: checkIn.visitor?.visitorType?.badgeColor ?? "#4f46e5",
       },
       host: {
-        name: checkIn.hostEmployee.user.name,
-        office: checkIn.hostEmployee.office?.name,
+        name: checkIn.hostEmployee?.user?.name || "Host",
+        office: checkIn.hostEmployee?.office?.name ?? "Main Reception",
       },
       hostEmployee: {
-        id: checkIn.hostEmployee.id,
+        id: checkIn.hostEmployee?.id,
         user: {
-          name: checkIn.hostEmployee.user.name,
-          email: checkIn.hostEmployee.user.email,
+          name: checkIn.hostEmployee?.user?.name || "Host",
+          email: checkIn.hostEmployee?.user?.email || "",
         },
       },
     },

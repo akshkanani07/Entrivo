@@ -111,16 +111,16 @@ export function WalkinForm({
       }
 
       setIssuedBadge({
-        badgeNumber: checkIn.badgeNumber || "BADGE",
-        visitorName: checkIn.visitor?.name || formData.name,
-        visitorCompany: checkIn.visitor?.company || formData.company || "Guest",
-        visitorTypeName: checkIn.visitor?.visitorTypeName || "Visitor",
-        badgeColor: checkIn.visitor?.badgeColor || "#4f46e5",
-        hostName: checkIn.host?.name || checkIn.hostEmployee?.user?.name || "Host",
-        hostOffice: checkIn.host?.office || checkIn.hostEmployee?.office?.name || "Main Reception",
-        photoUrl: checkIn.visitor?.avatarUrl || photoUrl,
-        issueDate: formatDateTime(checkIn.checkInTime || new Date()),
-        token: checkIn.badgeNumber || checkIn.id,
+        badgeNumber: checkIn?.badgeNumber || "BADGE",
+        visitorName: checkIn?.visitor?.name || formData.name || "Guest",
+        visitorCompany: checkIn?.visitor?.company || formData.company || "Guest",
+        visitorTypeName: checkIn?.visitor?.visitorTypeName || "Visitor",
+        badgeColor: checkIn?.visitor?.badgeColor || "#4f46e5",
+        hostName: checkIn?.host?.name || checkIn?.hostEmployee?.user?.name || "Host",
+        hostOffice: checkIn?.host?.office || checkIn?.hostEmployee?.office?.name || "Main Reception",
+        photoUrl: checkIn?.visitor?.avatarUrl || photoUrl,
+        issueDate: formatDateTime(checkIn?.checkInTime || new Date()),
+        token: checkIn?.badgeNumber || checkIn?.id || "BADGE",
       });
     } catch (err: any) {
       setError(err.message || "Failed to complete registration");
@@ -138,7 +138,7 @@ export function WalkinForm({
         <div>
           <h2 className="text-xl font-black text-white">Walk-in Check-in Successful!</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Badge <strong className="text-indigo-400">{issuedBadge.badgeNumber}</strong> issued. Host notified via In-app, Email & Push.
+            Badge <strong className="text-indigo-400">{issuedBadge?.badgeNumber || "BADGE"}</strong> issued. Host notified via In-app, Email & Push.
           </p>
         </div>
 

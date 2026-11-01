@@ -151,16 +151,16 @@ export function KioskClientView({
         throw new Error(checkinData?.error || "Check-in failed to return confirmation");
       }
       setIssuedBadge({
-        badgeNumber: item.badgeNumber || "BADGE",
-        visitorName: item.visitorName || item.visitor?.name || "Guest",
-        visitorCompany: item.visitorCompany || item.visitor?.company || "Visitor",
+        badgeNumber: item?.badgeNumber || "BADGE",
+        visitorName: item?.visitorName || item?.visitor?.name || "Guest",
+        visitorCompany: item?.visitorCompany || item?.visitor?.company || "Visitor",
         visitorTypeName: "Visitor",
         badgeColor: "#6366f1",
-        hostName: item.hostName || item.hostEmployee?.user?.name || "Host",
-        hostOffice: item.hostOffice || "Main Office",
-        photoUrl: item.photoUrl || null,
-        issueDate: formatDateTime(item.checkInTime || new Date()),
-        token: item.badgeNumber || item.id,
+        hostName: item?.hostName || item?.hostEmployee?.user?.name || "Host",
+        hostOffice: item?.hostOffice || "Main Office",
+        photoUrl: item?.photoUrl || null,
+        issueDate: formatDateTime(item?.checkInTime || new Date()),
+        token: item?.badgeNumber || item?.id || "BADGE",
       });
 
       setStep("SUCCESS");
@@ -216,16 +216,16 @@ export function KioskClientView({
         throw new Error(data?.error || "Walk-in registration did not return confirmation");
       }
       setIssuedBadge({
-        badgeNumber: item.badgeNumber || "BADGE",
-        visitorName: item.visitorName || item.visitor?.name || "Guest",
-        visitorCompany: item.visitorCompany || item.visitor?.company || "Visitor",
+        badgeNumber: item?.badgeNumber || "BADGE",
+        visitorName: item?.visitorName || item?.visitor?.name || "Guest",
+        visitorCompany: item?.visitorCompany || item?.visitor?.company || "Visitor",
         visitorTypeName: "Visitor",
         badgeColor: "#6366f1",
-        hostName: item.hostName || item.hostEmployee?.user?.name || "Host",
-        hostOffice: item.hostOffice || "Main Office",
-        photoUrl: item.photoUrl || null,
-        issueDate: formatDateTime(item.checkInTime || new Date()),
-        token: item.badgeNumber || item.id,
+        hostName: item?.hostName || item?.hostEmployee?.user?.name || "Host",
+        hostOffice: item?.hostOffice || "Main Office",
+        photoUrl: item?.photoUrl || null,
+        issueDate: formatDateTime(item?.checkInTime || new Date()),
+        token: item?.badgeNumber || item?.id || "BADGE",
       });
 
       setStep("SUCCESS");

@@ -241,13 +241,13 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {
     organizationId: orgId,
-    visitorName: checkIn.visitor.name,
-    visitorCompany: checkIn.visitor.company ?? undefined,
-    hostName: checkIn.hostEmployee.user.name,
-    hostEmail: checkIn.hostEmployee.user.email,
-    hostUserId: checkIn.hostEmployee.userId,
+    visitorName: checkIn.visitor?.name || "Guest",
+    visitorCompany: checkIn.visitor?.company ?? undefined,
+    hostName: checkIn.hostEmployee?.user?.name || "Host",
+    hostEmail: checkIn.hostEmployee?.user?.email || "",
+    hostUserId: checkIn.hostEmployee?.userId,
     badgeNumber,
-    location: checkIn.hostEmployee.office?.name ?? "Main Reception",
+    location: checkIn.hostEmployee?.office?.name ?? "Main Reception",
     entityId: checkIn.id,
   }).catch(console.error);
 
@@ -259,22 +259,22 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
       status: checkIn.status,
       checkInTime: checkIn.checkInTime,
       visitor: {
-        id: checkIn.visitor.id,
-        name: checkIn.visitor.name,
-        company: checkIn.visitor.company,
-        avatarUrl: checkIn.visitor.avatarUrl,
-        visitorTypeName: checkIn.visitor.visitorType?.name,
-        badgeColor: checkIn.visitor.visitorType?.badgeColor,
+        id: checkIn.visitor?.id,
+        name: checkIn.visitor?.name || "Guest",
+        company: checkIn.visitor?.company ?? null,
+        avatarUrl: checkIn.visitor?.avatarUrl ?? null,
+        visitorTypeName: checkIn.visitor?.visitorType?.name ?? "Visitor",
+        badgeColor: checkIn.visitor?.visitorType?.badgeColor ?? "#4f46e5",
       },
       host: {
-        name: checkIn.hostEmployee.user.name,
-        office: checkIn.hostEmployee.office?.name,
+        name: checkIn.hostEmployee?.user?.name || "Host",
+        office: checkIn.hostEmployee?.office?.name ?? "Main Reception",
       },
       hostEmployee: {
-        id: checkIn.hostEmployee.id,
+        id: checkIn.hostEmployee?.id,
         user: {
-          name: checkIn.hostEmployee.user.name,
-          email: checkIn.hostEmployee.user.email,
+          name: checkIn.hostEmployee?.user?.name || "Host",
+          email: checkIn.hostEmployee?.user?.email || "",
         },
       },
     },

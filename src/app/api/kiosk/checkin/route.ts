@@ -54,15 +54,15 @@ export async function POST(request: Request) {
     const response = NextResponse.json({
       success: true,
       data: {
-        id: checkIn.id,
-        badgeNumber: checkIn.badgeNumber,
-        status: checkIn.status,
-        checkInTime: checkIn.checkInTime,
-        visitorName: checkIn.visitor?.name || "Guest",
-        visitorCompany: checkIn.visitor?.company || "",
-        hostName: checkIn.hostEmployee?.user?.name || "Host",
+        id: checkIn?.id,
+        badgeNumber: checkIn?.badgeNumber,
+        status: checkIn?.status,
+        checkInTime: checkIn?.checkInTime,
+        visitorName: checkIn?.visitor?.name || "Guest",
+        visitorCompany: checkIn?.visitor?.company || "",
+        hostName: checkIn?.hostEmployee?.user?.name || "Host",
       },
-      message: `Visitor ${checkIn.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn.badgeNumber || ""}`,
+      message: `Visitor ${checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn?.badgeNumber || ""}`,
     });
 
     // Rolling renewal: refresh kiosk_token cookie

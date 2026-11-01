@@ -95,7 +95,7 @@ export async function GET(request: Request) {
               status: latestCheckIn.status,
               checkInTime: latestCheckIn.checkInTime,
               badgeNumber: latestCheckIn.badgeNumber,
-              hostName: latestCheckIn.hostEmployee.user.name,
+              hostName: latestCheckIn.hostEmployee?.user?.name || "Host",
             }
           : null,
         isCheckedIn: isCurrentlyCheckedIn,
