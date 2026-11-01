@@ -12,6 +12,7 @@
     "prisma:seed": "node prisma/seed.js",
     "test:tenant": "node --experimental-strip-types scripts/verify-tenant-isolation.ts",
     "test:tenants": "node --experimental-strip-types scripts/verify-tenant-isolation.ts",
+    "test:acceptance": "node --experimental-strip-types scripts/verify-phase-0-acceptance.ts",
     "worker": "npx tsx scripts/worker.ts",
     "vapid": "npx tsx scripts/generate-vapid.ts",
     "gen:key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
