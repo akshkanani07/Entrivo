@@ -20,6 +20,7 @@ export type Permission =
   | "employees.manage"
   | "org.manage"
   | "settings.manage"
+  | "kiosks.manage"
   | "integrations.manage"
   | "templates.manage"
   | "audit.read"
@@ -52,6 +53,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "employees.manage",
   "org.manage",
   "settings.manage",
+  "kiosks.manage",
   "integrations.manage",
   "templates.manage",
   "audit.read",
@@ -87,6 +89,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "employees.manage",
     "org.manage",
     "settings.manage",
+    "kiosks.manage",
     "integrations.manage",
     "templates.manage",
     "audit.read",

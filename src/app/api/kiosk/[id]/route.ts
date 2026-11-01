@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requirePermission } from "@/lib/rbac";
+import { requirePermission, requireAnyPermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 
 export async function DELETE(
@@ -15,7 +15,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requirePermission("settings.manage");
+    const auth = await requireAnyPermission(["settings.manage", "kiosks.manage"]);
     if (auth.response) return auth.response;
     const orgCheck = requireOrg(auth.user);
     if (orgCheck.response) return orgCheck.response;

@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "crypto";
 import { prisma } from "@/lib/db";
-import { requirePermission } from "@/lib/rbac";
+import { requirePermission, requireAnyPermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 
 const createKioskSchema = z.object({
@@ -19,7 +19,7 @@ const createKioskSchema = z.object({
 
 export async function GET() {
   try {
-    const auth = await requirePermission("settings.manage");
+    const auth = await requireAnyPermission(["settings.manage", "kiosks.manage"]);
     if (auth.response) return auth.response;
     const orgCheck = requireOrg(auth.user);
     if (orgCheck.response) return orgCheck.response;
@@ -61,7 +61,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requirePermission("settings.manage");
+    const auth = await requireAnyPermission(["settings.manage", "kiosks.manage"]);
     if (auth.response) return auth.response;
     const orgCheck = requireOrg(auth.user);
     if (orgCheck.response) return orgCheck.response;
@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         pairingCodeHash,
         pairingExpiresAt,
         isActive: true,
+        createdById: auth.user.id,
       },
       select: { id: true, name: true, isActive: true, createdAt: true },
     });

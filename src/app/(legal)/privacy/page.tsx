@@ -4,17 +4,20 @@ import { Lock, ShieldAlert, CheckCircle, Database, Eye, RefreshCw, Mail } from "
 
 export const metadata: Metadata = {
   title: "Privacy Policy & Data Consent — Entrivo",
-  description: "Entrivo privacy policy, compliance with the Digital Personal Data Protection (DPDP) Act 2023, GDPR, and visitor consent policies.",
+  description: "Entrivo privacy policy, compliance with the Digital Personal Data Protection (DPDP) Act 2023, and visitor consent policies.",
 };
 
 export default function PrivacyPolicyPage() {
+  const contactEmail = process.env.CONTACT_EMAIL || "support@entrivo.com";
+  const grievanceEmail = process.env.GRIEVANCE_EMAIL || contactEmail;
+
   return (
     <div className="space-y-10">
       {/* Header section */}
       <div className="border-b border-slate-800 pb-8">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800/40 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-4">
           <Lock className="w-3.5 h-3.5" />
-          <span>DPDP Act 2023 & GDPR Compliant — Version 1.0</span>
+          <span>DPDP Act 2023 Aligned — Version 1.0</span>
         </div>
         <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
           Privacy Policy & Visitor Data Consent
@@ -29,7 +32,7 @@ export default function PrivacyPolicyPage() {
         <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0 mt-0.5" />
         <div className="text-xs text-slate-300 leading-relaxed space-y-1">
           <p className="font-semibold text-white">
-            Digital Personal Data Protection (DPDP) Act 2023 & GDPR Notice
+            Digital Personal Data Protection (DPDP) Act 2023 Notice
           </p>
           <p>
             Entrivo operates as a Data Processor on behalf of subscribing enterprise organizations (the &ldquo;Data Fiduciary&rdquo;).
@@ -86,7 +89,7 @@ export default function PrivacyPolicyPage() {
             Lawful Basis & Purposes of Processing
           </h2>
           <p>
-            In compliance with Section 4 and Section 6 of the DPDP Act 2023 and Article 6 of the GDPR, personal data
+            In compliance with Section 4 and Section 6 of the DPDP Act 2023, personal data
             is collected and processed under the following lawful bases:
           </p>
           <ul className="list-disc pl-6 space-y-1.5 text-xs text-slate-400">
@@ -147,11 +150,11 @@ export default function PrivacyPolicyPage() {
             <span className="w-6 h-6 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-mono">5</span>
             Your Rights as a Data Principal
           </h2>
-          <p>Under the DPDP Act 2023 and GDPR, you have the following rights:</p>
+          <p>Under the DPDP Act 2023, you have the following rights:</p>
           <ul className="list-disc pl-6 space-y-1.5 text-xs text-slate-400">
             <li><strong className="text-slate-200">Right to Access:</strong> Request a summary of your personal data processed by the facility.</li>
             <li><strong className="text-slate-200">Right to Correction & Erasure:</strong> Request the correction of inaccurate data or the deletion of visitor logs, subject to statutory physical security retention obligations.</li>
-            <li><strong className="text-slate-200">Right of Grievance Redressal:</strong> Direct questions, concerns, or complaints to the designated Data Protection Officer.</li>
+            <li><strong className="text-slate-200">Right of Grievance Redressal:</strong> Direct questions, concerns, or complaints to the designated Grievance Officer.</li>
             <li><strong className="text-slate-200">Right to Withdraw Consent:</strong> You may decline optional photo capture or withdraw consent; however, physical facility access may require alternative identification protocols.</li>
           </ul>
         </section>
@@ -160,17 +163,17 @@ export default function PrivacyPolicyPage() {
         <section className="space-y-3">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-slate-800 text-slate-300 flex items-center justify-center text-xs font-mono">6</span>
-            Data Protection Officer (DPO) & Inquiries
+            Grievance Officer & Inquiries
           </h2>
           <p>
             To exercise your privacy rights, request data erasure, or submit an inquiry regarding our compliance practices,
-            please contact our Data Protection Office:
+            please contact our designated Grievance Office:
           </p>
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1 text-xs">
-            <p className="font-semibold text-white">Entrivo Data Protection Office</p>
-            <p className="text-slate-300">Email: <a href="mailto:dpo@entrivo.com" className="text-indigo-400 hover:underline">dpo@entrivo.com</a></p>
-            <p className="text-slate-300">Grievance Escalation: <a href="mailto:security@entrivo.com" className="text-indigo-400 hover:underline">security@entrivo.com</a></p>
-            <p className="text-slate-400">Response SLA: Written acknowledgment within 48 hours; resolution within 30 calendar days.</p>
+            <p className="font-semibold text-white">Entrivo Grievance & Compliance Office</p>
+            <p className="text-slate-300">Contact Email: <a href={`mailto:${contactEmail}`} className="text-indigo-400 hover:underline">{contactEmail}</a></p>
+            <p className="text-slate-300">Grievance Escalation: <a href={`mailto:${grievanceEmail}`} className="text-indigo-400 hover:underline">{grievanceEmail}</a></p>
+            <p className="text-slate-400">Response SLA: Written acknowledgment within 48 hours; resolution within 30 calendar days as per DPDP guidelines.</p>
           </div>
         </section>
       </div>

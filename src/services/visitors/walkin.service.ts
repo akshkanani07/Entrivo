@@ -4,6 +4,7 @@
  * Used by both /api/visitors/walkin and /api/kiosk/walkin.
  */
 
+import "server-only";
 import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";

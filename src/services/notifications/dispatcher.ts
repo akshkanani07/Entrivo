@@ -1,3 +1,4 @@
+import "server-only";
 import { NotificationEvent, NotificationPayload } from "./events";
 import { sendEmailNotification } from "./channels/email";
 import { sendInAppNotification } from "./channels/inapp";

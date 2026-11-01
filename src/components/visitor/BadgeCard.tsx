@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Printer, Download, ShieldCheck, Building2, Calendar, UserCheck } from "lucide-react";
-import { generateQRCodeDataUrl } from "@/lib/qr";
+import { generateQRCodeDataUrl } from "@/lib/qr-client";
 
 export interface BadgeData {
   badgeNumber: string;

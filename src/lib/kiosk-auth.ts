@@ -9,6 +9,7 @@
  * - Never returns visitor phone/email/idProof to the kiosk layer
  */
 
+import "server-only";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";

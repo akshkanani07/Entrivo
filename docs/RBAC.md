@@ -38,6 +38,7 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `integrations.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `templates.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `audit.read` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `kiosks.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `documents.read` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `documents.manage` | ✅ | ✅ | ✅ | ❌ | ❌ |
 | `meetingRooms.read` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -91,6 +92,13 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/notifications/test-email` | POST | `templates.manage` | API `requirePermission` |
 | `/api/auth/sessions` | GET, DELETE | `sessions.self` | API `requireUser` (scoped to user.id) |
 | `/api/cron/auto-checkout` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
+| `/api/kiosk` | GET, POST | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |
+| `/api/kiosk/:id` | DELETE | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |
+| `/api/kiosk/:id/repair` | POST | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |
+| `/api/kiosk/pair` | POST | Rate-limited pairing code lookup (public) | Pairing Code Guard |
+| `/api/kiosk/checkin` | POST | Device token cookie (`kiosk_token`), org-scoped | Kiosk Hardware Cookie Guard |
+| `/api/kiosk/walkin` | POST | Device token cookie (`kiosk_token`), org-scoped | Kiosk Hardware Cookie Guard |
+| `/api/kiosk/verify-qr` | POST | Device token cookie (`kiosk_token`), org-scoped | Kiosk Hardware Cookie Guard |
 
 ---
 

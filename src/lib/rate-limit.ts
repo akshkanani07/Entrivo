@@ -8,6 +8,7 @@
  * - Exposes methods to clear per-email counters upon successful authentication
  */
 
+import "server-only";
 import { getRedisConnection } from "./queue";
 
 interface RateLimitEntry {

@@ -6,6 +6,7 @@
  * handle auth and request parsing.
  */
 
+import "server-only";
 import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";

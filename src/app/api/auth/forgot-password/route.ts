@@ -6,6 +6,7 @@ import { hashToken, getClientIp } from "@/lib/auth";
 import { forgotPasswordRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
 import { getAppUrl } from "@/lib/app-url";
+import { escapeHtml } from "@/services/email/email.templates";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("A valid workplace email is required"),
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
               </div>
               <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Reset Your Password</h2>
               <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-                Hello ${user.name}, a request was received to reset the password for your Entrivo workplace terminal. Click below to choose a new password:
+                Hello ${escapeHtml(user.name)}, a request was received to reset the password for your Entrivo workplace terminal. Click below to choose a new password:
               </p>
               <div style="text-align: center; margin-bottom: 28px;">
                 <a href="${resetUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">

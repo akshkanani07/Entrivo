@@ -6,6 +6,7 @@ import { hashToken, getClientIp } from "@/lib/auth";
 import { magicLinkRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
 import { getAppUrl } from "@/lib/app-url";
+import { escapeHtml } from "@/services/email/email.templates";
 
 const magicLinkRequestSchema = z.object({
   email: z.string().email("A valid work email is required"),
@@ -98,14 +99,14 @@ export async function POST(request: Request) {
               </div>
               <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Sign In to Your Workplace</h2>
               <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-                Hello ${user.name}, we received a sign-in request for your Entrivo account. Click the button below to authenticate securely:
+                Hello ${escapeHtml(user.name)}, we received a sign-in request for your Entrivo account. Click the button below to authenticate securely:
               </p>
               <div style="text-align: center; margin-bottom: 28px;">
                 <a href="${magicUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">
                   Continue to Entrivo &rarr;
                 </a>
               </div>
-              <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; pt: 16px; margin: 0;">
+              <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px; margin: 0;">
                 This link will expire in 15 minutes and can only be used once. If you did not request this link, you can safely ignore this email.
               </p>
             </div>

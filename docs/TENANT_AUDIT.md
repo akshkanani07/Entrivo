@@ -53,6 +53,12 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 | `GET /api/dashboard/stats` | Aggregates | All counts & charts scoped to `organizationId` | No global aggregates returned |
 | `GET/POST/PUT/DELETE /api/notifications/templates` | `Template` | `where: { organizationId }` | Pre-verification before update/delete |
 | `GET /api/search` | Cross-entity | Every query (`visitor`, `employee`, `invitation`, `checkIn`) scoped to `organizationId` | No cross-tenant leakage |
+| `GET/POST /api/kiosk` | `Kiosk` | `where: { organizationId }` | Scoped to admin's organization |
+| `DELETE /api/kiosk/:id` | `Kiosk` | `findFirst({ where: { id, organizationId } })` | Tenant boundary asserted before soft delete |
+| `POST /api/kiosk/:id/repair` | `Kiosk` | `findFirst({ where: { id, organizationId } })` | Generates new pairing code within tenant |
+| `POST /api/kiosk/checkin` | `CheckIn` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
+| `POST /api/kiosk/walkin` | `CheckIn` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
+| `POST /api/kiosk/verify-qr` | `Invitation` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
 
 ---
 

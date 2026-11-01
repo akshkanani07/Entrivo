@@ -1,3 +1,4 @@
+import "server-only";
 import QRCode from "qrcode";
 import crypto from "crypto";
 

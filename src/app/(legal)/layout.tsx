@@ -71,7 +71,7 @@ export default function LegalLayout({
               © {new Date().getFullYear()} Entrivo Workplace Access Technologies Inc. All rights reserved.
             </p>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              Compliant with Digital Personal Data Protection (DPDP) Act 2023, GDPR, and ISO/IEC 27001 standards.
+              Compliant with the Digital Personal Data Protection (DPDP) Act 2023 and ISO/IEC 27001 security standards.
             </p>
           </div>
           <div className="flex items-center gap-6 text-[11px]">
@@ -82,10 +82,10 @@ export default function LegalLayout({
               Privacy & Consent
             </Link>
             <a
-              href="mailto:dpo@entrivo.com"
+              href={`mailto:${process.env.GRIEVANCE_EMAIL || process.env.CONTACT_EMAIL || "support@entrivo.com"}`}
               className="hover:text-indigo-400 transition-colors"
             >
-              Contact DPO (dpo@entrivo.com)
+              Grievance Officer ({process.env.GRIEVANCE_EMAIL || process.env.CONTACT_EMAIL || "support@entrivo.com"})
             </a>
           </div>
         </div>

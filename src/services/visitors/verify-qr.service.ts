@@ -3,6 +3,7 @@
  * Kiosk callers must use the kiosk-safe variant that omits PII.
  */
 
+import "server-only";
 import { prisma } from "@/lib/db";
 
 export interface VerifyQrResult {

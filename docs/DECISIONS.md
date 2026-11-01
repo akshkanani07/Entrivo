@@ -48,12 +48,17 @@
 ## Decision 9: Kiosk Mode One-Time Hardware Pairing Architecture
 - **Context**: The initial kiosk implementation used a raw secret key stored in browser `sessionStorage`, requiring manual key entry per session.
 - **Decision**: Refactored kiosk authentication to a secure one-time hardware pairing flow:
-  1. **Kiosk Model**: Updated `Kiosk` schema with `{ id, organizationId, name, deviceTokenHash (sha256), pairingCodeHash, pairingExpiresAt, lastUsedAt, expiresAt, isActive }`.
-  2. **One-Time 8-Digit Pairing Code**: An administrator (`settings.manage`) generates an 8-digit numeric pairing code (10-minute TTL, single-use, rate-limited, stored as sha256). The raw code is presented to the admin ONCE.
+  1. **Kiosk Model**: Updated `Kiosk` schema with `{ id, organizationId, name, deviceTokenHash (sha256), pairingCodeHash, pairingExpiresAt, lastUsedAt, expiresAt, isActive, createdById }`.
+  2. **One-Time 8-Digit Pairing Code**: An administrator (`kiosks.manage` or `settings.manage`) generates an 8-digit numeric pairing code (10-minute TTL, single-use, rate-limited, stored as sha256). The raw code is presented to the admin ONCE.
   3. **Pairing Endpoint (`POST /api/kiosk/pair`)**: Validates the pairing code against `pairingCodeHash`, generates a 32-byte crypto random device token, stores only its SHA-256 hash in `deviceTokenHash`, clears the pairing code, and issues an `httpOnly + Secure(prod) + SameSite=Strict` cookie `kiosk_token` with `maxAge: 180 days`. Tokens are NEVER stored in localStorage or sessionStorage.
   4. **Rolling Renewal**: Every successful request to `/api/kiosk/*` automatically extends `expiresAt` (+180 days) and refreshes the `kiosk_token` cookie via `renewKioskCookie`.
   5. **Kiosk Authentication (`requireKiosk`)**: Reads the `kiosk_token` cookie (with fallback support), verifies `deviceTokenHash` using constant-time comparison (`timingSafeEqual`), checks `isActive` and `expiresAt`, enforces per-device rate limiting (30 req / 60 s), scopes queries strictly to the kiosk's organization, and strips all visitor PII.
   6. **Kiosk UI Experience**: The `/kiosk` page checks the cookie on the server component; if missing or invalid, it redirects to `/kiosk/pair`. The `/kiosk/pair` screen allows staff to enter the 8-digit code once. Admin UI in `Settings > Lobby Kiosks` allows registering new kiosks, generating re-pairing codes, and instant revocation.
+
+## Decision 10: Server-Only Boundary Enforcement & Production Safety Guards
+- **`server-only` Imports**: Added `import "server-only";` to all core security and backend modules (`src/lib/auth.ts`, `src/lib/rbac.ts`, `src/lib/tenant.ts`, `src/lib/encryption.ts`, `src/lib/db.ts`, `src/lib/rate-limit.ts`, `src/lib/kiosk-auth.ts`, `src/lib/qr.ts`, and services). Client components rendering QR codes import from `src/lib/qr-client.ts` to prevent bundler leaks of server secrets or Node native modules (`crypto`).
+- **CSS Typo & Transactional Email Hardening**: Corrected CSS property typo (`pt: 16px;` -> `padding-top: 16px;`) and applied `escapeHtml` to dynamic user and host variables inside transactional auth emails (`/api/auth/magic-link`, `/api/auth/forgot-password`).
+- **Repo Hygiene & Compliance Configuration**: Added `.uploads/`, `*.tsbuildinfo`, and `.env*` (except `.env.example`) to `.gitignore`. Updated `.env.example` with compliance and proxy variables (`CONTACT_EMAIL`, `GRIEVANCE_EMAIL`, `TRUST_PROXY`). Updated privacy policy and legal layouts to align with India's DPDP Act 2023.
 
 
 
