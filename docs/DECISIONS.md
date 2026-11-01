@@ -63,6 +63,17 @@
   3. Made `OrgPolicySchema` completely resilient to nulls and invalid settings values, and updated `getOrgPolicy()` in `src/lib/settings-registry.ts` to use `OrgPolicySchema.safeParse()` with fallback to `DefaultOrgPolicy`.
   4. Added safe navigation (`?.`) and fallback defaults across all components (`WalkinForm`, `KioskClientView`, `CheckinTerminalClient`, `BadgeCard`, `/badge/[id]`, `/reports`, `/visitors`, `/dashboard`), preventing `Cannot read properties of undefined` errors.
 
+## Decision 12: Phase 3 Document Management, NDA E-Signature & Base64 Migration
+- **Context**: Visitors required NDA agreements and ID proof storage, but photos and signatures were stored as huge base64 strings directly inside database rows. In addition, uploaded files lacked binary magic-byte detection and virus scanning hooks.
+- **Decision**:
+  1. **Magic-Byte Validation & Antivirus**: Implemented `validateAndProcessUpload` in `src/services/storage/validation.ts`. Verifies binary magic bytes (JPEG `FF D8 FF`, PNG `89 50 4E 47`, WEBP `RIFF....WEBP`, PDF `%PDF-`). Rejects renamed executables (DOS MZ header) and oversize files. Integrated `AntivirusScanner` pluggable interface with clean dev No-Op scanner.
+  2. **Signed NDA PDF Generation & Fingerprint**: Used `pdfkit` to generate tamper-evident PDF binaries embedding visitor identity, organization, timestamp, IP, device, and signature. Computes SHA-256 binary hash stored on the `Document` record.
+  3. **Repeat Visitor NDA Policy Reuse**: Implemented `getVisitorValidNda(visitorId, orgId)` inspecting unexpired, non-deleted NDA documents. When `policy.ndaReuseEnabled` is active, repeat visitors bypass re-signing. If `policy.requireNda` is active, check-in without a valid signed NDA is rejected with HTTP 400.
+  4. **Document Expiry Lifecycle**: Added `status` (`VALID`, `EXPIRING`, `EXPIRED`) with automated alert dispatcher (`DOCUMENT_EXPIRING` event at 30, 7, 1 days). Protected cron endpoint `/api/cron/document-expiry` via Bearer token.
+  5. **Base64-to-Storage Migration**: Created `scripts/migrate-base64-to-storage.ts` that strips EXIF metadata, resizes photos/signatures via `sharp`, persists to storage adapter, updates `Visitor.avatarUrl` and `CheckIn.photoUrl` / `signatureUrl` to clean file URLs, and verifies idempotency (0 items on re-run).
+  6. **UI Enhancements**: Updated `/documents` with multipart file upload (`FormData`), status filter pills, file size/SHA-256 fingerprint inspect modal, and added a dedicated "Documents" tab inside visitor inspect profiles (`VisitorsClientList`).
+
+
 
 
 

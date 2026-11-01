@@ -9,7 +9,10 @@ const createRoomSchema = z.object({
   action: optionalString(),
   name: requiredString("Room name is required"),
   officeId: optionalString(),
-  capacity: z.union([z.number(), z.string()]).optional().nullable(),
+  capacity: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? undefined : Number(v)),
+    z.number().int().positive().optional()
+  ),
   floor: optionalString(),
   amenities: optionalString(),
   isAvailable: z.boolean().optional().nullable(),
@@ -18,7 +21,10 @@ const createRoomSchema = z.object({
 const updateRoomSchema = z.object({
   id: requiredString("Room ID is required"),
   name: optionalString(),
-  capacity: z.union([z.number(), z.string()]).optional().nullable(),
+  capacity: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? undefined : Number(v)),
+    z.number().int().positive().optional()
+  ),
   floor: optionalString(),
   amenities: optionalString(),
   isAvailable: z.boolean().optional().nullable(),

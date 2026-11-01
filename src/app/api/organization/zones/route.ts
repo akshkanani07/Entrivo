@@ -4,11 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const zoneSchema = z.object({
-  name: z.string().min(1, "Zone name is required"),
-  code: z.string().optional().nullable().or(z.literal("")),
-  floorId: z.string().min(1, "Floor ID is required"),
+  name: requiredString("Zone name is required"),
+  code: optionalString(),
+  floorId: requiredString("Floor ID is required"),
 });
 
 export async function GET(request: Request) {

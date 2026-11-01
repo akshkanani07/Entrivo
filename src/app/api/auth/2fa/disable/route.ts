@@ -5,10 +5,11 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/rbac";
 import { verifyPassword } from "@/lib/auth";
 import { twoFactorService } from "@/services/auth/two-factor.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const disableSchema = z.object({
-  password: z.string().min(1, "Password is required to disable 2FA"),
-  code: z.string().min(1, "Authenticator code or backup code is required"),
+  password: requiredString("Password is required to disable 2FA"),
+  code: requiredString("Authenticator code or backup code is required"),
 });
 
 export async function POST(request: Request) {

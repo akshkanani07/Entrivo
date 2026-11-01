@@ -4,10 +4,11 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getCurrentUser, verifyPassword, hashPassword, verifyToken } from "@/lib/auth";
 import { passwordPolicyService } from "@/services/auth/password-policy.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(10, "Password must be at least 10 characters long"),
+  currentPassword: requiredString("Current password is required"),
+  newPassword: requiredString("Password must be at least 10 characters long", 10),
 });
 
 export async function POST(request: Request) {

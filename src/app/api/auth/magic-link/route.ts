@@ -7,9 +7,10 @@ import { magicLinkRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
 import { getAppUrl } from "@/lib/app-url";
 import { escapeHtml } from "@/services/email/email.templates";
+import { requiredEmail } from "@/lib/zod-helpers";
 
 const magicLinkRequestSchema = z.object({
-  email: z.string().email("A valid work email is required"),
+  email: requiredEmail("A valid work email is required"),
 });
 
 export async function POST(request: Request) {

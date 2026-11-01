@@ -49,9 +49,43 @@ model PushSubscription {
   @@index([userId])
 }
 
+
 ---
 
-# Entrivo Schema Changes (Phase 1)
+# Entrivo Schema Changes (Phase 3)
+
+## 1. Document Model Enhancements
+- Scoped `Document` to `Organization`:
+  - `organizationId String`: Organization relation with cascade deletion.
+  - `fileId String?`: Optional relation to `File` model (`onDelete: SetNull`).
+  - `fileSize Int?`: Size in bytes.
+  - `mimeType String?`: Verified MIME type.
+  - `sha256 String?`: SHA-256 integrity hash of document payload.
+  - `status String @default("VALID")`: Computed lifecycle status (`VALID`, `EXPIRING`, `EXPIRED`).
+  - `metadata Json?`: Audit metadata (templateVersion, contentHash, signer IP, device/user-agent, timestamps).
+  - `createdById String?`: Audit user ID for actor tracking.
+  - Indexes: `@@index([organizationId])`, `@@index([visitorId])`, `@@index([docType])`, `@@index([expiryDate])`, `@@index([status])`.
+
+## 2. NdaTemplate Model
+Added dedicated `NdaTemplate` entity for organization-configurable NDA contracts:
+```prisma
+model NdaTemplate {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String        @default("Standard Visitor Non-Disclosure Agreement")
+  content        String        @db.Text
+  version        String        @default("1.0")
+  validityDays   Int           @default(365)
+  isActive       Boolean       @default(true)
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
+}
+```
+
 
 ## 1. Storage & Files Foundation
 - Added `model File`:

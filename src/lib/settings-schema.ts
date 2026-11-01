@@ -26,6 +26,8 @@ export const OrgPolicySchema = z.object({
   requirePhoto: z.boolean().default(true),
   requireIdProof: z.boolean().default(true),
   requireNda: z.boolean().default(true),
+  ndaReuseEnabled: z.boolean().default(true),
+  ndaValidityDays: z.number().min(1).max(730).default(365),
   advanceBookingDays: z.number().min(1).max(90).default(30),
   maxVisitorsPerHostPerDay: z.number().min(1).max(100).default(20),
   blockedVisitorTypes: z.array(z.string()).default([]),

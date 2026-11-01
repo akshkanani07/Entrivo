@@ -41,7 +41,16 @@ Identity, storage foundation, organization structure, holidays, working hours, t
 
 ---
 
-# Entrivo — Phase 2 Implementation Progress
+# Entrivo — Phase 3 Implementation Progress
+
+Document management and NDA e-signature.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P3-01** | Documents: multipart upload via storage adapter (ID_PROOF, NDA, AGREEMENT, OTHER), size & magic-byte validation, antivirus hook interface, download via signed URLs, expiry date + computed status (VALID, EXPIRING, EXPIRED) with alerts at 30/7/1 days (DOCUMENT_EXPIRING event), soft delete, audit logging, documents tab on visitor profile & /documents admin view with filters | [x] | 2026-11-01 | |
+| **P3-02** | NDA e-signature: org NDA template (NdaTemplate model, versioned rich text), signature pad on kiosk/staff, generate PDF (pdfkit) with visitor, timestamp, device/IP, template version, content hash, store as Document, reuse still-valid NDA for repeat visitors (policy ndaReuseEnabled), requireNda policy blocks check-in without valid signed NDA | [x] | 2026-11-01 | |
+| **P3-03** | Move photos and signatures out of base64-in-database into storage: migration script (scripts/migrate-base64-to-storage.ts), resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only, API responses return clean file IDs or URLs | [x] | 2026-11-01 | |
+
 
 Visitor core, invitations, approvals, security, rooms.
 
@@ -59,3 +68,16 @@ Visitor core, invitations, approvals, security, rooms.
 | **P2-10** | Security module completion: blacklist edit/remove/expiry, Watchlist (security+host alerts, approval gate), unified E.164 match logic, security notes & incident logs | [ ] | | |
 | **P2-11** | Meeting-room booking: RoomBooking model, overlap-safe transaction, capacity check, day/week grid, invitation linkage, cancel/reschedule sync | [ ] | | |
 | **P2-12** | Employee management polish: CSV import with preview & error report, deactivate flow (session revocation + invitation reassignment), self profile & avatar upload | [ ] | | |
+
+---
+
+# Entrivo — Phase 3 Implementation Progress
+
+Document management and NDA e-signature.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P3-01** | Documents: multipart upload via storage adapter (ID_PROOF, NDA, AGREEMENT, OTHER), size & magic-byte validation, antivirus hook interface (clearly labelled no-op driver), authorized signed URL downloads, expiry tracking & computed status (VALID, EXPIRING, EXPIRED) with 30/7/1 day DOCUMENT_EXPIRING alerts, soft delete, audited actions, visitor documents tab & /documents admin view with filters | [ ] | | |
+| **P3-02** | NDA e-signature: org NDA template (versioned rich text with placeholders), digital signature pad integration on kiosk & staff tablet, PDF generation (pdfkit) with visitor, timestamp, device/IP, template version & SHA-256 hash stored as Document, repeat visitor NDA reuse (policy-controlled), requireNda policy blocking check-in | [ ] | | |
+| **P3-03** | Move photos and signatures out of base64-in-database into storage: idempotent migration script for existing rows, resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only | [ ] | | |
+

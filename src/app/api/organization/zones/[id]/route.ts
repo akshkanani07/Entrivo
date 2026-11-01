@@ -4,10 +4,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { optionalString } from "@/lib/zod-helpers";
 
 const updateZoneSchema = z.object({
-  name: z.string().min(1).optional(),
-  code: z.string().optional().nullable().or(z.literal("")),
+  name: optionalString(),
+  code: optionalString(),
 });
 
 export async function PUT(

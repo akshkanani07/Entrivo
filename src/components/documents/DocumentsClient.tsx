@@ -34,6 +34,10 @@ interface Doc {
   title: string;
   docType: string;
   fileUrl: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  sha256?: string | null;
+  status?: string;
   expiryDate: Date | string | null;
   verified?: boolean;
   createdAt: Date | string;
@@ -54,20 +58,35 @@ const TYPE_COLORS: Record<string, string> = {
   OTHER: "bg-slate-950/70 text-slate-300 border-slate-800",
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  VALID: "bg-emerald-950/70 text-emerald-300 border-emerald-800/50",
+  EXPIRING: "bg-amber-950/70 text-amber-300 border-amber-800/50",
+  EXPIRED: "bg-rose-950/70 text-rose-300 border-rose-800/50",
+};
+
+function formatFileSize(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 function formatDate(date: Date | string | null): string {
   if (!date) return "Permanent";
   const d = new Date(date);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function isExpiringSoon(date: Date | string | null): boolean {
+function isExpiringSoon(date: Date | string | null, status?: string): boolean {
+  if (status === "EXPIRING") return true;
   if (!date) return false;
   const d = new Date(date);
   const diff = d.getTime() - Date.now();
   return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000;
 }
 
-function isExpired(date: Date | string | null): boolean {
+function isExpired(date: Date | string | null, status?: string): boolean {
+  if (status === "EXPIRED") return true;
   if (!date) return false;
   return new Date(date).getTime() < Date.now();
 }
@@ -76,6 +95,7 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
   const [docs, setDocs] = useState<Doc[]>(initialDocs);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
 
   // Inspect Modal
   const [showInspectModal, setShowInspectModal] = useState(false);
@@ -84,6 +104,7 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
   // Upload Modal
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadForm, setUploadForm] = useState({
     title: "",
     docType: "NDA",
@@ -110,12 +131,24 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
     setShowInspectModal(true);
   };
 
-  const handleDownload = (doc: Doc) => {
-    if (!doc.fileUrl || doc.fileUrl === "#") {
-      toast.info("Digital copy securely archived in Entrivo Cloud Vault.");
-      return;
+  const handleDownload = async (doc: Doc) => {
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/download`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to generate download URL");
+      }
+      const data = await res.json();
+      if (data?.downloadUrl) {
+        window.open(data.downloadUrl, "_blank");
+      } else if (doc.fileUrl && doc.fileUrl !== "#") {
+        window.open(doc.fileUrl, "_blank");
+      } else {
+        toast.info("Digital copy securely archived in Entrivo Cloud Vault.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Could not download document");
     }
-    window.open(doc.fileUrl, "_blank");
   };
 
   const triggerDelete = (id: string, title: string) => {
@@ -155,17 +188,35 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
 
     setUploading(true);
     try {
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(uploadForm),
-      });
+      let res;
+      if (uploadFile) {
+        const formData = new FormData();
+        formData.append("file", uploadFile);
+        formData.append("title", uploadForm.title.trim());
+        formData.append("docType", uploadForm.docType);
+        formData.append("visitorId", uploadForm.visitorId);
+        if (uploadForm.expiryDate) {
+          formData.append("expiryDate", uploadForm.expiryDate);
+        }
+        res = await fetch("/api/documents", {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        res = await fetch("/api/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(uploadForm),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
       setDocs((prev) => [data.data, ...prev]);
       toast.success(`Document "${uploadForm.title}" uploaded and verified!`);
       setShowUploadModal(false);
+      setUploadFile(null);
       setUploadForm({
         title: "",
         docType: "NDA",
@@ -189,10 +240,15 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
       (doc.visitor?.company || "").toLowerCase().includes(q) ||
       (doc.docType || "").toLowerCase().includes(q);
     const matchType = filterType === "ALL" || doc.docType === filterType;
-    return matchSearch && matchType;
+    const computedStatus =
+      doc.status ||
+      (isExpired(doc.expiryDate) ? "EXPIRED" : isExpiringSoon(doc.expiryDate) ? "EXPIRING" : "VALID");
+    const matchStatus = filterStatus === "ALL" || computedStatus === filterStatus;
+    return matchSearch && matchType && matchStatus;
   });
 
-  const docTypes = ["ALL", "NDA", "ID_PROOF", "AGREEMENT", "SAFETY_WAIVER", "INSURANCE"];
+  const docTypes = ["ALL", "NDA", "ID_PROOF", "AGREEMENT", "SAFETY_WAIVER", "INSURANCE", "OTHER"];
+  const docStatuses = ["ALL", "VALID", "EXPIRING", "EXPIRED"];
 
   return (
     <div className="space-y-6">
@@ -235,7 +291,7 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Filter className="w-4 h-4 text-slate-500 flex-shrink-0" />
           <select
             value={filterType}
@@ -245,6 +301,17 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
             {docTypes.map((t) => (
               <option key={t} value={t}>
                 {t === "ALL" ? "All Types" : t.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+          >
+            {docStatuses.map((s) => (
+              <option key={s} value={s}>
+                {s === "ALL" ? "All Statuses" : s}
               </option>
             ))}
           </select>
@@ -306,8 +373,9 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {filtered.map((doc) => {
-                  const expiring = isExpiringSoon(doc.expiryDate);
-                  const expired = isExpired(doc.expiryDate);
+                  const expiring = isExpiringSoon(doc.expiryDate, doc.status);
+                  const expired = isExpired(doc.expiryDate, doc.status);
+                  const computedStatus = expired ? "EXPIRED" : expiring ? "EXPIRING" : "VALID";
 
                   return (
                     <tr key={doc.id} className="hover:bg-slate-900/40 transition-colors">
@@ -317,7 +385,12 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                           <div className="w-8 h-8 rounded-lg bg-indigo-950/80 text-indigo-400 border border-indigo-800/50 flex items-center justify-center flex-shrink-0">
                             <FileText className="w-4 h-4" />
                           </div>
-                          <span className="font-bold text-white">{doc.title}</span>
+                          <div>
+                            <span className="font-bold text-white block">{doc.title}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {formatFileSize(doc.fileSize)} {doc.mimeType ? `• ${doc.mimeType.split("/")[1]?.toUpperCase()}` : ""}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
@@ -340,19 +413,22 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                         )}
                       </td>
 
-                      {/* Verification */}
+                      {/* Status */}
                       <td className="py-3.5 px-4">
-                        {doc.verified !== false ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                            STATUS_COLORS[computedStatus] || STATUS_COLORS.VALID
+                          }`}
+                        >
+                          {computedStatus === "VALID" ? (
                             <BadgeCheck className="w-3.5 h-3.5" />
-                            Verified
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">
+                          ) : computedStatus === "EXPIRING" ? (
                             <Clock className="w-3.5 h-3.5" />
-                            Pending
-                          </span>
-                        )}
+                          ) : (
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                          )}
+                          {computedStatus}
+                        </span>
                       </td>
 
                       {/* Expiry */}
@@ -368,12 +444,6 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                         >
                           {formatDate(doc.expiryDate)}
                         </span>
-                        {expired && (
-                          <span className="block text-[10px] text-rose-400 font-bold mt-0.5">EXPIRED</span>
-                        )}
-                        {expiring && !expired && (
-                          <span className="block text-[10px] text-amber-400 font-bold mt-0.5">EXPIRING SOON</span>
-                        )}
                       </td>
 
                       {/* Actions */}
@@ -391,7 +461,7 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                             type="button"
                             onClick={() => handleDownload(doc)}
                             className="p-1.5 rounded-lg bg-slate-900 hover:bg-indigo-950 text-slate-400 hover:text-indigo-300 border border-slate-800 transition-colors"
-                            title="Download"
+                            title="Download Signed Copy"
                           >
                             <Download className="w-3.5 h-3.5" />
                           </button>
@@ -467,6 +537,7 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                     <option value="AGREEMENT">Service Agreement</option>
                     <option value="SAFETY_WAIVER">Safety Waiver</option>
                     <option value="INSURANCE">Insurance Certificate</option>
+                    <option value="OTHER">Other Compliance Document</option>
                   </select>
                 </div>
 
@@ -490,6 +561,23 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                     )}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Upload File (.PDF, .PNG, .JPG, .WEBP)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer focus:outline-none focus:border-indigo-500"
+                />
+                {uploadFile && (
+                  <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1 font-mono">
+                    <CheckCircle2 className="w-3 h-3" /> Selected: {uploadFile.name} ({formatFileSize(uploadFile.size)})
+                  </p>
+                )}
               </div>
 
               <div>
@@ -556,17 +644,35 @@ export function DocumentsClient({ initialDocs, visitors = [] }: Props) {
                 { label: "Visitor Name", value: inspectedDoc.visitor.name },
                 { label: "Organization", value: inspectedDoc.visitor.company || "—" },
                 { label: "Verification Status", value: inspectedDoc.verified !== false ? "Verified & Authenticated" : "Pending Verification" },
+                {
+                  label: "Document Health",
+                  value: inspectedDoc.status || (isExpired(inspectedDoc.expiryDate) ? "EXPIRED" : isExpiringSoon(inspectedDoc.expiryDate) ? "EXPIRING" : "VALID"),
+                },
+                { label: "File Size", value: formatFileSize(inspectedDoc.fileSize) },
+                { label: "MIME Type", value: inspectedDoc.mimeType || "application/pdf" },
+                {
+                  label: "SHA-256 Fingerprint",
+                  value: inspectedDoc.sha256 ? `${inspectedDoc.sha256.slice(0, 16)}...` : "Vault Generated",
+                },
                 { label: "Valid Until", value: formatDate(inspectedDoc.expiryDate) },
                 { label: "Uploaded On", value: formatDate(inspectedDoc.createdAt) },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-start justify-between py-2 border-b border-slate-800/70 last:border-none">
                   <span className="text-xs text-slate-400 font-medium w-36 flex-shrink-0">{label}</span>
-                  <span className="text-xs font-semibold text-white text-right">{value}</span>
+                  <span className="text-xs font-semibold text-white text-right font-mono">{value}</span>
                 </div>
               ))}
             </div>
 
             <div className="pt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => handleDownload(inspectedDoc)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-glow"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Copy
+              </button>
               <button
                 type="button"
                 onClick={() => setShowInspectModal(false)}

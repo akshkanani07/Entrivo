@@ -19,7 +19,10 @@ const createEmployeeSchema = z.object({
   departmentName: optionalString(),
   officeId: optionalString(),
   employeeCode: optionalString(),
-  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional().nullable(),
+  role: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
+    z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional()
+  ),
   autoApproveVisitors: z.boolean().optional().nullable(),
   action: optionalString(),
 });
@@ -31,7 +34,10 @@ const updateEmployeeSchema = z.object({
   departmentId: optionalString(),
   status: optionalString(),
   autoApproveVisitors: z.boolean().optional().nullable(),
-  role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional().nullable(),
+  role: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
+    z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional()
+  ),
 });
 
 export async function GET(request: Request) {

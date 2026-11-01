@@ -6,10 +6,11 @@ import { prisma } from "@/lib/db";
 import { createDatabaseSession, getClientIp } from "@/lib/auth";
 import { twoFactorRateLimiter } from "@/lib/rate-limit";
 import { twoFactorService } from "@/services/auth/two-factor.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const verifyChallengeSchema = z.object({
-  challengeToken: z.string().min(1, "Challenge token is required"),
-  code: z.string().min(1, "2FA verification code or backup code is required"),
+  challengeToken: requiredString("Challenge token is required"),
+  code: requiredString("2FA verification code or backup code is required"),
 });
 
 export async function POST(request: Request) {

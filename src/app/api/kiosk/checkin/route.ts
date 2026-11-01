@@ -10,13 +10,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
 import { performCheckin } from "@/services/visitors/checkin.service";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const kioskCheckinSchema = z.object({
-  invitationId: z.string().min(1, "Invitation ID is required"),
-  photoUrl: z.string().optional().nullable().or(z.literal("")),
-  signatureUrl: z.string().optional().nullable().or(z.literal("")),
+  invitationId: requiredString("Invitation ID is required"),
+  photoUrl: optionalString(),
+  signatureUrl: optionalString(),
   consentGiven: z.boolean().optional().nullable(),
-  consentVersion: z.string().optional().nullable(),
+  consentVersion: optionalString(),
 });
 
 export async function POST(request: Request) {

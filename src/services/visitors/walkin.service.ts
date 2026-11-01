@@ -9,7 +9,9 @@ import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
-import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
+import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
+import { persistBase64Image } from "@/services/storage/persist-image";
+import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
 
 export interface WalkInInput {
   organizationId: string;
@@ -88,8 +90,9 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
     };
   }
 
+  let vType = null;
   if (input.visitorTypeId) {
-    const vType = await prisma.visitorType.findFirst({
+    vType = await prisma.visitorType.findFirst({
       where: { id: input.visitorTypeId, organizationId: orgId },
     });
     if (!vType) {
@@ -99,6 +102,39 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
 
   const cleanEmail = input.email ? input.email.toLowerCase().trim() : null;
   const cleanPhone = input.phone.trim();
+
+  // Find existing visitor for NDA reuse check
+  const existingVisitor = await prisma.visitor.findFirst({
+    where: {
+      organizationId: orgId,
+      OR: [{ phone: cleanPhone }, ...(cleanEmail ? [{ email: cleanEmail }] : [])],
+    },
+  });
+
+  // NDA Policy Enforcement Check (P3-02)
+  const { policy } = await getOrgPolicy(orgId);
+  const requiresNda = (vType?.requiresNDA ?? false) || policy.requireNda;
+
+  let ndaSigned = false;
+  let existingNda = null;
+
+  if (requiresNda) {
+    if (existingVisitor && policy.ndaReuseEnabled !== false) {
+      existingNda = await getVisitorValidNda(existingVisitor.id, orgId);
+    }
+
+    if (existingNda) {
+      ndaSigned = true;
+    } else if (input.signatureUrl) {
+      ndaSigned = true;
+    } else {
+      return {
+        success: false,
+        error: "A signed Non-Disclosure Agreement (NDA) is required before check-in can be completed.",
+        status: 400,
+      };
+    }
+  }
 
   // Blacklist check
   const blacklisted = await prisma.blacklistVisitor.findFirst({
@@ -153,6 +189,10 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
 
   const badgeNumber = await generateUniqueBadgeNumber(orgId);
 
+  // Persist base64 photo and signature into storage (P3-03)
+  const storedPhotoUrl = await persistBase64Image(input.photoUrl, orgId, "VISITOR_PHOTO");
+  const storedSignatureUrl = await persistBase64Image(input.signatureUrl, orgId, "SIGNATURE");
+
   const checkIn = await prisma.$transaction(
     async (tx) => {
       let visitor = await tx.visitor.findFirst({
@@ -172,7 +212,7 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
             visitorTypeId: input.visitorTypeId ?? null,
             idProofType: input.idProofType ?? null,
             idProofNumber: input.idProofNumber?.trim() ?? null,
-            avatarUrl: input.photoUrl ?? null,
+            avatarUrl: storedPhotoUrl ?? null,
             consentGiven: input.consentGiven ?? true,
             consentVersion: input.consentVersion ?? "v1.0",
             organizationId: orgId,
@@ -184,7 +224,7 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
           data: {
             name: input.name.trim(),
             company: input.company?.trim() ?? visitor.company,
-            avatarUrl: input.photoUrl ?? visitor.avatarUrl,
+            avatarUrl: storedPhotoUrl ?? visitor.avatarUrl,
             idProofType: input.idProofType ?? visitor.idProofType,
             idProofNumber: input.idProofNumber?.trim() ?? visitor.idProofNumber,
             consentGiven: input.consentGiven ?? true,
@@ -197,11 +237,12 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
         data: {
           visitorId: visitor.id,
           hostEmployeeId: hostEmp.id,
-          photoUrl: input.photoUrl ?? null,
-          signatureUrl: input.signatureUrl ?? null,
+          photoUrl: storedPhotoUrl ?? null,
+          signatureUrl: storedSignatureUrl ?? null,
           badgeNumber,
           badgeIssued: true,
           status: "CHECKED_IN",
+          ndaSigned,
           consentGiven: input.consentGiven ?? true,
           consentVersion: input.consentVersion ?? "v1.0",
           receptionistName: input.actorName,
@@ -237,6 +278,28 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
     },
     { isolationLevel: "Serializable" }
   );
+
+  // Generate and store Signed NDA Document if newly signed (P3-02)
+  if (requiresNda && !existingNda && input.signatureUrl) {
+    try {
+      await signNda({
+        organizationId: orgId,
+        visitorId: checkIn.visitor.id,
+        visitorName: checkIn.visitor.name,
+        visitorEmail: checkIn.visitor.email,
+        visitorPhone: input.phone,
+        visitorCompany: checkIn.visitor.company,
+        idProofType: input.idProofType,
+        idProofNumber: input.idProofNumber,
+        hostName: checkIn.hostEmployee?.user?.name,
+        purpose: input.purpose,
+        signatureDataUrl: input.signatureUrl,
+        actorId: hostEmp.userId,
+      });
+    } catch (ndaErr) {
+      console.error("[WalkIn] Failed to generate/store NDA Document:", ndaErr);
+    }
+  }
 
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {

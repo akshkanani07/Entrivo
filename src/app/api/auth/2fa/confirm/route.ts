@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/rbac";
 import { twoFactorService } from "@/services/auth/two-factor.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const confirmSchema = z.object({
-  code: z.string().min(6, "Verification code is required"),
+  code: requiredString("Verification code is required", 6),
 });
 
 export async function POST(request: Request) {

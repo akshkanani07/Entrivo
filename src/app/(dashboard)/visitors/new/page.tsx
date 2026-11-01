@@ -1,6 +1,7 @@
 import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
+import { getOrgPolicy } from "@/lib/settings-registry";
 import { WalkinForm } from "./WalkinForm";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,9 @@ export default async function NewWalkinPage() {
       </div>
     );
   }
+
+  // Fetch policy
+  const { policy } = await getOrgPolicy(orgId);
 
   // Fetch host employees
   const employees = await prisma.employee.findMany({
@@ -48,6 +52,7 @@ export default async function NewWalkinPage() {
       <WalkinForm
         employees={employees}
         visitorTypes={visitorTypes}
+        requireNda={policy.requireNda}
       />
     </div>
   );

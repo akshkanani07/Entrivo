@@ -7,9 +7,10 @@ import { forgotPasswordRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
 import { getAppUrl } from "@/lib/app-url";
 import { escapeHtml } from "@/services/email/email.templates";
+import { requiredEmail } from "@/lib/zod-helpers";
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email("A valid workplace email is required"),
+  email: requiredEmail("A valid workplace email is required"),
 });
 
 export async function POST(request: Request) {

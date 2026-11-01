@@ -5,9 +5,10 @@ import { prisma } from "@/lib/db";
 import { getClientIp } from "@/lib/auth";
 import { resendVerificationRateLimiter } from "@/lib/rate-limit";
 import { emailVerificationService } from "@/services/auth/email-verification.service";
+import { requiredEmail } from "@/lib/zod-helpers";
 
 const resendSchema = z.object({
-  email: z.string().email("A valid email address is required"),
+  email: requiredEmail("A valid email address is required"),
 });
 
 export async function POST(request: Request) {

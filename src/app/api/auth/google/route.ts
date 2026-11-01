@@ -4,9 +4,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { createDatabaseSession, getClientIp } from "@/lib/auth";
 import { LEGAL_VERSION } from "@/lib/legal";
+import { requiredString } from "@/lib/zod-helpers";
 
 const googleAuthSchema = z.object({
-  credential: z.string().min(1, "Google credential token is required"),
+  credential: requiredString("Google credential token is required"),
 });
 
 export async function POST(request: Request) {

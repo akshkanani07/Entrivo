@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import {
+  createDocument,
+  listDocuments,
+  softDeleteDocument,
+  DocumentType,
+} from "@/services/documents/document.service";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 import { z } from "zod";
 
-import { requiredString, optionalString } from "@/lib/zod-helpers";
-
-const createDocSchema = z.object({
-  visitorId: optionalString(),
-  title: requiredString("Document title is required"),
-  docType: optionalString(),
-  fileUrl: optionalString(),
-  expiryDate: z.string().datetime().optional().nullable(),
-});
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requirePermission("documents.read");
     if (auth.response) return auth.response;
@@ -23,19 +19,37 @@ export async function GET() {
     if (org.response) return org.response;
     const organizationId = org.organizationId;
 
-    const documents = await prisma.document.findMany({
-      where: {
-        visitor: { organizationId },
-        deletedAt: null,
-      },
-      include: { visitor: true },
-      orderBy: { createdAt: "desc" },
+    const { searchParams } = new URL(request.url);
+    const visitorId = searchParams.get("visitorId") || undefined;
+    const docType = searchParams.get("docType") || undefined;
+    const status = searchParams.get("status") || undefined;
+    const search = searchParams.get("search") || undefined;
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "100", 10);
+    const skip = (Math.max(1, page) - 1) * limit;
+
+    const result = await listDocuments(organizationId, {
+      visitorId,
+      docType,
+      status,
+      search,
+      take: limit,
+      skip,
     });
 
-    return NextResponse.json({ success: true, data: documents });
-  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      data: result.items,
+      total: result.total,
+      page,
+      limit,
+    });
+  } catch (error: any) {
     console.error("Documents GET error:", error);
-    return NextResponse.json({ success: false, error: "Failed to fetch documents" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to fetch documents" },
+      { status: 500 }
+    );
   }
 }
 
@@ -48,56 +62,111 @@ export async function POST(request: Request) {
     if (org.response) return org.response;
     const organizationId = org.organizationId;
 
-    const body = await request.json();
-    const parsed = createDocSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
-    }
+    const contentType = request.headers.get("content-type") || "";
 
-    const { visitorId, title, docType, fileUrl, expiryDate } = parsed.data;
+    // 1. Handle Multipart Form Data
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const file = formData.get("file") as File | null;
+      const title = (formData.get("title") as string) || (file?.name ? file.name.replace(/\.[^/.]+$/, "") : "Untitled Document");
+      const docType = ((formData.get("docType") as string) || "ID_PROOF").toUpperCase() as DocumentType;
+      const visitorId = formData.get("visitorId") as string | null;
+      const expiryDateStr = formData.get("expiryDate") as string | null;
 
-    let targetVisitorId = visitorId;
-    if (targetVisitorId) {
-      const visitor = await prisma.visitor.findFirst({
-        where: { id: targetVisitorId, organizationId },
-      });
-      if (!visitor) {
-        return NextResponse.json({ success: false, error: "Visitor not found in organization" }, { status: 404 });
+      if (!file) {
+        return NextResponse.json(
+          { success: false, error: "No file payload provided in multipart form data" },
+          { status: 400 }
+        );
       }
-    } else {
-      let visitor = await prisma.visitor.findFirst({
-        where: { organizationId },
-      });
-      if (!visitor) {
-        visitor = await prisma.visitor.create({
-          data: {
-            name: auth.user.name || "Workplace Visitor",
-            email: auth.user.email,
-            phone: auth.user.phone || "+91 99999 00000",
-            company: auth.user.organizationName || "General",
-            organizationId,
-          },
-        });
-      }
-      targetVisitorId = visitor.id;
-    }
 
-    const doc = await prisma.document.create({
-      data: {
-        visitorId: targetVisitorId,
+      if (!visitorId) {
+        return NextResponse.json(
+          { success: false, error: "Visitor ID is required to associate document" },
+          { status: 400 }
+        );
+      }
+
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const expiryDate = expiryDateStr ? new Date(expiryDateStr) : null;
+
+      const doc = await createDocument({
+        organizationId,
+        visitorId,
         title: title.trim(),
-        docType: docType || "ID_PROOF",
-        fileUrl: fileUrl || "#",
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        verified: true,
-      },
-      include: { visitor: true },
+        docType,
+        buffer,
+        declaredMime: file.type || "application/octet-stream",
+        filename: file.name,
+        expiryDate,
+        actorId: auth.user.id,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: doc,
+        message: `Document '${doc.title}' uploaded and verified successfully.`,
+      });
+    }
+
+    // 2. Handle Base64 or JSON Payload
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ success: false, error: "Invalid request body" }, { status: 400 });
+    }
+
+    const jsonSchema = z.object({
+      visitorId: requiredString("Visitor ID is required"),
+      title: requiredString("Document title is required"),
+      docType: z.preprocess(
+        (v) => (v === null || v === undefined || v === "" ? "ID_PROOF" : String(v).trim().toUpperCase()),
+        z.enum(["ID_PROOF", "NDA", "AGREEMENT", "OTHER"])
+      ),
+      base64: requiredString("File base64 data is required"),
+      mimeType: requiredString("MIME type is required"),
+      filename: optionalString(),
+      expiryDate: optionalString(),
     });
 
-    return NextResponse.json({ success: true, data: doc });
+    const parsed = jsonSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.issues[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    // Extract clean buffer from base64 (handle both data:image/...;base64, and raw base64)
+    let rawBase64 = parsed.data.base64;
+    if (rawBase64.includes(",")) {
+      rawBase64 = rawBase64.split(",")[1];
+    }
+    const buffer = Buffer.from(rawBase64, "base64");
+    const expiryDate = parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : null;
+
+    const doc = await createDocument({
+      organizationId,
+      visitorId: parsed.data.visitorId,
+      title: parsed.data.title,
+      docType: parsed.data.docType,
+      buffer,
+      declaredMime: parsed.data.mimeType,
+      filename: parsed.data.filename,
+      expiryDate,
+      actorId: auth.user.id,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: doc,
+      message: `Document '${doc.title}' saved and verified successfully.`,
+    });
   } catch (error: any) {
-    console.error("Document create error:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to create document" }, { status: 500 });
+    console.error("Document upload error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to process document upload" },
+      { status: 400 }
+    );
   }
 }
 
@@ -117,24 +186,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ success: false, error: "Document ID is required" }, { status: 400 });
     }
 
-    const doc = await prisma.document.findFirst({
-      where: {
-        id,
-        visitor: { organizationId },
-      },
-    });
+    await softDeleteDocument(id, organizationId, auth.user.id);
 
-    if (!doc) {
-      return NextResponse.json({ success: false, error: "Document not found" }, { status: 404 });
-    }
-
-    await prisma.document.delete({
-      where: { id },
-    });
-
-    return NextResponse.json({ success: true, message: "Document deleted successfully" });
+    return NextResponse.json({ success: true, message: "Document removed successfully." });
   } catch (error: any) {
     console.error("Document delete error:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to delete document" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to delete document" },
+      { status: 500 }
+    );
   }
 }

@@ -4,9 +4,10 @@ import { generateVisitorInvitationEmail } from "@/services/email/email.templates
 import { requirePermission } from "@/lib/rbac";
 import { getAppUrl } from "@/lib/app-url";
 import { z } from "zod";
+import { requiredEmail } from "@/lib/zod-helpers";
 
 const testEmailSchema = z.object({
-  to: z.string().email("A valid email address is required"),
+  to: requiredEmail("A valid email address is required"),
 });
 
 export async function POST(request: Request) {

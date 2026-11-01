@@ -44,6 +44,25 @@ export async function sendEmailNotification(
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId);
       }
 
+      case NotificationEvent.DOCUMENT_EXPIRING: {
+        const recipient = payload.hostEmail || payload.visitorEmail;
+        if (!recipient) return { success: false, reason: "No recipient email" };
+        const docTitle = payload.documentTitle || "Visitor Document";
+        const visitorName = payload.visitorName || "Guest";
+        const days = payload.daysRemaining ?? 30;
+        const expiry = payload.expiryDate || "soon";
+        return await emailService.sendEmail(
+          {
+            to: recipient,
+            recipientName: payload.hostName || visitorName,
+            subject: `Action Required: Document Expiring - ${docTitle}`,
+            htmlContent: `<p>Document <strong>${docTitle}</strong> for visitor <strong>${visitorName}</strong> will expire in ${days} days (${expiry}). Please ensure renewal or re-verification in the Entrivo portal.</p>`,
+          },
+          payload.hostUserId,
+          payload.organizationId
+        );
+      }
+
       case NotificationEvent.VISITOR_CHECKED_OUT: {
         if (!payload.visitorEmail) return { success: false, reason: "No visitor email" };
         const email = generateVisitorCheckoutEmail({
@@ -69,6 +88,25 @@ export async function sendEmailNotification(
           approvalUrl: payload.approvalUrl || `${getAppUrl()}/approvals`,
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId);
+      }
+
+      case NotificationEvent.DOCUMENT_EXPIRING: {
+        const recipient = payload.hostEmail || payload.visitorEmail;
+        if (!recipient) return { success: false, reason: "No recipient email" };
+        const docTitle = payload.documentTitle || "Visitor Document";
+        const visitorName = payload.visitorName || "Guest";
+        const days = payload.daysRemaining ?? 30;
+        const expiry = payload.expiryDate || "soon";
+        return await emailService.sendEmail(
+          {
+            to: recipient,
+            recipientName: payload.hostName || visitorName,
+            subject: `Action Required: Document Expiring - ${docTitle}`,
+            htmlContent: `<p>Document <strong>${docTitle}</strong> for visitor <strong>${visitorName}</strong> will expire in ${days} days (${expiry}). Please ensure renewal or re-verification in the Entrivo portal.</p>`,
+          },
+          payload.hostUserId,
+          payload.organizationId
+        );
       }
 
       default:

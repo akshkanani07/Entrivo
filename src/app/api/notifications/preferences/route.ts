@@ -3,10 +3,11 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/rbac";
 import { NotificationChannel } from "@prisma/client";
 import { z } from "zod";
+import { requiredString } from "@/lib/zod-helpers";
 
 const updatePrefSchema = z.object({
   channel: z.nativeEnum(NotificationChannel),
-  event: z.string().min(1),
+  event: requiredString("Event name is required"),
   enabled: z.boolean(),
 });
 

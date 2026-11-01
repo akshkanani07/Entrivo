@@ -21,6 +21,8 @@ import {
   Mail,
   Building,
   UserPlus,
+  FileText,
+  Download,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -62,6 +64,32 @@ export function VisitorsClientList({
 
   // Profile Modal State
   const [inspectVisitor, setInspectVisitor] = useState<VisitorItem | null>(null);
+  const [inspectTab, setInspectTab] = useState<"profile" | "documents">("profile");
+  const [visitorDocs, setVisitorDocs] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  const fetchVisitorDocuments = async (visitorId: string) => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`/api/documents?visitorId=${visitorId}`);
+      const data = await res.json();
+      if (data?.success && Array.isArray(data?.data)) {
+        setVisitorDocs(data.data);
+      } else {
+        setVisitorDocs([]);
+      }
+    } catch {
+      setVisitorDocs([]);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const handleOpenInspect = (v: VisitorItem) => {
+    setInspectVisitor(v);
+    setInspectTab("profile");
+    fetchVisitorDocuments(v.id);
+  };
 
   // Confirm Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<{
@@ -383,7 +411,7 @@ export function VisitorsClientList({
                         {/* Details Modal Trigger */}
                         <button
                           type="button"
-                          onClick={() => setInspectVisitor(v)}
+                          onClick={() => handleOpenInspect(v)}
                           className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors"
                           title="Inspect Visitor Profile"
                         >
@@ -453,47 +481,145 @@ export function VisitorsClientList({
               </button>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-slate-500" /> Email
+            {/* Modal Tabs */}
+            <div className="flex border-b border-slate-800 mb-4">
+              <button
+                type="button"
+                onClick={() => setInspectTab("profile")}
+                className={`px-3 py-1.5 text-xs font-bold border-b-2 transition-colors ${
+                  inspectTab === "profile"
+                    ? "border-indigo-500 text-indigo-400"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Profile Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectTab("documents")}
+                className={`px-3 py-1.5 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                  inspectTab === "documents"
+                    ? "border-indigo-500 text-indigo-400"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>Documents</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-300 font-mono">
+                  {visitorDocs.length}
                 </span>
-                <span className="text-white font-medium">{inspectVisitor.email}</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-slate-500" /> Phone
-                </span>
-                <span className="text-white font-mono">{inspectVisitor.phone}</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">Visitor Classification</span>
-                <span
-                  className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white"
-                  style={{ backgroundColor: inspectVisitor.typeColor }}
-                >
-                  {inspectVisitor.typeName}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">ID Proof Verification</span>
-                <span className="text-slate-300 font-mono">
-                  {inspectVisitor.idProofType ? `${inspectVisitor.idProofType}: ${inspectVisitor.idProofNumber || "Verified"}` : "None on file"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
-                <span className="text-slate-400">Current Campus Status</span>
-                <span className={inspectVisitor.isCheckedIn ? "text-emerald-400 font-bold" : "text-slate-400"}>
-                  {inspectVisitor.isCheckedIn ? `Inside (Badge ${inspectVisitor.activeBadgeNumber || "Assigned"})` : "Checked Out"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-slate-400">Security Clearance</span>
-                <span className={inspectVisitor.isBlacklisted ? "text-rose-400 font-bold" : "text-emerald-400 font-semibold"}>
-                  {inspectVisitor.isBlacklisted ? `Flagged: ${inspectVisitor.blacklistReason || "Watchlisted"}` : "Cleared / Approved"}
-                </span>
-              </div>
+              </button>
             </div>
+
+            {inspectTab === "profile" ? (
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-slate-500" /> Email
+                  </span>
+                  <span className="text-white font-medium">{inspectVisitor.email}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                  <span className="text-slate-400 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-slate-500" /> Phone
+                  </span>
+                  <span className="text-white font-mono">{inspectVisitor.phone}</span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                  <span className="text-slate-400">Visitor Classification</span>
+                  <span
+                    className="px-2 py-0.5 rounded text-[10px] font-bold uppercase text-white"
+                    style={{ backgroundColor: inspectVisitor.typeColor }}
+                  >
+                    {inspectVisitor.typeName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                  <span className="text-slate-400">ID Proof Verification</span>
+                  <span className="text-slate-300 font-mono">
+                    {inspectVisitor.idProofType ? `${inspectVisitor.idProofType}: ${inspectVisitor.idProofNumber || "Verified"}` : "None on file"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5 border-b border-slate-800/80">
+                  <span className="text-slate-400">Current Campus Status</span>
+                  <span className={inspectVisitor.isCheckedIn ? "text-emerald-400 font-bold" : "text-slate-400"}>
+                    {inspectVisitor.isCheckedIn ? `Inside (Badge ${inspectVisitor.activeBadgeNumber || "Assigned"})` : "Checked Out"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1.5">
+                  <span className="text-slate-400">Security Clearance</span>
+                  <span className={inspectVisitor.isBlacklisted ? "text-rose-400 font-bold" : "text-emerald-400 font-semibold"}>
+                    {inspectVisitor.isBlacklisted ? `Flagged: ${inspectVisitor.blacklistReason || "Watchlisted"}` : "Cleared / Approved"}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 text-xs">
+                {loadingDocs ? (
+                  <div className="py-8 text-center text-slate-400 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <span>Loading vault documents...</span>
+                  </div>
+                ) : visitorDocs.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400">
+                    <FileText className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                    <p className="font-semibold text-white">No Documents on File</p>
+                    <p className="text-[11px] text-slate-500 mt-1">No signed NDAs or ID proofs uploaded for this visitor.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {visitorDocs.map((doc: any) => (
+                      <div
+                        key={doc.id}
+                        className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-white truncate">{doc.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] uppercase font-bold text-indigo-400">
+                              {doc.docType}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              {doc.expiryDate ? new Date(doc.expiryDate).toLocaleDateString() : "Permanent"}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded font-bold uppercase bg-emerald-950 text-emerald-400 border border-emerald-800/40">
+                              {doc.status || "VALID"}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              const r = await fetch(`/api/documents/${doc.id}/download`);
+                              const d = await r.json();
+                              if (d?.downloadUrl) {
+                                window.open(d.downloadUrl, "_blank");
+                              } else {
+                                toast.info("Document verified in vault.");
+                              }
+                            } catch {
+                              toast.error("Failed to download");
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-950 text-slate-400 hover:text-indigo-300 transition-colors"
+                          title="Download Document"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="pt-2 text-right">
+                  <Link
+                    href="/documents"
+                    className="inline-flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                  >
+                    Open Full Document Vault &rarr;
+                  </Link>
+                </div>
+              </div>
+            )}
 
             <div className="pt-4 mt-2 border-t border-slate-800 flex justify-end gap-2">
               <button

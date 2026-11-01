@@ -18,6 +18,7 @@ async function main() {
   await prisma.approval.deleteMany({});
   await prisma.invitation.deleteMany({});
   await prisma.document.deleteMany({});
+  await prisma.ndaTemplate.deleteMany({});
   await prisma.visitor.deleteMany({});
   await prisma.blacklistVisitor.deleteMany({});
   await prisma.visitorType.deleteMany({});
@@ -559,6 +560,18 @@ async function main() {
       entity: "ORGANIZATION",
       entityId: org.id,
       details: "Entrivo Global Workplace Enterprise initialized with policies and visitor workflows.",
+    },
+  });
+
+  // 17. Default NDA Template
+  await prisma.ndaTemplate.create({
+    data: {
+      organizationId: org.id,
+      title: "Standard Visitor Non-Disclosure & Confidentiality Agreement",
+      version: "1.0",
+      validityDays: 365,
+      isActive: true,
+      content: `### VISITOR NON-DISCLOSURE & FACILITY ACCESS AGREEMENT\n\nThis Agreement is entered into on {{DATE}} between **{{ORGANIZATION_NAME}}** ("Company") and **{{VISITOR_NAME}}** representing **{{COMPANY_NAME}}** ("Visitor").\n\n1. **Confidentiality**: Visitor agrees to maintain complete confidentiality regarding all proprietary, technical, and commercial information observed or disclosed during the visit.\n2. **Facility Rules**: Visitor must wear an assigned Entrivo visitor badge at all times, remain within authorized zones, and adhere to workplace safety standards.\n3. **Photography & Recording**: Photography, audio/video recording, and unauthorized data extraction from screens or servers are strictly prohibited.\n4. **Governing Law**: This Agreement is governed by the Digital Personal Data Protection (DPDP) Act, 2023 and applicable national safety regulations.\n\nBy signing below, Visitor affirms and agrees to all terms set forth herein.`,
     },
   });
 

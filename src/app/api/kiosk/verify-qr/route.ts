@@ -10,9 +10,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKiosk, renewKioskCookie, stripVisitorPii } from "@/lib/kiosk-auth";
 import { verifyQrToken } from "@/services/visitors/verify-qr.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const verifyQrSchema = z.object({
-  token: z.string().min(1, "QR token is required"),
+  token: requiredString("QR token is required"),
 });
 
 export async function POST(request: Request) {

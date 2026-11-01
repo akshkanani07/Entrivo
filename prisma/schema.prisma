@@ -98,6 +98,8 @@ model Organization {
   reports         Report[]
   kiosks          Kiosk[]
   files           File[]
+  documents       Document[]
+  ndaTemplates    NdaTemplate[]
 
   @@index([slug])
 }
@@ -484,19 +486,49 @@ model MeetingRoom {
 }
 
 model Document {
-  id         String    @id @default(cuid())
-  visitorId  String
-  visitor    Visitor   @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  title      String
-  docType    String    @default("ID_PROOF")
-  fileUrl    String
-  expiryDate DateTime?
-  verified   Boolean   @default(true)
-  deletedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitorId      String
+  visitor        Visitor       @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  title          String
+  docType        String        @default("ID_PROOF") // ID_PROOF | NDA | AGREEMENT | OTHER
+  fileUrl        String?
+  fileId         String?
+  file           File?         @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  fileSize       Int?
+  mimeType       String?
+  sha256         String?
+  expiryDate     DateTime?
+  status         String        @default("VALID") // VALID | EXPIRING | EXPIRED
+  metadata       Json?
+  verified       Boolean       @default(true)
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  @@index([organizationId])
   @@index([visitorId])
+  @@index([docType])
+  @@index([expiryDate])
+  @@index([status])
+}
+
+model NdaTemplate {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String        @default("Standard Visitor Non-Disclosure Agreement")
+  content        String        @db.Text
+  version        String        @default("1.0")
+  validityDays   Int           @default(365)
+  isActive       Boolean       @default(true)
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
 }
 
 model BlacklistVisitor {
@@ -765,6 +797,8 @@ model File {
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  documents      Document[]
 
   @@index([organizationId])
   @@index([ownerType, ownerId])

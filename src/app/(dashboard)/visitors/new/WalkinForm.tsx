@@ -32,14 +32,17 @@ interface VisitorTypeOption {
   id: string;
   name: string;
   badgeColor: string;
+  requiresNDA?: boolean;
 }
 
 export function WalkinForm({
   employees,
   visitorTypes,
+  requireNda = false,
 }: {
   employees: EmployeeOption[];
   visitorTypes: VisitorTypeOption[];
+  requireNda?: boolean;
 }) {
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -54,6 +57,9 @@ export function WalkinForm({
     idProofNumber: "",
   });
 
+  const selectedType = visitorTypes.find((t) => t.id === formData.visitorTypeId);
+  const isNdaRequired = requireNda || (selectedType?.requiresNDA ?? false);
+
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,6 +70,11 @@ export function WalkinForm({
     e.preventDefault();
     if (!formData.name || !formData.phone || !formData.hostEmployeeId) {
       setError("Please fill all required fields (Visitor name, phone, and host employee)");
+      return;
+    }
+
+    if (isNdaRequired && !signatureUrl) {
+      setError("A digital signature is required for the Non-Disclosure Agreement (NDA) before check-in.");
       return;
     }
 
@@ -200,9 +211,16 @@ export function WalkinForm({
           </div>
 
           <div className="border-t border-slate-800/80 pt-5">
-            <h3 className="text-xs font-bold text-white uppercase tracking-wider mb-2">
-              NDA & Workplace Agreement
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                NDA & Workplace Agreement
+              </h3>
+              {isNdaRequired && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  Required
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-400 mb-3">
               I agree to abide by workplace safety guidelines and wear my pass at all times.
             </p>

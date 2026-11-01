@@ -5,6 +5,7 @@ export enum NotificationEvent {
   APPROVAL_REQUESTED = "APPROVAL_REQUESTED",
   APPROVAL_DECIDED = "APPROVAL_DECIDED",
   SECURITY_ALERT = "SECURITY_ALERT",
+  DOCUMENT_EXPIRING = "DOCUMENT_EXPIRING",
 }
 
 export interface NotificationPayload {
@@ -25,6 +26,10 @@ export interface NotificationPayload {
   decision?: "APPROVED" | "REJECTED";
   reason?: string;
   severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  documentTitle?: string;
+  documentType?: string;
+  daysRemaining?: number;
+  expiryDate?: string;
   entityId?: string; // e.g. invitationId or checkInId for dedupe
 }
 

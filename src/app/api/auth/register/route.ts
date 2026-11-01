@@ -4,13 +4,14 @@ import { prisma } from "@/lib/db";
 import { hashPassword, createDatabaseSession, validatePasswordStrength, getClientIp } from "@/lib/auth";
 import { registerRateLimiter } from "@/lib/rate-limit";
 import { emailVerificationService } from "@/services/auth/email-verification.service";
+import { requiredString, requiredEmail, optionalString } from "@/lib/zod-helpers";
 
 const registerSchema = z.object({
-  companyName: z.string().min(2, "Company name must be at least 2 characters"),
-  name: z.string().min(2, "Administrator name must be at least 2 characters"),
-  email: z.string().email("A valid work email is required"),
-  password: z.string().min(10, "Password must be at least 10 characters"),
-  phone: z.string().optional().nullable().or(z.literal("")),
+  companyName: requiredString("Company name must be at least 2 characters", 2),
+  name: requiredString("Administrator name must be at least 2 characters", 2),
+  email: requiredEmail("A valid work email is required"),
+  password: requiredString("Password must be at least 10 characters", 10),
+  phone: optionalString(),
   agreeTerms: z.boolean().optional().nullable(),
 });
 

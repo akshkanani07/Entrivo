@@ -77,6 +77,13 @@ export function formatEventContent(event: NotificationEvent, payload: Notificati
         url: "/security",
       };
 
+    case NotificationEvent.DOCUMENT_EXPIRING:
+      return {
+        title: `Document Expiring: ${payload.documentTitle || "Visitor Document"}`,
+        body: `${payload.documentType || "Document"} for ${payload.visitorName} expires in ${payload.daysRemaining ?? "a few"} days (${payload.expiryDate || ""}). Renewal or re-verification required.`,
+        url: "/documents",
+      };
+
     default:
       return {
         title: "Entrivo Notification",

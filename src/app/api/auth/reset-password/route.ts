@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db";
 import { hashToken, hashPassword } from "@/lib/auth";
 import { passwordPolicyService } from "@/services/auth/password-policy.service";
 import { emailService } from "@/services/email/mailjet.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const resetPasswordSchema = z.object({
-  token: z.string().min(10, "Valid token is required"),
-  password: z.string().min(10, "Password must be at least 10 characters"),
+  token: requiredString("Valid token is required", 10),
+  password: requiredString("Password must be at least 10 characters", 10),
 });
 
 export async function POST(request: Request) {

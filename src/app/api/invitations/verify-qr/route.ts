@@ -3,9 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString } from "@/lib/zod-helpers";
 
 const verifyQrSchema = z.object({
-  token: z.string().min(1, "QR Token is required"),
+  token: requiredString("QR Token is required"),
 });
 
 export async function POST(request: Request) {

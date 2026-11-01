@@ -4,10 +4,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { optionalString } from "@/lib/zod-helpers";
 
 const updateDepartmentSchema = z.object({
-  name: z.string().min(1).optional(),
-  code: z.string().min(1).max(10).optional(),
+  name: optionalString(),
+  code: optionalString(),
 });
 
 export async function PUT(

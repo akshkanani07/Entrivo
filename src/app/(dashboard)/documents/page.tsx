@@ -23,7 +23,13 @@ export default async function DocumentsPage() {
   try {
     const [docs, vists] = await Promise.all([
       prisma.document.findMany({
-        where: { visitor: { organizationId: orgId } },
+        where: {
+          OR: [
+            { organizationId: orgId },
+            { visitor: { organizationId: orgId } },
+          ],
+          deletedAt: null,
+        },
         include: { visitor: true },
         orderBy: { createdAt: "desc" },
       }),

@@ -3,20 +3,21 @@ import { prisma } from "@/lib/db";
 import { requireUser, requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
+import { optionalString, optionalEmail } from "@/lib/zod-helpers";
 
 const updateOrgSchema = z.object({
-  name: z.string().optional().nullable(),
-  logo: z.string().optional().nullable().or(z.literal("")),
-  brandColor: z.string().optional().nullable().or(z.literal("")),
-  timezone: z.string().optional().nullable().or(z.literal("")),
-  locale: z.string().optional().nullable().or(z.literal("")),
-  workingHours: z.string().optional().nullable().or(z.literal("")),
-  address: z.string().optional().nullable().or(z.literal("")),
-  city: z.string().optional().nullable().or(z.literal("")),
-  country: z.string().optional().nullable().or(z.literal("")),
-  contactEmail: z.string().email().optional().nullable().or(z.literal("")),
-  contactPhone: z.string().optional().nullable().or(z.literal("")),
-  checkInPolicy: z.string().optional().nullable().or(z.literal("")),
+  name: optionalString(),
+  logo: optionalString(),
+  brandColor: optionalString(),
+  timezone: optionalString(),
+  locale: optionalString(),
+  workingHours: optionalString(),
+  address: optionalString(),
+  city: optionalString(),
+  country: optionalString(),
+  contactEmail: optionalEmail(),
+  contactPhone: optionalString(),
+  checkInPolicy: optionalString(),
   policies: z.record(z.any()).optional().nullable(),
 });
 

@@ -32,7 +32,10 @@ const patchInvitationSchema = z.object({
   startTime: optionalString(),
   endTime: optionalString(),
   purpose: optionalString(),
-  status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "EXPIRED"]).optional().nullable(),
+  status: z.preprocess(
+    (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
+    z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELLED", "COMPLETED", "EXPIRED"]).optional()
+  ),
   meetingRoomId: optionalString(),
   notes: optionalString(),
 });

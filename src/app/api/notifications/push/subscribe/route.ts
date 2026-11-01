@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 // ── Push endpoint allow-list ─────────────────────────────────────────────────
 const PUSH_HOST_ALLOWLIST: Array<string | RegExp> = [
@@ -35,18 +36,18 @@ function isAllowedPushHost(urlStr: string): boolean {
 // p256dh uncompressed EC key is 65 raw bytes → 87 base64url chars (no padding)
 // auth is 16 raw bytes → 22 base64url chars
 const subscribeSchema = z.object({
-  endpoint: z.string().url("Valid push endpoint URL is required"),
+  endpoint: requiredString("Valid push endpoint URL is required").pipe(
+    z.string().url("Valid push endpoint URL is required")
+  ),
   keys: z.object({
-    p256dh: z
-      .string()
-      .min(86, "p256dh key is too short")
-      .max(90, "p256dh key is too long"),
-    auth: z
-      .string()
-      .min(22, "auth key is too short")
-      .max(24, "auth key is too long"),
+    p256dh: requiredString("p256dh key is required").pipe(
+      z.string().min(86, "p256dh key is too short").max(90, "p256dh key is too long")
+    ),
+    auth: requiredString("auth key is required").pipe(
+      z.string().min(22, "auth key is too short").max(24, "auth key is too long")
+    ),
   }),
-  userAgent: z.string().optional().nullable().or(z.literal("")),
+  userAgent: optionalString(),
 });
 
 export async function POST(request: Request) {

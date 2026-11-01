@@ -4,12 +4,13 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const officeSchema = z.object({
-  name: z.string().min(1, "Office name is required"),
-  branchId: z.string().min(1, "Branch is required"),
-  floor: z.string().optional().nullable().or(z.literal("")),
-  building: z.string().optional().nullable().or(z.literal("")),
+  name: requiredString("Office name is required"),
+  branchId: requiredString("Branch is required"),
+  floor: optionalString(),
+  building: optionalString(),
   workingHours: z.any().optional().nullable(),
 });
 

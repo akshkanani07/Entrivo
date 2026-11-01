@@ -11,7 +11,9 @@ import { prisma } from "@/lib/db";
 import { generateUniqueBadgeNumber } from "@/lib/badge";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
-import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
+import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
+import { persistBase64Image } from "@/services/storage/persist-image";
+import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
 
 export interface CheckInInput {
   invitationId: string;
@@ -175,6 +177,35 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     };
   }
 
+  // NDA Policy Enforcement Check (P3-02)
+  const { policy } = await getOrgPolicy(orgId);
+  const requiresNda = (invitation.visitor.visitorType?.requiresNDA ?? false) || policy.requireNda;
+
+  let ndaSigned = false;
+  let existingNda = null;
+
+  if (requiresNda) {
+    if (policy.ndaReuseEnabled !== false) {
+      existingNda = await getVisitorValidNda(invitation.visitorId, orgId);
+    }
+
+    if (existingNda) {
+      ndaSigned = true;
+    } else if (input.signatureUrl) {
+      ndaSigned = true;
+    } else {
+      return {
+        success: false,
+        error: "A signed Non-Disclosure Agreement (NDA) is required before check-in can be completed.",
+        status: 400,
+      };
+    }
+  }
+
+  // Persist base64 photo and signature into storage (P3-03)
+  const storedPhotoUrl = await persistBase64Image(input.photoUrl, orgId, "VISITOR_PHOTO");
+  const storedSignatureUrl = await persistBase64Image(input.signatureUrl, orgId, "SIGNATURE");
+
   // Generate badge number BEFORE the transaction
   const badgeNumber = await generateUniqueBadgeNumber(orgId);
 
@@ -220,10 +251,11 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
               badgeNumber,
               badgeIssued: true,
               status: "CHECKED_IN",
+              ndaSigned,
               consentGiven: input.consentGiven ?? true,
               consentVersion: input.consentVersion ?? "v1.0",
-              photoUrl: input.photoUrl ?? invitation.visitor.avatarUrl ?? null,
-              signatureUrl: input.signatureUrl ?? null,
+              photoUrl: storedPhotoUrl ?? invitation.visitor.avatarUrl ?? null,
+              signatureUrl: storedSignatureUrl ?? null,
               receptionistName: input.receptionistName ?? input.actorName,
               securityGuardName: input.actorName,
             },
@@ -293,6 +325,28 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
 
   if (!checkIn) {
     return { success: false, error: "Failed to complete check-in transaction", status: 500 };
+  }
+
+  // Generate and store Signed NDA Document if newly signed (P3-02)
+  if (requiresNda && !existingNda && input.signatureUrl) {
+    try {
+      await signNda({
+        organizationId: orgId,
+        visitorId: invitation.visitorId,
+        visitorName: invitation.visitor.name,
+        visitorEmail: invitation.visitor.email,
+        visitorPhone: invitation.visitor.phone,
+        visitorCompany: invitation.visitor.company,
+        idProofType: invitation.visitor.idProofType,
+        idProofNumber: invitation.visitor.idProofNumber,
+        hostName: invitation.hostEmployee?.user?.name,
+        purpose: invitation.purpose,
+        signatureDataUrl: input.signatureUrl,
+        actorId: invitation.hostEmployee?.userId,
+      });
+    } catch (ndaErr) {
+      console.error("[CheckIn] Failed to generate/store NDA Document:", ndaErr);
+    }
   }
 
   // Notify host (fire-and-forget)

@@ -2,9 +2,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { emailVerificationService } from "@/services/auth/email-verification.service";
+import { requiredString } from "@/lib/zod-helpers";
 
 const verifyEmailSchema = z.object({
-  token: z.string().min(16, "Verification token is required"),
+  token: requiredString("Verification token is required", 16),
 });
 
 export async function POST(request: Request) {

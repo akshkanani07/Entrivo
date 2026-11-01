@@ -7,10 +7,11 @@ import { prisma } from "@/lib/db";
 import { verifyPassword, createDatabaseSession, getClientIp } from "@/lib/auth";
 import { loginRateLimiter, clearLoginEmailRateLimit } from "@/lib/rate-limit";
 import { LEGAL_VERSION } from "@/lib/legal";
+import { requiredString, requiredEmail } from "@/lib/zod-helpers";
 
 const loginSchema = z.object({
-  email: z.string().email("A valid email address is required"),
-  password: z.string().min(1, "Password is required"),
+  email: requiredEmail("A valid email address is required"),
+  password: requiredString("Password is required"),
 });
 
 // Pre-computed dynamic bcrypt hash generated at module init to equalize timing

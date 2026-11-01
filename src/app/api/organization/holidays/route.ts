@@ -4,16 +4,17 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const holidaySchema = z.object({
-  name: z.string().min(1, "Holiday name is required"),
-  date: z.string().min(1, "Start date is required"),
-  endDate: z.string().optional().nullable().or(z.literal("")),
-  isRecurring: z.boolean().optional(),
-  branchId: z.string().optional().nullable().or(z.literal("")),
-  description: z.string().optional().nullable().or(z.literal("")),
-  action: z.string().optional().nullable(),
-  csvContent: z.string().optional().nullable(),
+  name: requiredString("Holiday name is required"),
+  date: requiredString("Start date is required"),
+  endDate: optionalString(),
+  isRecurring: z.boolean().optional().nullable(),
+  branchId: optionalString(),
+  description: optionalString(),
+  action: optionalString(),
+  csvContent: optionalString(),
 });
 
 export async function GET(request: Request) {

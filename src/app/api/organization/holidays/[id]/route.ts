@@ -4,14 +4,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { optionalString } from "@/lib/zod-helpers";
 
 const updateHolidaySchema = z.object({
-  name: z.string().min(1).optional(),
-  date: z.string().optional(),
-  endDate: z.string().optional().nullable().or(z.literal("")),
-  isRecurring: z.boolean().optional(),
-  branchId: z.string().optional().nullable().or(z.literal("")),
-  description: z.string().optional().nullable().or(z.literal("")),
+  name: optionalString(),
+  date: optionalString(),
+  endDate: optionalString(),
+  isRecurring: z.boolean().optional().nullable(),
+  branchId: optionalString(),
+  description: optionalString(),
 });
 
 export async function PUT(
@@ -51,8 +52,12 @@ export async function PUT(
         ...(name ? { name: name.trim() } : {}),
         ...(date ? { date: new Date(date) } : {}),
         ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
-        ...(isRecurring !== undefined ? { isRecurring } : {}),
-        ...(branchId !== undefined ? { branchId: branchId || null } : {}),
+        ...(isRecurring !== undefined && isRecurring !== null ? { isRecurring } : {}),
+        ...(branchId !== undefined
+          ? branchId
+            ? { branch: { connect: { id: branchId } } }
+            : { branch: { disconnect: true } }
+          : {}),
         ...(description !== undefined ? { description: description?.trim() || null } : {}),
       },
     });

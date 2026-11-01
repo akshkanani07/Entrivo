@@ -4,11 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const branchSchema = z.object({
-  name: z.string().min(1, "Branch name is required"),
-  code: z.string().min(1, "Branch code is required").max(10),
-  address: z.string().optional().nullable().or(z.literal("")),
+  name: requiredString("Branch name is required"),
+  code: requiredString("Branch code is required").pipe(z.string().max(10)),
+  address: optionalString(),
   workingHours: z.any().optional().nullable(),
 });
 

@@ -3,9 +3,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { hashToken, createDatabaseSession, getClientIp } from "@/lib/auth";
 import { LEGAL_VERSION } from "@/lib/legal";
+import { requiredString } from "@/lib/zod-helpers";
 
 const consumeSchema = z.object({
-  token: z.string().min(10, "Valid token is required"),
+  token: requiredString("Valid token is required", 10),
 });
 
 export async function POST(request: Request) {

@@ -4,10 +4,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { optionalString } from "@/lib/zod-helpers";
 
 const updateFloorSchema = z.object({
-  name: z.string().min(1).optional(),
-  number: z.number().int().optional(),
+  name: optionalString(),
+  number: z.preprocess((v) => (v === null || v === undefined || v === "" ? undefined : Number(v)), z.number().int().optional()),
 });
 
 export async function PUT(
