@@ -47,9 +47,9 @@ Document management and NDA e-signature.
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P3-01** | Documents: multipart upload via storage adapter (ID_PROOF, NDA, AGREEMENT, OTHER), size & magic-byte validation, antivirus hook interface, download via signed URLs, expiry date + computed status (VALID, EXPIRING, EXPIRED) with alerts at 30/7/1 days (DOCUMENT_EXPIRING event), soft delete, audit logging, documents tab on visitor profile & /documents admin view with filters | [x] | 2026-11-01 | |
-| **P3-02** | NDA e-signature: org NDA template (NdaTemplate model, versioned rich text), signature pad on kiosk/staff, generate PDF (pdfkit) with visitor, timestamp, device/IP, template version, content hash, store as Document, reuse still-valid NDA for repeat visitors (policy ndaReuseEnabled), requireNda policy blocks check-in without valid signed NDA | [x] | 2026-11-01 | |
-| **P3-03** | Move photos and signatures out of base64-in-database into storage: migration script (scripts/migrate-base64-to-storage.ts), resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only, API responses return clean file IDs or URLs | [x] | 2026-11-01 | |
+| **P3-01** | Documents: multipart upload via storage adapter (ID_PROOF, NDA, AGREEMENT, OTHER), size & magic-byte validation, antivirus hook interface, download via signed URLs, expiry date + computed status (VALID, EXPIRING, EXPIRED) with alerts at 30/7/1 days (DOCUMENT_EXPIRING event), soft delete, audit logging, documents tab on visitor profile & /documents admin view with filters | [x] | 2026-11-01 | `0ba7f55` |
+| **P3-02** | NDA e-signature: org NDA template (NdaTemplate model, versioned rich text), signature pad on kiosk/staff, generate PDF (pdfkit) with visitor, timestamp, device/IP, template version, content hash, store as Document, reuse still-valid NDA for repeat visitors (policy ndaReuseEnabled), requireNda policy blocks check-in without valid signed NDA | [x] | 2026-11-01 | `0ba7f55` |
+| **P3-03** | Move photos and signatures out of base64-in-database into storage: migration script (scripts/migrate-base64-to-storage.ts), resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only, API responses return clean file IDs or URLs | [x] | 2026-11-01 | `0ba7f55` |
 
 
 Visitor core, invitations, approvals, security, rooms.
