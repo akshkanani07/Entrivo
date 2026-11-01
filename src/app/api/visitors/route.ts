@@ -8,21 +8,21 @@ const createVisitorSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("A valid email is required"),
   phone: z.string().min(5, "Phone is required"),
-  company: z.string().optional(),
-  visitorTypeId: z.string().optional().nullable(),
-  idProofType: z.string().optional(),
-  idProofNumber: z.string().optional(),
-  avatarUrl: z.string().optional(),
+  company: z.string().optional().nullable().or(z.literal("")),
+  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
+  idProofType: z.string().optional().nullable().or(z.literal("")),
+  idProofNumber: z.string().optional().nullable().or(z.literal("")),
+  avatarUrl: z.string().optional().nullable().or(z.literal("")),
 });
 
 const patchVisitorSchema = z.object({
   id: z.string().min(1, "Visitor ID is required"),
-  isBlacklisted: z.boolean().optional(),
-  blacklistReason: z.string().optional(),
-  company: z.string().optional(),
-  visitorTypeId: z.string().optional().nullable(),
-  name: z.string().optional(),
-  phone: z.string().optional(),
+  isBlacklisted: z.boolean().optional().nullable(),
+  blacklistReason: z.string().optional().nullable().or(z.literal("")),
+  company: z.string().optional().nullable().or(z.literal("")),
+  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
+  name: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
 });
 
 export async function GET(request: Request) {
@@ -206,10 +206,10 @@ export async function PATCH(request: Request) {
     const updated = await prisma.visitor.update({
       where: { id },
       data: {
-        ...(name !== undefined ? { name: name.trim() } : {}),
-        ...(phone !== undefined ? { phone: phone.trim() } : {}),
-        ...(company !== undefined ? { company: company.trim() } : {}),
-        ...(visitorTypeId !== undefined ? { visitorTypeId } : {}),
+        ...(name ? { name: name.trim() } : {}),
+        ...(phone ? { phone: phone.trim() } : {}),
+        ...(company !== undefined ? { company: company?.trim() || "Independent Guest" } : {}),
+        ...(visitorTypeId !== undefined ? { visitorTypeId: visitorTypeId || null } : {}),
         ...(isBlacklisted !== undefined
           ? {
               isBlacklisted: Boolean(isBlacklisted),

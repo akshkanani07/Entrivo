@@ -6,18 +6,18 @@ import { performWalkIn } from "@/services/visitors/walkin.service";
 
 const walkinSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email().optional().or(z.literal("")),
+  email: z.string().email().optional().nullable().or(z.literal("")),
   phone: z.string().min(5, "Phone is required"),
-  company: z.string().optional(),
-  visitorTypeId: z.string().optional().nullable(),
+  company: z.string().optional().nullable().or(z.literal("")),
+  visitorTypeId: z.string().optional().nullable().or(z.literal("")),
   hostEmployeeId: z.string().min(1, "Host employee is required"),
-  purpose: z.string().optional(),
-  idProofType: z.string().optional(),
-  idProofNumber: z.string().optional(),
-  photoUrl: z.string().optional(),
-  signatureUrl: z.string().optional(),
-  consentGiven: z.boolean().optional(),
-  consentVersion: z.string().optional(),
+  purpose: z.string().optional().nullable().or(z.literal("")),
+  idProofType: z.string().optional().nullable().or(z.literal("")),
+  idProofNumber: z.string().optional().nullable().or(z.literal("")),
+  photoUrl: z.string().optional().nullable().or(z.literal("")),
+  signatureUrl: z.string().optional().nullable().or(z.literal("")),
+  consentGiven: z.boolean().optional().nullable(),
+  consentVersion: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {
@@ -40,8 +40,19 @@ export async function POST(request: Request) {
     }
 
     const result = await performWalkIn({
-      ...parsed.data,
-      email: parsed.data.email || null,
+      name: parsed.data.name.trim(),
+      phone: parsed.data.phone.trim(),
+      email: parsed.data.email?.trim() || null,
+      company: parsed.data.company?.trim() || undefined,
+      visitorTypeId: parsed.data.visitorTypeId || null,
+      hostEmployeeId: parsed.data.hostEmployeeId,
+      purpose: parsed.data.purpose?.trim() || undefined,
+      idProofType: parsed.data.idProofType?.trim() || undefined,
+      idProofNumber: parsed.data.idProofNumber?.trim() || undefined,
+      photoUrl: parsed.data.photoUrl || undefined,
+      signatureUrl: parsed.data.signatureUrl || undefined,
+      consentGiven: parsed.data.consentGiven ?? true,
+      consentVersion: parsed.data.consentVersion || "v1.0",
       organizationId: orgId,
       actorName: user.name,
     });

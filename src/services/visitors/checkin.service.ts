@@ -15,11 +15,11 @@ export interface CheckInInput {
   invitationId: string;
   organizationId: string;
   actorName: string; // receptionist / kiosk name shown in logs
-  photoUrl?: string;
-  signatureUrl?: string;
-  receptionistName?: string;
-  consentGiven?: boolean;
-  consentVersion?: string;
+  photoUrl?: string | null;
+  signatureUrl?: string | null;
+  receptionistName?: string | null;
+  consentGiven?: boolean | null;
+  consentVersion?: string | null;
 }
 
 export interface CheckInResult {

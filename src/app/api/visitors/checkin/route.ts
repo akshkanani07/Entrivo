@@ -6,11 +6,11 @@ import { performCheckin } from "@/services/visitors/checkin.service";
 
 const checkinSchema = z.object({
   invitationId: z.string().min(1, "Invitation ID is required"),
-  photoUrl: z.string().optional(),
-  signatureUrl: z.string().optional(),
-  receptionistName: z.string().optional(),
-  consentGiven: z.boolean().optional(),
-  consentVersion: z.string().optional(),
+  photoUrl: z.string().optional().nullable().or(z.literal("")),
+  signatureUrl: z.string().optional().nullable().or(z.literal("")),
+  receptionistName: z.string().optional().nullable().or(z.literal("")),
+  consentGiven: z.boolean().optional().nullable(),
+  consentVersion: z.string().optional().nullable(),
 });
 
 export async function POST(request: Request) {

@@ -5,10 +5,10 @@ import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
 const createDocSchema = z.object({
-  visitorId: z.string().optional(),
+  visitorId: z.string().optional().nullable(),
   title: z.string().min(1, "Document title is required"),
-  docType: z.string().optional(),
-  fileUrl: z.string().optional(),
+  docType: z.string().optional().nullable().or(z.literal("")),
+  fileUrl: z.string().optional().nullable().or(z.literal("")),
   expiryDate: z.string().datetime().optional().nullable(),
 });
 

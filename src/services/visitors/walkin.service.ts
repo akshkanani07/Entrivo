@@ -15,16 +15,16 @@ export interface WalkInInput {
   name: string;
   phone: string;
   email?: string | null;
-  company?: string;
+  company?: string | null;
   visitorTypeId?: string | null;
   hostEmployeeId: string;
-  purpose?: string;
-  idProofType?: string;
-  idProofNumber?: string;
-  photoUrl?: string;
-  signatureUrl?: string;
-  consentGiven?: boolean;
-  consentVersion?: string;
+  purpose?: string | null;
+  idProofType?: string | null;
+  idProofNumber?: string | null;
+  photoUrl?: string | null;
+  signatureUrl?: string | null;
+  consentGiven?: boolean | null;
+  consentVersion?: string | null;
 }
 
 export interface WalkInResult {

@@ -9,7 +9,7 @@ import { NotificationEvent } from "@/services/notifications/events";
 const approvalActionSchema = z.object({
   approvalId: z.string().min(1, "Approval ID is required"),
   action: z.enum(["APPROVED", "REJECTED"]),
-  comments: z.string().optional(),
+  comments: z.string().optional().nullable().or(z.literal("")),
 });
 
 export async function GET() {

@@ -9,8 +9,8 @@ const registerSchema = z.object({
   name: z.string().min(2, "Administrator name must be at least 2 characters"),
   email: z.string().email("A valid work email is required"),
   password: z.string().min(10, "Password must be at least 10 characters"),
-  phone: z.string().optional(),
-  agreeTerms: z.boolean().optional(),
+  phone: z.string().optional().nullable().or(z.literal("")),
+  agreeTerms: z.boolean().optional().nullable(),
 });
 
 export async function POST(request: Request) {

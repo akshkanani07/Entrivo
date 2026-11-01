@@ -5,22 +5,22 @@ import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
 const createRoomSchema = z.object({
-  action: z.string().optional(),
-  name: z.string().optional(),
-  officeId: z.string().optional(),
-  capacity: z.union([z.number(), z.string()]).optional(),
-  floor: z.string().optional(),
-  amenities: z.string().optional(),
-  isAvailable: z.boolean().optional(),
+  action: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+  officeId: z.string().optional().nullable(),
+  capacity: z.union([z.number(), z.string()]).optional().nullable(),
+  floor: z.string().optional().nullable().or(z.literal("")),
+  amenities: z.string().optional().nullable().or(z.literal("")),
+  isAvailable: z.boolean().optional().nullable(),
 });
 
 const updateRoomSchema = z.object({
   id: z.string().min(1, "Room ID is required"),
-  name: z.string().optional(),
-  capacity: z.union([z.number(), z.string()]).optional(),
-  floor: z.string().optional(),
-  amenities: z.string().optional(),
-  isAvailable: z.boolean().optional(),
+  name: z.string().optional().nullable(),
+  capacity: z.union([z.number(), z.string()]).optional().nullable(),
+  floor: z.string().optional().nullable().or(z.literal("")),
+  amenities: z.string().optional().nullable().or(z.literal("")),
+  isAvailable: z.boolean().optional().nullable(),
 });
 
 export async function GET() {
@@ -217,10 +217,10 @@ export async function PUT(request: Request) {
     const updated = await prisma.meetingRoom.update({
       where: { id },
       data: {
-        ...(name !== undefined ? { name: name.trim() } : {}),
+        ...(name ? { name: name.trim() } : {}),
         ...(capacity !== undefined ? { capacity: Number(capacity) } : {}),
-        ...(floor !== undefined ? { floor: floor.trim() } : {}),
-        ...(amenities !== undefined ? { amenities: amenities.trim() } : {}),
+        ...(floor !== undefined ? { floor: floor?.trim() || null } : {}),
+        ...(amenities !== undefined ? { amenities: amenities?.trim() || null } : {}),
         ...(isAvailable !== undefined ? { isAvailable: Boolean(isAvailable) } : {}),
       },
       include: { office: true, invitations: true },

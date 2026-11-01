@@ -46,7 +46,7 @@ const subscribeSchema = z.object({
       .min(22, "auth key is too short")
       .max(24, "auth key is too long"),
   }),
-  userAgent: z.string().optional(),
+  userAgent: z.string().optional().nullable().or(z.literal("")),
 });
 
 export async function POST(request: Request) {

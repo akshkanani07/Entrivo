@@ -5,15 +5,15 @@ import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
 const updateOrgSchema = z.object({
-  name: z.string().optional(),
-  workingHours: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  country: z.string().optional(),
-  contactEmail: z.string().email().optional().or(z.literal("")),
-  contactPhone: z.string().optional(),
-  checkInPolicy: z.string().optional(),
-  policies: z.record(z.any()).optional(),
+  name: z.string().optional().nullable(),
+  workingHours: z.string().optional().nullable().or(z.literal("")),
+  address: z.string().optional().nullable().or(z.literal("")),
+  city: z.string().optional().nullable().or(z.literal("")),
+  country: z.string().optional().nullable().or(z.literal("")),
+  contactEmail: z.string().email().optional().nullable().or(z.literal("")),
+  contactPhone: z.string().optional().nullable().or(z.literal("")),
+  checkInPolicy: z.string().optional().nullable().or(z.literal("")),
+  policies: z.record(z.any()).optional().nullable(),
 });
 
 export async function GET() {
@@ -81,14 +81,14 @@ export async function PUT(request: Request) {
     const updatedOrg = await prisma.organization.update({
       where: { id: organizationId },
       data: {
-        ...(name !== undefined ? { name } : {}),
-        ...(workingHours !== undefined ? { workingHours } : {}),
-        ...(address !== undefined ? { address } : {}),
-        ...(city !== undefined ? { city } : {}),
-        ...(country !== undefined ? { country } : {}),
-        ...(contactEmail !== undefined ? { contactEmail } : {}),
-        ...(contactPhone !== undefined ? { contactPhone } : {}),
-        ...(checkInPolicy !== undefined ? { checkInPolicy } : {}),
+        ...(name ? { name } : {}),
+        ...(workingHours !== undefined ? { workingHours: workingHours || null } : {}),
+        ...(address !== undefined ? { address: address || null } : {}),
+        ...(city !== undefined ? { city: city || null } : {}),
+        ...(country !== undefined ? { country: country || null } : {}),
+        ...(contactEmail !== undefined ? { contactEmail: contactEmail || null } : {}),
+        ...(contactPhone !== undefined ? { contactPhone: contactPhone || null } : {}),
+        ...(checkInPolicy !== undefined ? { checkInPolicy: checkInPolicy || null } : {}),
       },
     });
 

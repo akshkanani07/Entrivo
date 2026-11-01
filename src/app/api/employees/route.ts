@@ -12,23 +12,23 @@ import { getAppUrl } from "@/lib/app-url";
 const createEmployeeSchema = z.object({
   name: z.string().min(1, "Employee name is required"),
   email: z.string().email("A valid work email is required"),
-  phone: z.string().optional(),
-  designation: z.string().optional(),
-  departmentId: z.string().optional(),
-  departmentName: z.string().optional(),
-  officeId: z.string().optional(),
-  employeeCode: z.string().optional(),
+  phone: z.string().optional().nullable().or(z.literal("")),
+  designation: z.string().optional().nullable().or(z.literal("")),
+  departmentId: z.string().optional().nullable().or(z.literal("")),
+  departmentName: z.string().optional().nullable().or(z.literal("")),
+  officeId: z.string().optional().nullable().or(z.literal("")),
+  employeeCode: z.string().optional().nullable().or(z.literal("")),
   role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional(),
   autoApproveVisitors: z.boolean().optional(),
-  action: z.string().optional(),
+  action: z.string().optional().nullable(),
 });
 
 const updateEmployeeSchema = z.object({
   id: z.string().min(1, "Employee ID is required"),
-  designation: z.string().optional(),
-  phone: z.string().optional(),
-  departmentId: z.string().optional().nullable(),
-  status: z.string().optional(),
+  designation: z.string().optional().nullable().or(z.literal("")),
+  phone: z.string().optional().nullable().or(z.literal("")),
+  departmentId: z.string().optional().nullable().or(z.literal("")),
+  status: z.string().optional().nullable().or(z.literal("")),
   autoApproveVisitors: z.boolean().optional(),
   role: z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional(),
 });
@@ -487,10 +487,10 @@ export async function PUT(request: Request) {
     const updated = await prisma.employee.update({
       where: { id },
       data: {
-        ...(designation !== undefined ? { designation: designation.trim() } : {}),
-        ...(phone !== undefined ? { phone: phone.trim() } : {}),
-        ...(departmentId !== undefined ? { departmentId } : {}),
-        ...(status !== undefined ? { status } : {}),
+        ...(designation ? { designation: designation.trim() } : {}),
+        ...(phone ? { phone: phone.trim() } : {}),
+        ...(departmentId ? { departmentId } : {}),
+        ...(status ? { status } : {}),
         ...(autoApproveVisitors !== undefined ? { autoApproveVisitors: Boolean(autoApproveVisitors) } : {}),
       },
       include: {

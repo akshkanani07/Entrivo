@@ -7,10 +7,10 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 
 const checkoutSchema = z.object({
-  checkInId: z.string().optional(),
-  badgeNumber: z.string().optional(),
-  exitNotes: z.string().optional(),
-  checkoutMethod: z.string().optional(),
+  checkInId: z.string().optional().nullable().or(z.literal("")),
+  badgeNumber: z.string().optional().nullable().or(z.literal("")),
+  exitNotes: z.string().optional().nullable().or(z.literal("")),
+  checkoutMethod: z.string().optional().nullable().or(z.literal("")),
 });
 
 export async function POST(request: Request) {

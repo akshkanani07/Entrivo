@@ -6,21 +6,21 @@ import { NotificationChannel } from "@prisma/client";
 import { z } from "zod";
 
 const createTemplateSchema = z.object({
-  action: z.string().optional(),
-  event: z.string().optional(),
-  channel: z.nativeEnum(NotificationChannel).optional(),
-  subject: z.string().optional().nullable(),
-  body: z.string().optional(),
-  variables: z.string().optional(),
-  isActive: z.boolean().optional(),
+  action: z.string().optional().nullable(),
+  event: z.string().optional().nullable(),
+  channel: z.nativeEnum(NotificationChannel).optional().nullable(),
+  subject: z.string().optional().nullable().or(z.literal("")),
+  body: z.string().optional().nullable().or(z.literal("")),
+  variables: z.string().optional().nullable().or(z.literal("")),
+  isActive: z.boolean().optional().nullable(),
 });
 
 const updateTemplateSchema = z.object({
   id: z.string().min(1, "Template ID is required"),
-  subject: z.string().optional().nullable(),
-  body: z.string().optional(),
-  variables: z.string().optional(),
-  isActive: z.boolean().optional(),
+  subject: z.string().optional().nullable().or(z.literal("")),
+  body: z.string().optional().nullable().or(z.literal("")),
+  variables: z.string().optional().nullable().or(z.literal("")),
+  isActive: z.boolean().optional().nullable(),
 });
 
 export async function GET() {
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
         subject: subject || null,
         body: templateBody.trim(),
         variables: variables || "visitor_name,host_name,date,time,location",
-        isActive: isActive !== undefined ? isActive : true,
+        isActive: isActive ?? true,
       },
     });
 
@@ -183,10 +183,10 @@ export async function PUT(request: Request) {
     const updated = await prisma.notificationTemplate.update({
       where: { id },
       data: {
-        ...(subject !== undefined ? { subject } : {}),
-        ...(templateBody !== undefined ? { body: templateBody.trim() } : {}),
-        ...(variables !== undefined ? { variables } : {}),
-        ...(isActive !== undefined ? { isActive } : {}),
+        ...(subject !== undefined ? { subject: subject || null } : {}),
+        ...(templateBody ? { body: templateBody.trim() } : {}),
+        ...(variables ? { variables } : {}),
+        ...(isActive !== undefined && isActive !== null ? { isActive } : {}),
       },
     });
 

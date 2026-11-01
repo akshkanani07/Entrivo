@@ -106,20 +106,21 @@ export function CheckinTerminalClient({
         });
       } catch {}
 
-      const vName = data.checkIn?.visitor?.name || "Visitor";
-      const vComp = data.checkIn?.visitor?.company || "Guest";
-      const bNum = data.checkIn?.badgeNumber || "BADGE";
+      const checkInRecord = data.checkIn || data.data;
+      const vName = checkInRecord?.visitor?.name || "Visitor";
+      const vComp = checkInRecord?.visitor?.company || "Guest";
+      const bNum = checkInRecord?.badgeNumber || "BADGE";
 
       setIssuedBadge({
         badgeNumber: bNum,
         visitorName: vName,
         visitorCompany: vComp,
-        visitorTypeName: data.checkIn?.visitor?.visitorTypeName || "Guest",
-        badgeColor: data.checkIn?.visitor?.badgeColor || "#6366f1",
-        hostName: data.checkIn?.host?.name || "Host",
-        hostOffice: data.checkIn?.host?.office,
-        photoUrl: data.checkIn?.visitor?.avatarUrl,
-        issueDate: formatDateTime(data.checkIn?.checkInTime || new Date()),
+        visitorTypeName: checkInRecord?.visitor?.visitorTypeName || "Guest",
+        badgeColor: checkInRecord?.visitor?.badgeColor || "#6366f1",
+        hostName: checkInRecord?.host?.name || checkInRecord?.hostEmployee?.user?.name || "Host",
+        hostOffice: checkInRecord?.host?.office || checkInRecord?.hostEmployee?.office?.name,
+        photoUrl: checkInRecord?.visitor?.avatarUrl || checkInRecord?.photoUrl,
+        issueDate: formatDateTime(checkInRecord?.checkInTime || new Date()),
       });
 
       toast.success(`Check-in successful! Badge ${bNum} issued for ${vName}.`);
