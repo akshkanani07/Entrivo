@@ -28,16 +28,16 @@ Identity, storage foundation, organization structure, holidays, working hours, t
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P1-00** | Storage adapter (local, cloudinary, s3), File model, private download route /api/files/[id], upload API with magic bytes & sharp re-encode | [x] | 2026-11-01 | `phase-1` |
-| **P1-01** | Email verification: EmailVerificationToken, /verify-email, resend rate limit, register flow, requireVerifiedEmail policy | [x] | 2026-11-01 | `phase-1` |
-| **P1-02** | Two-Factor Auth (TOTP via otplib, RFC 6238): enrol, 10 backup codes, login challenge token, encrypted secret, audit | [x] | 2026-11-01 | `phase-1` |
-| **P1-03** | Password policy: min length, complexity, history (PasswordHistory last N), optional max age enforcement | [x] | 2026-11-01 | `phase-1` |
-| **P1-04** | Session policy: idle timeout + absolute lifetime server-side enforcement, client idle warning modal, revoke session | [x] | 2026-11-01 | `phase-1` |
-| **P1-05** | Organization profile: logo upload via storage adapter, brand color, timezone, locale, branding in login/badges/emails | [x] | 2026-11-01 | `phase-1` |
-| **P1-06** | Org structure CRUD: Branch, Office, Floor, Zone, Department with 409 reference blocking & audit logging | [x] | 2026-11-01 | `phase-1` |
-| **P1-07** | Holidays: CRUD per branch, date ranges, recurring yearly, CSV import, calendar view | [x] | 2026-11-01 | `phase-1` |
-| **P1-08** | Working hours: structured JSON per branch/office, timezone-aware enforcement (ALLOW, WARN, BLOCK) | [x] | 2026-11-01 | `phase-1` |
-| **P1-09** | Typed policies registry (src/lib/settings-schema.ts, zod) + getOrgPolicy(orgId) cached resolver | [x] | 2026-11-01 | `phase-1` |
+| **P1-00** | Storage adapter (local, cloudinary, s3), File model, private download route /api/files/[id], upload API with magic bytes & sharp re-encode | [x] | 2026-11-01 | `c4159fb` |
+| **P1-01** | Email verification: EmailVerificationToken, /verify-email, resend rate limit, register flow, requireVerifiedEmail policy | [x] | 2026-11-01 | `c4159fb` |
+| **P1-02** | Two-Factor Auth (TOTP via otplib, RFC 6238): enrol, 10 backup codes, login challenge token, encrypted secret, audit | [x] | 2026-11-01 | `c4159fb` |
+| **P1-03** | Password policy: min length, complexity, history (PasswordHistory last N), optional max age enforcement | [x] | 2026-11-01 | `c4159fb` |
+| **P1-04** | Session policy: idle timeout + absolute lifetime server-side enforcement, client idle warning modal, revoke session | [x] | 2026-11-01 | `c4159fb` |
+| **P1-05** | Organization profile: logo upload via storage adapter, brand color, timezone, locale, branding in login/badges/emails | [x] | 2026-11-01 | `c4159fb` |
+| **P1-06** | Org structure CRUD: Branch, Office, Floor, Zone, Department with 409 reference blocking & audit logging | [x] | 2026-11-01 | `c4159fb` |
+| **P1-07** | Holidays: CRUD per branch, date ranges, recurring yearly, CSV import, calendar view | [x] | 2026-11-01 | `c4159fb` |
+| **P1-08** | Working hours: structured JSON per branch/office, timezone-aware enforcement (ALLOW, WARN, BLOCK) | [x] | 2026-11-01 | `c4159fb` |
+| **P1-09** | Typed policies registry (src/lib/settings-schema.ts, zod) + getOrgPolicy(orgId) cached resolver | [x] | 2026-11-01 | `c4159fb` |
 
 ---
 
