@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: result.checkIn,
+      checkIn: result.checkIn,
       message: `Visitor ${result.checkIn.visitor.name} checked in successfully. Badge #${result.checkIn.badgeNumber}`,
     });
   } catch (error: any) {

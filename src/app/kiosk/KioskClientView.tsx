@@ -20,6 +20,7 @@ import {
   Lock,
   LogOut,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { CameraCapture } from "@/components/visitor/CameraCapture";
 import { SignatureCanvas } from "@/components/visitor/SignatureCanvas";
 import { BadgeCard, BadgeData } from "@/components/visitor/BadgeCard";
@@ -42,13 +43,16 @@ interface VisitorTypeOption {
 
 export function KioskClientView({
   orgName,
+  kioskName,
   employees,
   visitorTypes,
 }: {
   orgName: string;
+  kioskName?: string;
   employees: EmployeeOption[];
   visitorTypes: VisitorTypeOption[];
 }) {
+  const router = useRouter();
   const [step, setStep] = useState<"WELCOME" | "QR_CHECKIN" | "WALKIN_INFO" | "WALKIN_PHOTO" | "WALKIN_NDA" | "SUCCESS">("WELCOME");
   const [qrInput, setQrInput] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
@@ -65,64 +69,6 @@ export function KioskClientView({
   const [consentChecked, setConsentChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
-
-  // Kiosk Terminal Pairing State
-  const [kioskKey, setKioskKey] = useState<string | null>(null);
-  const [isPaired, setIsPaired] = useState<boolean | null>(null); // null during initial client check
-  const [pairingInput, setPairingInput] = useState("");
-  const [pairingLoading, setPairingLoading] = useState(false);
-
-  useEffect(() => {
-    const stored = typeof window !== "undefined" ? sessionStorage.getItem("entrivo_kiosk_key") : null;
-    if (stored) {
-      setKioskKey(stored);
-      setIsPaired(true);
-    } else {
-      setIsPaired(false);
-    }
-  }, []);
-
-  const handlePairTerminal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const keyToUse = pairingInput.trim();
-    if (!keyToUse) return;
-
-    setPairingLoading(true);
-    try {
-      // Test the key against kiosk verification endpoint with a dummy probe
-      const res = await fetch("/api/kiosk/verify-qr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-kiosk-key": keyToUse,
-        },
-        body: JSON.stringify({ token: "PROBE_CHECK" }),
-      });
-
-      // 401 means invalid key; 404/400 means valid key, pass just not found (which is expected)
-      if (res.status === 401) {
-        toast.error("Invalid or revoked kiosk key. Please check the key in Settings.");
-        return;
-      }
-
-      sessionStorage.setItem("entrivo_kiosk_key", keyToUse);
-      setKioskKey(keyToUse);
-      setIsPaired(true);
-      setPairingInput("");
-      toast.success("Kiosk terminal successfully paired!");
-    } catch {
-      toast.error("Failed to connect to kiosk service");
-    } finally {
-      setPairingLoading(false);
-    }
-  };
-
-  const handleUnpair = () => {
-    sessionStorage.removeItem("entrivo_kiosk_key");
-    setKioskKey(null);
-    setIsPaired(false);
-    toast.info("Kiosk terminal unpaired.");
-  };
 
   // Auto-reset timer when on success screen
   useEffect(() => {
@@ -159,16 +105,14 @@ export function KioskClientView({
       // 1. Verify token via kiosk-scoped endpoint
       const verifyRes = await fetch("/api/kiosk/verify-qr", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-kiosk-key": kioskKey || "",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
 
       if (verifyRes.status === 401) {
-        handleUnpair();
-        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        router.push("/kiosk/pair");
+        return;
       }
 
       const verifyData = await verifyRes.json();
@@ -179,10 +123,7 @@ export function KioskClientView({
       // 2. Perform Checkin via kiosk-scoped endpoint
       const checkinRes = await fetch("/api/kiosk/checkin", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-kiosk-key": kioskKey || "",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           invitationId: verifyData.data.invitationId,
           consentGiven: true,
@@ -191,8 +132,9 @@ export function KioskClientView({
       });
 
       if (checkinRes.status === 401) {
-        handleUnpair();
-        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        router.push("/kiosk/pair");
+        return;
       }
 
       const checkinData = await checkinRes.json();
@@ -235,10 +177,7 @@ export function KioskClientView({
     try {
       const res = await fetch("/api/kiosk/walkin", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-kiosk-key": kioskKey || "",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           phone,
@@ -254,8 +193,9 @@ export function KioskClientView({
       });
 
       if (res.status === 401) {
-        handleUnpair();
-        throw new Error("Kiosk authorization expired or invalid. Please re-pair this terminal.");
+        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        router.push("/kiosk/pair");
+        return;
       }
 
       const data = await res.json();
@@ -288,51 +228,6 @@ export function KioskClientView({
     }
   };
 
-  if (isPaired === false) {
-    return (
-      <div className="relative z-10 max-w-md w-full mx-auto my-auto flex-1 flex flex-col justify-center">
-        <div className="glass-card rounded-3xl border border-indigo-950/70 p-8 space-y-6 text-center shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto shadow-glow">
-            <Tablet className="w-8 h-8" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Pair Lobby Kiosk Terminal</h2>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              This terminal is not paired with an Entrivo workplace organization. An administrator must enter the Kiosk Secret Key generated in <strong className="text-slate-200">Settings &gt; Kiosks</strong>.
-            </p>
-          </div>
-
-          <form onSubmit={handlePairTerminal} className="space-y-4 text-left">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Kiosk Secret Key
-              </label>
-              <input
-                type="password"
-                required
-                value={pairingInput}
-                onChange={(e) => setPairingInput(e.target.value)}
-                placeholder="Paste key here..."
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={pairingLoading}
-              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-glow-sm disabled:opacity-50"
-            >
-              {pairingLoading ? "Verifying..." : "Pair & Activate Kiosk"}
-            </button>
-          </form>
-
-          <p className="text-[11px] text-slate-500">
-            The key is stored in this browser&apos;s sessionStorage and authenticates self-service check-ins.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="relative z-10 max-w-4xl w-full mx-auto flex-1 flex flex-col justify-between">
       {/* Top Brand Bar */}
@@ -342,7 +237,14 @@ export function KioskClientView({
             <ShieldCheck className="w-7 h-7" />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white tracking-tight">{orgName}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-black text-white tracking-tight">{orgName}</h1>
+              {kioskName && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  {kioskName}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-indigo-300 font-medium">Welcome to Our Modern Workplace</p>
           </div>
         </div>
@@ -357,13 +259,6 @@ export function KioskClientView({
               Start Over
             </button>
           )}
-          <button
-            onClick={handleUnpair}
-            title="Unpair Terminal"
-            className="p-2 rounded-xl text-slate-600 hover:text-slate-400 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

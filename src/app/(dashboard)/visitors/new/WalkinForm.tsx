@@ -99,16 +99,21 @@ export function WalkinForm({
       } catch {}
 
       // Prepare issued badge data
+      const checkIn = data.checkIn || data.data;
+      if (!checkIn) {
+        throw new Error(data.error || "Walk-in registration did not return check-in data");
+      }
+
       setIssuedBadge({
-        badgeNumber: data.checkIn.badgeNumber,
-        visitorName: data.checkIn.visitor.name,
-        visitorCompany: data.checkIn.visitor.company,
-        visitorTypeName: data.checkIn.visitor.visitorTypeName,
-        badgeColor: data.checkIn.visitor.badgeColor,
-        hostName: data.checkIn.host.name,
-        hostOffice: data.checkIn.host.office,
-        photoUrl: data.checkIn.visitor.avatarUrl,
-        issueDate: formatDateTime(data.checkIn.checkInTime),
+        badgeNumber: checkIn.badgeNumber || "BADGE",
+        visitorName: checkIn.visitor?.name || formData.name,
+        visitorCompany: checkIn.visitor?.company || formData.company || "Guest",
+        visitorTypeName: checkIn.visitor?.visitorTypeName || "Visitor",
+        badgeColor: checkIn.visitor?.badgeColor || "#4f46e5",
+        hostName: checkIn.host?.name || checkIn.hostEmployee?.user?.name || "Host",
+        hostOffice: checkIn.host?.office || checkIn.hostEmployee?.office?.name || "Main Reception",
+        photoUrl: checkIn.visitor?.avatarUrl || photoUrl,
+        issueDate: formatDateTime(checkIn.checkInTime || new Date()),
       });
     } catch (err: any) {
       setError(err.message || "Failed to complete registration");

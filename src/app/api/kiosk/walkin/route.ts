@@ -1,13 +1,14 @@
 /**
  * /api/kiosk/walkin — Kiosk walk-in check-in
  *
- * Authenticated via x-kiosk-key header (no staff session).
+ * Authenticated via httpOnly kiosk_token cookie (no staff session).
  * Reuses the shared walkin service — same validations as staff route.
+ * Rolling renewal: refreshes the cookie on successful request.
  */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireKiosk } from "@/lib/kiosk-auth";
+import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
 import { performWalkIn } from "@/services/visitors/walkin.service";
 
 const kioskWalkinSchema = z.object({
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     const { checkIn } = result;
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         id: checkIn.id,
@@ -67,10 +68,13 @@ export async function POST(request: Request) {
         visitorCompany: checkIn.visitor.company,
         hostName: checkIn.hostEmployee.user.name,
       },
+      message: `Walk-in visitor ${checkIn.visitor.name} checked in successfully. Badge #${checkIn.badgeNumber}`,
     });
+
+    // Rolling renewal: refresh kiosk_token cookie
+    return renewKioskCookie(response, kioskAuth.rawToken);
   } catch (error) {
     console.error("Kiosk walkin error:", error);
     return NextResponse.json({ success: false, error: "Walk-in failed" }, { status: 500 });
   }
 }
-

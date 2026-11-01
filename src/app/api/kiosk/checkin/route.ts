@@ -1,13 +1,14 @@
 /**
  * /api/kiosk/checkin — Kiosk check-in
  *
- * Authenticated via x-kiosk-key header (no staff session).
+ * Authenticated via httpOnly kiosk_token cookie (or fallback key).
  * Reuses the shared checkin service — same validations as staff route.
+ * Rolling renewal: refreshes the cookie on successful request.
  */
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireKiosk } from "@/lib/kiosk-auth";
+import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
 import { performCheckin } from "@/services/visitors/checkin.service";
 
 const kioskCheckinSchema = z.object({
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
 
     // Return minimal data — no visitor PII
     const { checkIn } = result;
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         id: checkIn.id,
@@ -59,7 +60,11 @@ export async function POST(request: Request) {
         visitorCompany: checkIn.visitor.company,
         hostName: checkIn.hostEmployee.user.name,
       },
+      message: `Visitor ${checkIn.visitor.name} checked in successfully. Badge #${checkIn.badgeNumber}`,
     });
+
+    // Rolling renewal: refresh kiosk_token cookie
+    return renewKioskCookie(response, kioskAuth.rawToken);
   } catch (error) {
     console.error("Kiosk checkin error:", error);
     return NextResponse.json(
@@ -68,4 +73,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

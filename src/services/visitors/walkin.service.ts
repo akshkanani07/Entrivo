@@ -38,6 +38,13 @@ export interface WalkInResult {
       id: string;
       name: string;
       company: string | null;
+      avatarUrl?: string | null;
+      visitorTypeName?: string | null;
+      badgeColor?: string | null;
+    };
+    host?: {
+      name: string;
+      office?: string | null;
     };
     hostEmployee: {
       id: string;
@@ -241,6 +248,13 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
         id: checkIn.visitor.id,
         name: checkIn.visitor.name,
         company: checkIn.visitor.company,
+        avatarUrl: checkIn.visitor.avatarUrl,
+        visitorTypeName: checkIn.visitor.visitorType?.name,
+        badgeColor: checkIn.visitor.visitorType?.badgeColor,
+      },
+      host: {
+        name: checkIn.hostEmployee.user.name,
+        office: checkIn.hostEmployee.office?.name,
       },
       hostEmployee: {
         id: checkIn.hostEmployee.id,

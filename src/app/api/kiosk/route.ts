@@ -1,7 +1,7 @@
 /**
  * /api/kiosk — Admin management of kiosk devices
  * GET  list all kiosks for the org
- * POST create a new kiosk (returns raw key ONCE, never again)
+ * POST create a new kiosk (returns 8-digit single-use pairing code ONCE, 10 min TTL)
  *
  * Requires permission: settings.manage
  */
@@ -32,13 +32,27 @@ export async function GET() {
         name: true,
         isActive: true,
         lastUsedAt: true,
+        expiresAt: true,
         createdAt: true,
         updatedAt: true,
-        // keyHash is intentionally excluded — never returned to client
+        pairingExpiresAt: true,
+        deviceTokenHash: true,
       },
     });
 
-    return NextResponse.json({ success: true, data: kiosks });
+    const now = new Date();
+    const safeKiosks = kiosks.map((k) => ({
+      id: k.id,
+      name: k.name,
+      isActive: k.isActive,
+      isPaired: Boolean(k.deviceTokenHash && (!k.expiresAt || k.expiresAt > now)),
+      lastUsedAt: k.lastUsedAt,
+      expiresAt: k.expiresAt,
+      createdAt: k.createdAt,
+      hasPendingPairing: Boolean(k.pairingExpiresAt && k.pairingExpiresAt > now),
+    }));
+
+    return NextResponse.json({ success: true, data: safeKiosks });
   } catch (error) {
     console.error("Kiosk GET error:", error);
     return NextResponse.json({ success: false, error: "Failed to fetch kiosks" }, { status: 500 });
@@ -61,15 +75,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate a secure 48-character raw key (base64url, no padding)
-    const rawKey = crypto.randomBytes(36).toString("base64url"); // 48 chars
-    const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+    // Generate an 8-digit numeric pairing code (10000000 to 99999999)
+    const pairingCode = crypto.randomInt(10000000, 99999999).toString();
+    const pairingCodeHash = crypto.createHash("sha256").update(pairingCode).digest("hex");
+    const pairingExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes TTL
 
     const kiosk = await prisma.kiosk.create({
       data: {
         organizationId: orgCheck.organizationId,
         name: parsed.data.name.trim(),
-        keyHash,
+        pairingCodeHash,
+        pairingExpiresAt,
         isActive: true,
       },
       select: { id: true, name: true, isActive: true, createdAt: true },
@@ -82,25 +98,22 @@ export async function POST(request: Request) {
         action: "KIOSK_CREATED",
         entity: "Kiosk",
         entityId: kiosk.id,
-        details: `Kiosk '${kiosk.name}' created`,
+        details: `Kiosk '${kiosk.name}' created with pairing code`,
       },
     });
 
-    // rawKey returned ONCE — store it securely on the kiosk device
+    // pairingCode returned ONCE — must be entered on the physical kiosk device
     return NextResponse.json({
       success: true,
       data: {
         ...kiosk,
-        rawKey, // shown once only
+        pairingCode, // shown once only
+        expiresInMinutes: 10,
       },
-      message: "Kiosk created. Copy the key now — it will not be shown again.",
+      message: "Kiosk created. Enter the 8-digit pairing code on the kiosk screen within 10 minutes.",
     });
   } catch (error) {
     console.error("Kiosk POST error:", error);
-    return NextResponse.json(
-      { success: false, error: "Failed to create kiosk" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, error: "Failed to create kiosk" }, { status: 500 });
   }
 }
-

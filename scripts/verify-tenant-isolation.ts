@@ -155,6 +155,17 @@ async function runTest() {
   const blacklistIdB = blacklistData.data?.id;
   console.log(`[PASS] Created Tenant B Blacklist Entry: ${blacklistIdB || "N/A"}`);
 
+  // 3f. Kiosk Terminal in Tenant B
+  const createKioskRes = await fetch(`${BASE_URL}/api/kiosk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: tokenB },
+    body: JSON.stringify({ name: `Beta Reception iPad ${timestamp}` }),
+  });
+  const kioskData = (await createKioskRes.json()) as any;
+  const kioskIdB = kioskData.data?.id;
+  const pairingCodeB = kioskData.data?.pairingCode;
+  console.log(`[PASS] Created Tenant B Kiosk: ${kioskIdB || "N/A"} (Pairing Code: ${pairingCodeB})`);
+
   // --- Executing Multi-Tenant Isolation Tests ---
   console.log("\n--- Executing Multi-Tenant Isolation Assertions (Tenant A attempting access to Tenant B) ---");
 
@@ -361,6 +372,53 @@ async function runTest() {
   );
   if (leakedSearch) throw new Error("SECURITY BREACH: Global search leaked Tenant B entity!");
   console.log("   [PASSED]: Global search strictly isolated.");
+
+  // TEST 19: Kiosk Pairing & Isolation
+  console.log("Test 19: Kiosk Mode: Tenant A list kiosks -> must NOT see Tenant B kiosk");
+  const listKiosksRes = await fetch(`${BASE_URL}/api/kiosk`, {
+    headers: { Cookie: tokenA },
+  });
+  const kiosksData = (await listKiosksRes.json()) as any;
+  const leakedKiosk = (kiosksData.data || []).find((k: any) => k.id === kioskIdB);
+  if (leakedKiosk) throw new Error("SECURITY BREACH: Tenant A saw Tenant B kiosk terminal!");
+  console.log("   [PASSED]: Tenant B kiosk completely invisible to Tenant A.");
+
+  console.log("   Subtest: Tenant A attempts DELETE on Tenant B kiosk");
+  const delKioskRes = await fetch(`${BASE_URL}/api/kiosk/${kioskIdB}`, {
+    method: "DELETE",
+    headers: { Cookie: tokenA },
+  });
+  if (delKioskRes.status !== 404 && delKioskRes.status !== 403) {
+    throw new Error(`SECURITY BREACH: Tenant A DELETE on Tenant B kiosk returned HTTP ${delKioskRes.status}!`);
+  }
+  console.log("   [PASSED]: Cross-tenant kiosk revocation blocked (404).");
+
+  console.log("   Subtest: Calling /api/kiosk/checkin without paired kiosk token");
+  const unauthKioskRes = await fetch(`${BASE_URL}/api/kiosk/checkin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ invitationId: "fake_inv" }),
+  });
+  if (unauthKioskRes.status !== 401) {
+    throw new Error(`Kiosk unauthenticated checkin returned HTTP ${unauthKioskRes.status} instead of 401!`);
+  }
+  console.log("   [PASSED]: Unpaired kiosk check-in rejected with HTTP 401.");
+
+  console.log("   Subtest: Pair kiosk via POST /api/kiosk/pair with 8-digit code");
+  const pairRes = await fetch(`${BASE_URL}/api/kiosk/pair`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: pairingCodeB }),
+  });
+  const pairData = (await pairRes.json()) as any;
+  if (!pairRes.ok || !pairData.success) {
+    throw new Error(`Failed to pair kiosk with 8-digit code: ${JSON.stringify(pairData)}`);
+  }
+  const setCookie = pairRes.headers.get("set-cookie") || "";
+  if (!setCookie.includes("kiosk_token=")) {
+    throw new Error("Kiosk pairing did not issue httpOnly kiosk_token cookie!");
+  }
+  console.log("   [PASSED]: Kiosk successfully paired with 8-digit code & received kiosk_token cookie.");
 
   console.log("\nALL MULTI-TENANT ISOLATION TESTS PASSED CLEANLY! ZERO DATA LEAKS DETECTED.");
 }
