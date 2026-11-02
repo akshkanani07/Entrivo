@@ -89,8 +89,8 @@ Admin settings, compliance, data lifecycle.
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P6-01** | Settings UI complete, tabs: General/Branding, Notifications, Visitor, Approval rules, Security, Integrations, Kiosks, Data & Privacy, Jobs. Every setting is typed in the zod registry, has defaults, validation, audit diff, and is ENFORCED. Produce docs/SETTINGS_ENFORCEMENT.md. | [x] | 2026-11-02 | `e61a457` |
-| **P6-02** | Required fields: invitation, walk-in and kiosk forms render dynamically from the visitor/field settings and validate on the server. | [x] | 2026-11-02 | `e61a457` |
-| **P6-03** | Data retention & DPDP tooling: retention job that anonymizes/purges visitor PII (photo, ID, signature, phone, email) after N days per org and data class; data-principal tools — export a visitor's data (JSON/PDF) and erase/anonymize on request, all audited; consent records view; versioned privacy notice shown at kiosk before capture. Privacy text must match real behavior. | [x] | 2026-11-02 | `e61a457` |
+| **P6-01** | Settings UI complete, tabs: General/Branding, Notifications, Visitor, Approval rules, Security, Integrations, Kiosks, Data & Privacy, Jobs. Every setting is typed in the zod registry, has defaults, validation, audit diff, and is ENFORCED. Produce docs/SETTINGS_ENFORCEMENT.md. | [x] | 2026-11-02 | `08226fa` |
+| **P6-02** | Required fields: invitation, walk-in and kiosk forms render dynamically from the visitor/field settings and validate on the server. | [x] | 2026-11-02 | `08226fa` |
+| **P6-03** | Data retention & DPDP tooling: retention job that anonymizes/purges visitor PII (photo, ID, signature, phone, email) after N days per org and data class; data-principal tools — export a visitor's data (JSON/PDF) and erase/anonymize on request, all audited; consent records view; versioned privacy notice shown at kiosk before capture. Privacy text must match real behavior. | [x] | 2026-11-02 | `08226fa` |
 
 
