@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/encryption";
 import { NotificationEvent, NotificationPayload } from "../events";
@@ -29,8 +30,45 @@ export async function sendSlackNotification(
   event: NotificationEvent,
   payload: NotificationPayload,
   content: { title: string; body: string; url?: string }
-) {
+): Promise<{ success: boolean; error?: string; reason?: string }> {
   try {
+    // 1. Check if Slack integration is enabled
+    const enabledSetting = await prisma.setting.findUnique({
+      where: {
+        organizationId_key: {
+          organizationId: payload.organizationId,
+          key: "SLACK_ENABLED",
+        },
+      },
+    });
+    if (enabledSetting?.value === "false") {
+      return { success: false, reason: "Slack integration disabled" };
+    }
+
+    // 2. Check per-event routing: which events route to Slack
+    const eventsSetting = await prisma.setting.findUnique({
+      where: {
+        organizationId_key: {
+          organizationId: payload.organizationId,
+          key: "SLACK_EVENTS",
+        },
+      },
+    });
+
+    const activeEvents = eventsSetting?.value
+      ? eventsSetting.value.split(",").map((s) => s.trim())
+      : [
+          NotificationEvent.VISITOR_ARRIVED,
+          NotificationEvent.VISITOR_WAITING,
+          NotificationEvent.SECURITY_ALERT,
+          NotificationEvent.VISITOR_OVERSTAYED,
+        ];
+
+    if (!activeEvents.includes(event)) {
+      return { success: false, reason: `Event ${event} not routed to Slack` };
+    }
+
+    // 3. Check Slack webhook configuration
     const setting = await prisma.setting.findUnique({
       where: {
         organizationId_key: {
@@ -44,20 +82,40 @@ export async function sendSlackNotification(
       return { success: false, reason: "Slack webhook not configured" };
     }
 
-    const enabledSetting = await prisma.setting.findUnique({
-      where: {
-        organizationId_key: {
+    const rawWebhook = decrypt(setting.value);
+
+    // Mock mode support
+    if (rawWebhook.startsWith("mock_") || rawWebhook.includes("mock-slack")) {
+      const masked = "https://hooks.slack.com/services/MOCK";
+      await prisma.notification.create({
+        data: {
           organizationId: payload.organizationId,
-          key: "SLACK_ENABLED",
+          channel: "SLACK",
+          event,
+          title: content.title,
+          body: content.body,
+          recipient: masked,
+          status: "SENT",
+          deliveredAt: new Date(),
+          retryCount: 0,
+          data: { simulated: true, visitor: payload.visitorName },
         },
-      },
-    });
-    if (enabledSetting?.value === "false") {
-      return { success: false, reason: "Slack integration disabled" };
+      });
+
+      await prisma.setting.upsert({
+        where: { organizationId_key: { organizationId: payload.organizationId, key: "SLACK_LAST_STATUS" } },
+        create: {
+          organizationId: payload.organizationId,
+          key: "SLACK_LAST_STATUS",
+          value: `DELIVERED_SIMULATED: ${new Date().toISOString()}`,
+        },
+        update: { value: `DELIVERED_SIMULATED: ${new Date().toISOString()}` },
+      });
+
+      return { success: true };
     }
 
-    const webhookUrl = decrypt(setting.value);
-    if (!isValidSlackWebhook(webhookUrl)) {
+    if (!isValidSlackWebhook(rawWebhook)) {
       console.warn("[Slack] Blocked non-allowlisted webhook URL (SSRF protection).");
       return { success: false, reason: "Invalid Slack webhook URL" };
     }
@@ -97,7 +155,7 @@ export async function sendSlackNotification(
         : []),
     ];
 
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(rawWebhook, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blocks }),
@@ -105,24 +163,100 @@ export async function sendSlackNotification(
       signal: AbortSignal.timeout(5000),
     });
 
+    const maskedUrl = maskSlackUrl(rawWebhook);
+
     if (!response.ok && response.type !== "opaqueredirect") {
       const errText = await response.text().catch(() => "(unreadable)");
       console.error("[Slack] HTTP error:", response.status, errText.slice(0, 200));
+
+      await prisma.notification.create({
+        data: {
+          organizationId: payload.organizationId,
+          channel: "SLACK",
+          event,
+          title: content.title,
+          body: content.body,
+          recipient: maskedUrl,
+          status: "FAILED",
+          error: `HTTP ${response.status}: ${errText.slice(0, 200)}`,
+          lastAttemptAt: new Date(),
+          retryCount: 0,
+        },
+      });
+
+      await prisma.setting.upsert({
+        where: { organizationId_key: { organizationId: payload.organizationId, key: "SLACK_LAST_STATUS" } },
+        create: {
+          organizationId: payload.organizationId,
+          key: "SLACK_LAST_STATUS",
+          value: `FAILED: HTTP ${response.status} at ${new Date().toISOString()}`,
+        },
+        update: { value: `FAILED: HTTP ${response.status} at ${new Date().toISOString()}` },
+      });
+
       return { success: false, error: `HTTP ${response.status}` };
     }
 
     if (response.type === "opaqueredirect") {
-      console.warn("[Slack] Webhook redirected — blocked (SSRF protection). URL:", maskSlackUrl(webhookUrl));
+      console.warn("[Slack] Webhook redirected — blocked (SSRF protection). URL:", maskedUrl);
       return { success: false, reason: "Webhook redirect blocked" };
     }
 
+    // Success
+    await prisma.notification.create({
+      data: {
+        organizationId: payload.organizationId,
+        channel: "SLACK",
+        event,
+        title: content.title,
+        body: content.body,
+        recipient: maskedUrl,
+        status: "SENT",
+        deliveredAt: new Date(),
+        retryCount: 0,
+      },
+    });
+
+    await prisma.setting.upsert({
+      where: { organizationId_key: { organizationId: payload.organizationId, key: "SLACK_LAST_STATUS" } },
+      create: {
+        organizationId: payload.organizationId,
+        key: "SLACK_LAST_STATUS",
+        value: `DELIVERED: ${new Date().toISOString()}`,
+      },
+      update: { value: `DELIVERED: ${new Date().toISOString()}` },
+    });
+
     return { success: true };
-  } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
-      console.error("[Slack] Webhook timed out after 5 s");
-      return { success: false, error: "Webhook timeout" };
-    }
+  } catch (error: any) {
+    const errorMsg = error instanceof Error && error.name === "TimeoutError" ? "Webhook timeout after 5s" : "Dispatch error";
     console.error("[Slack] Dispatch error:", error);
-    return { success: false, error: "Dispatch error" };
+
+    await prisma.notification.create({
+      data: {
+        organizationId: payload.organizationId,
+        channel: "SLACK",
+        event,
+        title: content.title,
+        body: content.body,
+        recipient: "slack_webhook",
+        status: "FAILED",
+        error: errorMsg,
+        lastAttemptAt: new Date(),
+        retryCount: 0,
+      },
+    }).catch(() => null);
+
+    await prisma.setting.upsert({
+      where: { organizationId_key: { organizationId: payload.organizationId, key: "SLACK_LAST_STATUS" } },
+      create: {
+        organizationId: payload.organizationId,
+        key: "SLACK_LAST_STATUS",
+        value: `FAILED: ${errorMsg} at ${new Date().toISOString()}`,
+      },
+      update: { value: `FAILED: ${errorMsg} at ${new Date().toISOString()}` },
+    }).catch(() => null);
+
+    return { success: false, error: errorMsg };
   }
 }

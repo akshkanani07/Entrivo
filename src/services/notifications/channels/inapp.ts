@@ -18,8 +18,11 @@ export async function sendInAppNotification(params: {
         event: params.event,
         title: params.title,
         body: params.body,
+        recipient: params.userId || "in_app_user",
         data: params.data || null,
         status: "SENT",
+        deliveredAt: new Date(),
+        retryCount: 0,
       },
     });
     return { success: true, id: notification.id };

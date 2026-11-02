@@ -7,10 +7,11 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 
 import { requiredString, optionalString } from "@/lib/zod-helpers";
+import { getAppUrl } from "@/lib/app-url";
 
 const approvalActionSchema = z.object({
   approvalId: requiredString("Approval ID is required"),
-  action: z.enum(["APPROVED", "REJECTED"]),
+  action: z.enum(["APPROVED", "REJECTED", "ESCALATED"]),
   comments: optionalString(),
 });
 
@@ -119,6 +120,30 @@ export async function POST(request: Request) {
 
     // Execute state transitions in one atomic transaction
     const updatedApproval = await prisma.$transaction(async (tx) => {
+      if (action === "ESCALATED") {
+        const updated = await tx.approval.update({
+          where: { id: approval.id },
+          data: {
+            step: "ADMIN",
+            comments: comments?.trim() || "Escalated for administrative review",
+          },
+          include: { invitation: true },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            organizationId: orgId,
+            userId: user.id,
+            action: "APPROVAL_ESCALATED",
+            entity: "APPROVAL",
+            entityId: approval.id,
+            details: `Approval for visitor ${approval.invitation?.visitor?.name || "guest"} escalated to administration by ${user.name} (${user.role}).`,
+          },
+        });
+
+        return updated;
+      }
+
       const updated = await tx.approval.update({
         where: { id: approval.id },
         data: {
@@ -151,6 +176,28 @@ export async function POST(request: Request) {
 
       return updated;
     });
+
+    if (action === "ESCALATED") {
+      // Fire APPROVAL_ESCALATED notification
+      await notify(NotificationEvent.APPROVAL_ESCALATED, {
+        organizationId: orgId,
+        visitorName: approval.invitation?.visitor?.name || "Visitor",
+        visitorEmail: approval.invitation?.visitor?.email,
+        visitorCompany: approval.invitation?.visitor?.company || undefined,
+        hostName: approval.invitation?.hostEmployee?.user?.name || user.name,
+        hostEmail: approval.invitation?.hostEmployee?.user?.email || user.email,
+        hostUserId: approval.invitation?.hostEmployee?.userId || user.id,
+        approvalUrl: `${getAppUrl()}/approvals`,
+        reason: comments?.trim() || "Escalated to management",
+        entityId: `escalate-${approval.id}`,
+      }).catch(console.error);
+
+      return NextResponse.json({
+        success: true,
+        data: updatedApproval,
+        message: "Request successfully escalated to administration.",
+      });
+    }
 
     // Notify participants about approval decision
     await notify(NotificationEvent.APPROVAL_DECIDED, {

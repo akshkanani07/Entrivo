@@ -363,6 +363,33 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     entityId: invitation.id,
   }).catch(console.error);
 
+  // Notify host that guest is waiting in lobby
+  notify(NotificationEvent.VISITOR_WAITING, {
+    organizationId: orgId,
+    visitorName: invitation.visitor?.name || "Guest",
+    visitorCompany: invitation.visitor?.company ?? undefined,
+    hostName: invitation.hostEmployee?.user?.name || "Host",
+    hostEmail: invitation.hostEmployee?.user?.email || "",
+    hostUserId: invitation.hostEmployee?.userId,
+    location: invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+    entityId: `waiting-${checkIn.id}`,
+  }).catch(console.error);
+
+  // Send check-in confirmation to visitor
+  if (invitation.visitor?.email) {
+    notify(NotificationEvent.CHECKIN_CONFIRMATION, {
+      organizationId: orgId,
+      visitorName: invitation.visitor.name,
+      visitorEmail: invitation.visitor.email,
+      visitorCompany: invitation.visitor.company ?? undefined,
+      hostName: invitation.hostEmployee?.user?.name || "Host",
+      badgeNumber,
+      location: invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+      time: new Date().toLocaleTimeString(),
+      entityId: `conf-${checkIn.id}`,
+    }).catch(console.error);
+  }
+
   return {
     success: true,
     checkIn: {

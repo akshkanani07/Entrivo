@@ -19,6 +19,7 @@ const createEmployeeSchema = z.object({
   departmentName: optionalString(),
   officeId: optionalString(),
   employeeCode: optionalString(),
+  backupApproverId: optionalString(),
   role: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
     z.enum(["SUPER_ADMIN", "ORG_ADMIN", "RECEPTIONIST", "SECURITY_GUARD", "EMPLOYEE"]).optional()
@@ -33,6 +34,7 @@ const updateEmployeeSchema = z.object({
   phone: optionalString(),
   departmentId: optionalString(),
   status: optionalString(),
+  backupApproverId: optionalString(),
   autoApproveVisitors: z.boolean().optional().nullable(),
   role: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
@@ -253,6 +255,7 @@ export async function POST(request: Request) {
       departmentName,
       officeId,
       employeeCode,
+      backupApproverId,
       role = "EMPLOYEE",
       autoApproveVisitors,
     } = parsed.data;
@@ -357,6 +360,7 @@ export async function POST(request: Request) {
           phone: phone?.trim() || null,
           status: "AVAILABLE",
           autoApproveVisitors: Boolean(autoApproveVisitors),
+          backupApproverId: backupApproverId || null,
         },
         include: {
           user: true,
@@ -459,7 +463,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const { id, designation, phone, departmentId, status, autoApproveVisitors, role } = parsed.data;
+    const { id, designation, phone, departmentId, status, autoApproveVisitors, role, backupApproverId } = parsed.data;
 
     // Tenant scoped lookup
     const existing = await prisma.employee.findFirst({
@@ -469,6 +473,19 @@ export async function PUT(request: Request) {
 
     if (!existing) {
       return NextResponse.json({ success: false, error: "Employee not found in organization." }, { status: 404 });
+    }
+
+    if (backupApproverId && backupApproverId === id) {
+      return NextResponse.json({ success: false, error: "An employee cannot be their own backup approver." }, { status: 400 });
+    }
+
+    if (backupApproverId) {
+      const backupExists = await prisma.employee.findFirst({
+        where: { id: backupApproverId, organizationId: orgId },
+      });
+      if (!backupExists) {
+        return NextResponse.json({ success: false, error: "Backup approver not found in organization." }, { status: 400 });
+      }
     }
 
     // If changing role
@@ -498,6 +515,7 @@ export async function PUT(request: Request) {
         ...(phone ? { phone: phone.trim() } : {}),
         ...(departmentId ? { departmentId } : {}),
         ...(status ? { status } : {}),
+        ...(backupApproverId !== undefined ? { backupApproverId: backupApproverId || null } : {}),
         ...(autoApproveVisitors !== undefined ? { autoApproveVisitors: Boolean(autoApproveVisitors) } : {}),
       },
       include: {

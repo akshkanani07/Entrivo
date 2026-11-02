@@ -128,6 +128,27 @@ export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number
           guardName: "System Worker",
         },
       });
+
+      // Notify host and security staff of visitor overstay
+      if (c.visitor?.organizationId) {
+        try {
+          const { notify } = await import("@/services/notifications/dispatcher");
+          const { NotificationEvent } = await import("@/services/notifications/events");
+          await notify(NotificationEvent.VISITOR_OVERSTAYED, {
+            organizationId: c.visitor.organizationId,
+            visitorName: c.visitor.name || "Guest",
+            visitorCompany: c.visitor.company || undefined,
+            hostName: c.hostEmployee?.user?.name || "Host",
+            hostEmail: c.hostEmployee?.user?.email,
+            hostUserId: c.hostEmployee?.userId,
+            badgeNumber: c.badgeNumber || undefined,
+            overstayDuration: "Exceeded scheduled visit duration",
+            entityId: `overstay-${c.id}`,
+          });
+        } catch (notifyErr) {
+          console.error("Overstay notification error:", notifyErr);
+        }
+      }
     }
 
     return { overstayedCount: overdueCheckins.length };

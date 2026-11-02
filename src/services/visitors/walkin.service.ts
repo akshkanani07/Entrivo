@@ -314,6 +314,33 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
     entityId: checkIn.id,
   }).catch(console.error);
 
+  // Notify host that walk-in guest is waiting in lobby
+  notify(NotificationEvent.VISITOR_WAITING, {
+    organizationId: orgId,
+    visitorName: checkIn.visitor?.name || "Guest",
+    visitorCompany: checkIn.visitor?.company ?? undefined,
+    hostName: checkIn.hostEmployee?.user?.name || "Host",
+    hostEmail: checkIn.hostEmployee?.user?.email || "",
+    hostUserId: checkIn.hostEmployee?.userId,
+    location: checkIn.hostEmployee?.office?.name ?? "Main Reception",
+    entityId: `waiting-${checkIn.id}`,
+  }).catch(console.error);
+
+  // Send check-in confirmation to visitor
+  if (checkIn.visitor?.email) {
+    notify(NotificationEvent.CHECKIN_CONFIRMATION, {
+      organizationId: orgId,
+      visitorName: checkIn.visitor.name,
+      visitorEmail: checkIn.visitor.email,
+      visitorCompany: checkIn.visitor.company ?? undefined,
+      hostName: checkIn.hostEmployee?.user?.name || "Host",
+      badgeNumber,
+      location: checkIn.hostEmployee?.office?.name ?? "Main Reception",
+      time: new Date().toLocaleTimeString(),
+      entityId: `conf-${checkIn.id}`,
+    }).catch(console.error);
+  }
+
   return {
     success: true,
     checkIn: {

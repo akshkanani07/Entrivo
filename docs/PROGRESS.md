@@ -51,33 +51,20 @@ Document management and NDA e-signature.
 | **P3-02** | NDA e-signature: org NDA template (NdaTemplate model, versioned rich text), signature pad on kiosk/staff, generate PDF (pdfkit) with visitor, timestamp, device/IP, template version, content hash, store as Document, reuse still-valid NDA for repeat visitors (policy ndaReuseEnabled), requireNda policy blocks check-in without valid signed NDA | [x] | 2026-11-01 | `0ba7f55` |
 | **P3-03** | Move photos and signatures out of base64-in-database into storage: migration script (scripts/migrate-base64-to-storage.ts), resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only, API responses return clean file IDs or URLs | [x] | 2026-11-01 | `0ba7f55` |
 
-
-Visitor core, invitations, approvals, security, rooms.
-
-| Task ID | Description | Status | Date | Commit |
-|---------|-------------|--------|------|--------|
-| **P2-01** | Visitor types CRUD: name, color, icon, requiresApproval, requiresNda, requiresEscort, defaultDurationMinutes, isActive; seeded types protected; flags enforced in invitation/walk-in/kiosk/check-in | [ ] | | |
-| **P2-02** | Invitation lifecycle: PATCH reschedule and DELETE/POST cancel (with reason); EMPLOYEE self-only; validation matrix; InvitationEvent history table; QR revoked/reissued + notifications; UI actions & timeline | [ ] | | |
-| **P2-03** | Approval workflow engine: ApprovalRule model, multi-step sequential approvals, walk-in WAITING_APPROVAL, timeouts/escalation, OOO delegation, /approvals UI & Settings rule builder | [ ] | | |
-| **P2-04** | QR passes (QRCode model): token hash, slot window (validFrom/validUntil), maxUses, usedCount, revocation, full 256-bit HMAC, rate limiting, pass public page without PII | [ ] | | |
-| **P2-05** | Camera QR scanner component: BarcodeDetector with jsqr fallback, camera switch, torch, permission help, manual fallback, scan debounce | [ ] | | |
-| **P2-06** | Check-in/out completion: verify details step, ID verification flow (masked number + sha256 + private storage + verified flag), exit confirmation, auto-checkout worker | [ ] | | |
-| **P2-07** | Central scheduler (src/services/scheduler): recurring jobs for reminders, overstay, auto-checkout, doc expiry, reports; BullMQ + in-process fallback + /api/cron/*; Admin Jobs panel | [ ] | | |
-| **P2-08** | Badges: BadgeTemplate CRUD UI, field toggles, orientation, size CR80/A6, live preview, exact print CSS, digital badge page | [ ] | | |
-| **P2-09** | Host management: availability (AVAILABLE, BUSY, AWAY, OUT_OF_OFFICE + backup approver), meeting history per employee, "My visitors" self-service for EMPLOYEE | [ ] | | |
-| **P2-10** | Security module completion: blacklist edit/remove/expiry, Watchlist (security+host alerts, approval gate), unified E.164 match logic, security notes & incident logs | [ ] | | |
-| **P2-11** | Meeting-room booking: RoomBooking model, overlap-safe transaction, capacity check, day/week grid, invitation linkage, cancel/reschedule sync | [ ] | | |
-| **P2-12** | Employee management polish: CSV import with preview & error report, deactivate flow (session revocation + invitation reassignment), self profile & avatar upload | [ ] | | |
-
 ---
 
-# Entrivo — Phase 3 Implementation Progress
+# Entrivo — Phase 4 Implementation Progress
 
-Document management and NDA e-signature.
+Notifications and email completion (WhatsApp stays permanently removed).
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P3-01** | Documents: multipart upload via storage adapter (ID_PROOF, NDA, AGREEMENT, OTHER), size & magic-byte validation, antivirus hook interface (clearly labelled no-op driver), authorized signed URL downloads, expiry tracking & computed status (VALID, EXPIRING, EXPIRED) with 30/7/1 day DOCUMENT_EXPIRING alerts, soft delete, audited actions, visitor documents tab & /documents admin view with filters | [ ] | | |
-| **P3-02** | NDA e-signature: org NDA template (versioned rich text with placeholders), digital signature pad integration on kiosk & staff tablet, PDF generation (pdfkit) with visitor, timestamp, device/IP, template version & SHA-256 hash stored as Document, repeat visitor NDA reuse (policy-controlled), requireNda policy blocking check-in | [ ] | | |
-| **P3-03** | Move photos and signatures out of base64-in-database into storage: idempotent migration script for existing rows, resize & EXIF strip (sharp), badge/kiosk/walk-in flows updated to store file IDs/signed URLs only | [ ] | | |
+| **P4-01** | Events: add INVITATION_CANCELLED, INVITATION_RESCHEDULED, VISITOR_WAITING, VISITOR_OVERSTAYED, VISITOR_REMINDER (24h and 1h), APPROVAL_ESCALATED, DOCUMENT_EXPIRING, DAILY_REPORT, CHECKIN_CONFIRMATION, CHECKOUT_THANKS; wire each to real code paths | [x] | 2026-11-02 | `d3923fc` |
+| **P4-02** | Routing + preferences: org default routing table; per-user preference matrix (event x channel) with quiet hours UI; security-critical messages bypass; delivery to host, backup approver, org admins, receptionists, guards, visitor | [x] | 2026-11-02 | `d3923fc` |
+| **P4-03** | Template system: NotificationTemplate overrides per org/event/channel/locale (en, hi, gu) with allow-listed variables, workflow DRAFT -> PENDING_APPROVAL -> ACTIVE, versioning, live preview, test send, safe fallback, used by EVERY send | [x] | 2026-11-02 | `d3923fc` |
+| **P4-04** | Email catalog: shared responsive branded layout, plain-text alt, unsubscribe for non-critical; visitor emails with .ics for invitations/reschedules; employee emails; admin emails | [x] | 2026-11-02 | `d3923fc` |
+| **P4-05** | Delivery log: filters (event, channel, status, date), error text, retry, dead-letter view, 24h metrics per channel | [x] | 2026-11-02 | `d3923fc` |
+| **P4-06** | Daily report and digests: job at org-configurable local time, content from real database aggregates | [x] | 2026-11-02 | `d3923fc` |
+| **P4-07** | Slack/Teams per-event routing UI (which events go to which channel), message customization, last-delivery status | [x] | 2026-11-02 | `d3923fc` |
+| **P4-08** | SMS: provider-agnostic adapter interface only; UI marks SMS as "Coming soon", no fake sending | [x] | 2026-11-02 | `d3923fc` |
 

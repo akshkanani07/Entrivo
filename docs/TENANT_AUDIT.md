@@ -59,6 +59,11 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 | `POST /api/kiosk/checkin` | `CheckIn` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
 | `POST /api/kiosk/walkin` | `CheckIn` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
 | `POST /api/kiosk/verify-qr` | `Invitation` | Kiosk device token hash resolved to `organizationId` | Scoped strictly to kiosk's tenant; no PII leak |
+| `GET/POST /api/notifications/delivery-log` | `Notification` | `where: { organizationId }` | Scoped to admin's tenant; retry asserts org boundary |
+| `GET/PUT /api/notifications/preferences` | `NotificationPreference` | `where: { userId }` | Scoped to caller user and quiet hours on User |
+| `GET/POST/PUT/DELETE /api/notifications/templates` | `NotificationTemplate` | `where: { organizationId }` | Scoped to tenant; admin approval audited |
+| `POST /api/cron/reminders` | `Invitation` | Constant-time `Authorization: Bearer CRON_SECRET` | Evaluates visits strictly within each tenant |
+| `POST /api/cron/daily-report` | Aggregates | Constant-time `Authorization: Bearer CRON_SECRET` | Computes aggregates grouped per organization |
 
 ---
 

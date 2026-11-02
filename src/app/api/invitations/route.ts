@@ -374,6 +374,12 @@ export async function PATCH(request: Request) {
       }
     }
 
+    const isReschedule = Boolean(
+      (scheduledDate && new Date(scheduledDate).getTime() !== new Date(existing.scheduledDate).getTime()) ||
+      (startTime && startTime !== existing.startTime)
+    );
+    const isCancelled = status === "CANCELLED" && existing.status !== "CANCELLED";
+
     const updated = await prisma.invitation.update({
       where: { id },
       data: {
@@ -387,10 +393,48 @@ export async function PATCH(request: Request) {
       },
       include: {
         visitor: true,
-        hostEmployee: { include: { user: true } },
+        hostEmployee: { include: { user: true, office: true } },
         meetingRoom: true,
+        organization: true,
       },
     });
+
+    const locationName = updated.meetingRoom?.name || updated.hostEmployee.office?.name || updated.organization.name;
+    const formattedDate = formatDate(updated.scheduledDate);
+
+    // Fire INVITATION_RESCHEDULED notification
+    if (isReschedule && updated.status !== "CANCELLED") {
+      await notify(NotificationEvent.INVITATION_RESCHEDULED, {
+        organizationId: orgId,
+        visitorName: updated.visitor.name,
+        visitorEmail: updated.visitor.email,
+        visitorCompany: updated.visitor.company || undefined,
+        hostName: updated.hostEmployee.user.name,
+        hostEmail: updated.hostEmployee.user.email,
+        hostUserId: updated.hostEmployee.userId,
+        date: formattedDate,
+        time: `${updated.startTime || ""} - ${updated.endTime || ""}`,
+        location: locationName,
+        qrPassUrl: updated.passUrl || undefined,
+        entityId: updated.id,
+      }).catch(console.error);
+    }
+
+    // Fire INVITATION_CANCELLED notification
+    if (isCancelled) {
+      await notify(NotificationEvent.INVITATION_CANCELLED, {
+        organizationId: orgId,
+        visitorName: updated.visitor.name,
+        visitorEmail: updated.visitor.email,
+        visitorCompany: updated.visitor.company || undefined,
+        hostName: updated.hostEmployee.user.name,
+        hostEmail: updated.hostEmployee.user.email,
+        hostUserId: updated.hostEmployee.userId,
+        date: formattedDate,
+        reason: "Cancelled by host/administrator",
+        entityId: updated.id,
+      }).catch(console.error);
+    }
 
     return NextResponse.json({ success: true, data: updated, message: "Invitation updated successfully." });
   } catch (error) {
@@ -411,13 +455,17 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const reasonParam = searchParams.get("reason");
     if (!id) {
       return NextResponse.json({ success: false, error: "Invitation ID is required" }, { status: 400 });
     }
 
     const existing = await prisma.invitation.findFirst({
       where: { id, organizationId: orgId },
-      include: { hostEmployee: true },
+      include: {
+        hostEmployee: { include: { user: true } },
+        visitor: true,
+      },
     });
 
     if (!existing) {
@@ -429,10 +477,24 @@ export async function DELETE(request: Request) {
     }
 
     // Cancel invitation
-    await prisma.invitation.update({
+    const cancelled = await prisma.invitation.update({
       where: { id },
       data: { status: "CANCELLED" },
     });
+
+    // Fire INVITATION_CANCELLED notification
+    await notify(NotificationEvent.INVITATION_CANCELLED, {
+      organizationId: orgId,
+      visitorName: existing.visitor.name,
+      visitorEmail: existing.visitor.email,
+      visitorCompany: existing.visitor.company || undefined,
+      hostName: existing.hostEmployee.user.name,
+      hostEmail: existing.hostEmployee.user.email,
+      hostUserId: existing.hostEmployee.userId,
+      date: formatDate(existing.scheduledDate),
+      reason: reasonParam || "Cancelled by host",
+      entityId: existing.id,
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "Invitation cancelled successfully" });
   } catch (error) {

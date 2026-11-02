@@ -12,8 +12,12 @@ import {
   CheckCircle2,
   Copy,
   Bell,
-  MessageSquare,
-  Share2,
+  Eye,
+  Send,
+  ShieldCheck,
+  Globe,
+  Tag,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -22,9 +26,14 @@ export interface TemplateItem {
   id: string;
   event: string;
   channel: "EMAIL" | "WEB_PUSH" | "SLACK" | "TEAMS" | "IN_APP";
+  locale: string;
+  status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "ARCHIVED";
+  version: number;
   subject?: string | null;
   body: string;
   variables: string;
+  approvedBy?: { id: string; name: string; email: string } | null;
+  approvedAt?: string | null;
   isActive: boolean;
 }
 
@@ -32,36 +41,77 @@ interface Props {
   initialTemplates: TemplateItem[];
 }
 
+const EVENTS = [
+  "VISITOR_INVITED",
+  "INVITATION_CANCELLED",
+  "INVITATION_RESCHEDULED",
+  "VISITOR_WAITING",
+  "VISITOR_ARRIVED",
+  "CHECKIN_CONFIRMATION",
+  "CHECKOUT_THANKS",
+  "VISITOR_CHECKED_OUT",
+  "VISITOR_OVERSTAYED",
+  "VISITOR_REMINDER",
+  "APPROVAL_REQUESTED",
+  "APPROVAL_DECIDED",
+  "APPROVAL_ESCALATED",
+  "DOCUMENT_EXPIRING",
+  "SECURITY_ALERT",
+  "DAILY_REPORT",
+];
+
+const LOCALES = [
+  { code: "en", name: "English (en)" },
+  { code: "hi", name: "Hindi (हिन्दी)" },
+  { code: "gu", name: "Gujarati (ગુજરાતી)" },
+];
+
 export function TemplatesManager({ initialTemplates }: Props) {
   const [templates, setTemplates] = useState<TemplateItem[]>(initialTemplates);
   const [seeding, setSeeding] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedLocale, setSelectedLocale] = useState<string>("ALL");
 
   // Form State
   const [form, setForm] = useState<{
     event: string;
     channel: "EMAIL" | "WEB_PUSH" | "SLACK" | "TEAMS" | "IN_APP";
+    locale: string;
     subject: string;
     body: string;
     variables: string;
+    status: string;
   }>({
     event: "VISITOR_ARRIVED",
     channel: "EMAIL",
+    locale: "en",
     subject: "",
     body: "",
-    variables: "visitor_name,host_name,date,time,location,qr_link",
+    variables: "visitor_name,host_name,date,time,location,badge_number",
+    status: "DRAFT",
   });
 
-  const [editingTemplate, setEditingTemplate] = useState<{
-    id: string;
-    event: string;
-    channel: "EMAIL" | "WEB_PUSH" | "SLACK" | "TEAMS" | "IN_APP";
-    subject?: string;
-    body: string;
-  } | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<TemplateItem | null>(null);
 
+  // Preview Modal
+  const [previewData, setPreviewData] = useState<{
+    isOpen: boolean;
+    subject: string;
+    body: string;
+    loading: boolean;
+  }>({
+    isOpen: false,
+    subject: "",
+    body: "",
+    loading: false,
+  });
+
+  // Action in progress (e.g. approving template ID)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Delete Dialog
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
     id: string;
@@ -114,18 +164,20 @@ export function TemplatesManager({ initialTemplates }: Props) {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to create template");
-      toast.success("Template created successfully!");
+      toast.success("Template created successfully (Draft).");
       setShowAddModal(false);
       setForm({
         event: "VISITOR_ARRIVED",
         channel: "EMAIL",
+        locale: "en",
         subject: "",
         body: "",
-        variables: "visitor_name,host_name,date,time,location,qr_link",
+        variables: "visitor_name,host_name,date,time,location,badge_number",
+        status: "DRAFT",
       });
       await refreshTemplates();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create");
+      toast.error(err.message || "Create failed");
     } finally {
       setSubmitting(false);
     }
@@ -143,12 +195,15 @@ export function TemplatesManager({ initialTemplates }: Props) {
           id: editingTemplate.id,
           subject: editingTemplate.subject,
           body: editingTemplate.body,
+          variables: editingTemplate.variables,
+          locale: editingTemplate.locale,
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || "Failed to update template");
-      toast.success("Template updated!");
+      toast.success("Template revised (New draft saved).");
       setShowEditModal(false);
+      setEditingTemplate(null);
       await refreshTemplates();
     } catch (err: any) {
       toast.error(err.message || "Update failed");
@@ -157,65 +212,152 @@ export function TemplatesManager({ initialTemplates }: Props) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleApprove = async (id: string) => {
+    setActionLoadingId(id);
+    try {
+      const res = await fetch("/api/notifications/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve", id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Approval failed");
+      toast.success(data.message || "Template approved into ACTIVE status!");
+      await refreshTemplates();
+    } catch (err: any) {
+      toast.error(err.message || "Approval failed");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePreview = async (template: { event: string; subject?: string | null; body: string }) => {
+    setPreviewData({ isOpen: true, subject: "", body: "", loading: true });
+    try {
+      const res = await fetch("/api/notifications/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "preview",
+          event: template.event,
+          subject: template.subject,
+          body: template.body,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setPreviewData({
+          isOpen: true,
+          subject: data.data.subject,
+          body: data.data.body,
+          loading: false,
+        });
+      }
+    } catch (err: any) {
+      toast.error("Preview failed");
+      setPreviewData((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleTestSend = async (t: TemplateItem) => {
+    setActionLoadingId(t.id);
+    try {
+      const res = await fetch("/api/notifications/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test_send",
+          event: t.event,
+          channel: t.channel,
+          subject: t.subject,
+          body: t.body,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Test send failed");
+      toast.success(data.message || "Test notification dispatched to your email/inbox!");
+    } catch (err: any) {
+      toast.error(err.message || "Test dispatch failed");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
     setDeleteDialog((prev) => ({ ...prev, loading: true }));
     try {
       const res = await fetch(`/api/notifications/templates?id=${deleteDialog.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || "Failed to delete template");
-      toast.success("Template deleted");
-      setTemplates((prev) => prev.filter((t) => t.id !== deleteDialog.id));
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to delete");
+      toast.success("Template deleted successfully");
       setDeleteDialog({ isOpen: false, id: "", name: "", loading: false });
+      await refreshTemplates();
     } catch (err: any) {
       toast.error(err.message || "Delete failed");
       setDeleteDialog((prev) => ({ ...prev, loading: false }));
     }
   };
 
-  const getChannelColor = (channel: string) => {
-    switch (channel) {
-      case "EMAIL":
-        return "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
-      case "WEB_PUSH":
-        return "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
-      case "SLACK":
-        return "bg-amber-500/10 text-amber-400 border-amber-500/30";
-      case "TEAMS":
-        return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+  const filteredTemplates = selectedLocale === "ALL"
+    ? templates
+    : templates.filter((t) => t.locale === selectedLocale);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ACTIVE":
+        return "bg-emerald-950/80 text-emerald-400 border-emerald-800";
+      case "PENDING_APPROVAL":
+        return "bg-amber-950/80 text-amber-400 border-amber-800";
+      case "DRAFT":
+        return "bg-slate-900 text-slate-400 border-slate-700";
       default:
-        return "bg-slate-800 text-slate-300 border-slate-700";
+        return "bg-zinc-900 text-zinc-500 border-zinc-800";
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
         <div>
-          <h3 className="text-sm font-bold text-white">
-            Multi-Channel Notification Templates ({templates.length})
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Mail className="w-4 h-4 text-indigo-400" />
+            Template Overrides & Multi-Lingual Catalog ({templates.length})
           </h3>
-          <p className="text-[11px] text-slate-400">
-            Email, Web Push, Slack, Teams & In-App delivery formats
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Overrides built-in defaults for English, Hindi, and Gujarati. Workflow: Draft → Admin Approval → Active.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {templates.length === 0 && (
-            <button
-              onClick={handleSeedDefaults}
-              disabled={seeding}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all"
-            >
-              {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-indigo-400" />}
-              Seed Sample Templates
-            </button>
-          )}
+          {/* Locale Filter */}
+          <select
+            value={selectedLocale}
+            onChange={(e) => setSelectedLocale(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 text-xs focus:outline-none"
+          >
+            <option value="ALL">All Languages</option>
+            <option value="en">English (en)</option>
+            <option value="hi">Hindi (hi)</option>
+            <option value="gu">Gujarati (gu)</option>
+          </select>
 
           <button
+            type="button"
+            onClick={handleSeedDefaults}
+            disabled={seeding}
+            className="px-2.5 py-1.5 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-800 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            title="Seed default multi-channel templates"
+          >
+            {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Reset Defaults
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-glow-sm transition-all"
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-glow"
           >
             <Plus className="w-3.5 h-3.5" />
             New Template
@@ -223,57 +365,80 @@ export function TemplatesManager({ initialTemplates }: Props) {
         </div>
       </div>
 
-      {templates.length === 0 ? (
-        <div className="p-8 text-center glass-card rounded-2xl border border-slate-800 text-slate-400 text-xs">
-          No custom templates defined yet. Click &quot;Seed Sample Templates&quot; to initialize defaults.
+      {filteredTemplates.length === 0 ? (
+        <div className="p-10 text-center text-xs text-slate-500 border border-slate-800/60 rounded-xl bg-slate-950/40">
+          No custom template overrides found for this filter. Entrivo is using safe built-in multi-lingual defaults.
+          Click &quot;Reset Defaults&quot; or &quot;New Template&quot; to customize.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {templates.map((t) => (
+        <div className="space-y-3">
+          {filteredTemplates.map((t) => (
             <div
               key={t.id}
-              className="p-4 rounded-xl glass-card border border-slate-800/80 bg-slate-900/50 flex flex-col justify-between gap-3"
+              className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all space-y-2.5"
             >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${getChannelColor(t.channel)}`}>
-                    {t.channel.replace("_", " ")}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase bg-indigo-950/80 text-indigo-400 border-indigo-800">
+                    {t.channel}
                   </span>
-                  <span className="text-[11px] font-semibold text-slate-400">
-                    {t.event.replace("_", " ")}
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border uppercase bg-slate-900 text-slate-400 border-slate-800">
+                    {t.locale} v{t.version}
                   </span>
+                  <span className="text-xs font-bold text-white">{t.event}</span>
                 </div>
 
-                {t.subject && (
-                  <h4 className="text-xs font-bold text-white mt-2">
-                    {t.subject}
-                  </h4>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border uppercase ${getStatusBadge(t.status)}`}>
+                    {t.status.replace("_", " ")}
+                  </span>
 
-                <p className="text-[11px] font-mono text-slate-300 bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 mt-2 whitespace-pre-wrap line-clamp-4">
-                  {t.body}
-                </p>
-              </div>
+                  {t.status !== "ACTIVE" && (
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(t.id)}
+                      disabled={actionLoadingId === t.id}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                      title="Approve and activate this template revision"
+                    >
+                      <ShieldCheck className="w-3 h-3" />
+                      Approve &amp; Activate
+                    </button>
+                  )}
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-[10px] text-slate-500">
-                <span>Vars: {t.variables}</span>
-                <div className="flex items-center gap-1">
                   <button
+                    type="button"
+                    onClick={() => handlePreview(t)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                    title="Live Preview with Sample Data"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleTestSend(t)}
+                    disabled={actionLoadingId === t.id}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                    title="Send Test Notification"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => {
-                      setEditingTemplate({
-                        id: t.id,
-                        event: t.event,
-                        channel: t.channel,
-                        subject: t.subject || "",
-                        body: t.body,
-                      });
+                      setEditingTemplate(t);
                       setShowEditModal(true);
                     }}
-                    className="p-1 text-slate-400 hover:text-white transition-colors"
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+                    title="Edit Template"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
+
                   <button
+                    type="button"
                     onClick={() =>
                       setDeleteDialog({
                         isOpen: true,
@@ -282,111 +447,153 @@ export function TemplatesManager({ initialTemplates }: Props) {
                         loading: false,
                       })
                     }
-                    className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-500 hover:text-rose-400 border border-slate-700 hover:border-rose-800"
+                    title="Delete Template"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
+              </div>
+
+              {t.subject && (
+                <div className="text-xs font-semibold text-slate-300">
+                  Subject: <span className="text-white font-mono">{t.subject}</span>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-300 font-mono whitespace-pre-line bg-slate-950/80 p-2.5 rounded-lg border border-slate-800/60 leading-relaxed text-[11px]">
+                {t.body}
+              </p>
+
+              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span>Variables: {t.variables}</span>
+                <span>
+                  {t.approvedBy ? `Approved by ${t.approvedBy.name}` : "Draft mode (Fallback active)"}
+                </span>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Add Modal */}
+      {/* CREATE MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card w-full max-w-lg rounded-2xl border border-indigo-950/80 bg-slate-950 p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Create Notification Template</h3>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-lg w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-indigo-400" /> Create Notification Template
+              </h3>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3">
+            <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Channel</label>
-                  <select
-                    value={form.channel}
-                    onChange={(e) => setForm({ ...form, channel: e.target.value as any })}
-                    className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white"
-                  >
-                    <option value="EMAIL">Email</option>
-                    <option value="WEB_PUSH">Web Push</option>
-                    <option value="SLACK">Slack</option>
-                    <option value="TEAMS">Microsoft Teams</option>
-                    <option value="IN_APP">In-App</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Trigger Event</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Event *</label>
                   <select
                     value={form.event}
                     onChange={(e) => setForm({ ...form, event: e.target.value })}
-                    className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="VISITOR_ARRIVED">Visitor Arrived</option>
-                    <option value="VISITOR_INVITED">Visitor Invited</option>
-                    <option value="VISITOR_CHECKED_OUT">Visitor Checked Out</option>
-                    <option value="APPROVAL_REQUESTED">Approval Requested</option>
-                    <option value="APPROVAL_DECIDED">Approval Decided</option>
-                    <option value="SECURITY_ALERT">Security Alert</option>
+                    {EVENTS.map((ev) => (
+                      <option key={ev} value={ev}>
+                        {ev}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Channel *</label>
+                  <select
+                    value={form.channel}
+                    onChange={(e) => setForm({ ...form, channel: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="EMAIL">Email</option>
+                    <option value="IN_APP">In-App</option>
+                    <option value="WEB_PUSH">Web Push</option>
+                    <option value="SLACK">Slack</option>
+                    <option value="TEAMS">Teams</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Language Locale</label>
+                  <select
+                    value={form.locale}
+                    onChange={(e) => setForm({ ...form, locale: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    {LOCALES.map((l) => (
+                      <option key={l.code} value={l.code}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Initial Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="ACTIVE">Active (Admin Direct)</option>
                   </select>
                 </div>
               </div>
 
               {form.channel === "EMAIL" && (
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Subject</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Subject Line</label>
                   <input
                     type="text"
+                    placeholder="e.g. Visitor Pass: {{visitor_name}} on {{date}}"
                     value={form.subject}
                     onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                    placeholder="Visitor Arrival Alert"
-                    className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Template Body</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Template Body *</label>
                 <textarea
                   rows={4}
+                  required
+                  placeholder="Hello {{visitor_name}}, your meeting with {{host_name}} is confirmed..."
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
-                  placeholder="Hello {{host_name}}, your visitor {{visitor_name}} has arrived..."
-                  className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
+                <span className="text-[10px] text-slate-500 mt-1 block font-mono">
+                  Available tags: &#123;&#123;visitor_name&#125;&#125;, &#123;&#123;host_name&#125;&#125;, &#123;&#123;date&#125;&#125;, &#123;&#123;time&#125;&#125;, &#123;&#123;location&#125;&#125;, &#123;&#123;badge_number&#125;&#125;, &#123;&#123;qr_link&#125;&#125;
+                </span>
               </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Variables (comma separated)</label>
-                <input
-                  type="text"
-                  value={form.variables}
-                  onChange={(e) => setForm({ ...form, variables: e.target.value })}
-                  className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-glow disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Create Template
+                  <span>Save Template</span>
                 </button>
               </div>
             </form>
@@ -394,56 +601,78 @@ export function TemplatesManager({ initialTemplates }: Props) {
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* EDIT MODAL */}
       {showEditModal && editingTemplate && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card w-full max-w-lg rounded-2xl border border-indigo-950/80 bg-slate-950 p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Edit {editingTemplate.event} ({editingTemplate.channel})</h3>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-lg w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-indigo-400" /> Edit Template Revision
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingTemplate(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdate} className="space-y-3">
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div className="text-xs text-slate-400">
+                Editing: <span className="text-white font-bold">{editingTemplate.event}</span> ({editingTemplate.channel} - {editingTemplate.locale})
+              </div>
+
               {editingTemplate.channel === "EMAIL" && (
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Subject</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Subject</label>
                   <input
                     type="text"
                     value={editingTemplate.subject || ""}
                     onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
-                    className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               )}
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Template Body</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Body *</label>
                 <textarea
                   rows={5}
+                  required
                   value={editingTemplate.body}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, body: e.target.value })}
-                  className="w-full text-xs p-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                  required
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="p-2.5 rounded-lg bg-amber-950/30 border border-amber-900/50 text-[11px] text-amber-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>
+                  Modifying an active template saves a new revision in <strong>DRAFT</strong> status until re-approved by an administrator.
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-3 py-1.5 rounded-xl border border-slate-800 text-xs text-slate-400 hover:text-white"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingTemplate(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-semibold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-glow disabled:opacity-50"
                 >
                   {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Save Changes
+                  <span>Save Revision</span>
                 </button>
               </div>
             </form>
@@ -451,15 +680,59 @@ export function TemplatesManager({ initialTemplates }: Props) {
         </div>
       )}
 
+      {/* LIVE PREVIEW MODAL */}
+      {previewData.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-lg w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Eye className="w-4 h-4 text-indigo-400" /> Live Interpolation Preview
+              </h3>
+              <button
+                onClick={() => setPreviewData((p) => ({ ...p, isOpen: false }))}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {previewData.loading ? (
+              <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                Rendering template with sample visitor data...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {previewData.subject && (
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Rendered Subject</span>
+                    <span className="text-xs font-bold text-white">{previewData.subject}</span>
+                  </div>
+                )}
+
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-200 whitespace-pre-line leading-relaxed">
+                  {previewData.body}
+                </div>
+
+                <div className="text-[11px] text-slate-400">
+                  Preview rendered using sample data: Alex Rivera (Global Tech Solutions), Host: Sarah Jenkins.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DIALOG */}
       <ConfirmDialog
         isOpen={deleteDialog.isOpen}
-        title="Delete Notification Template"
-        description={`Are you sure you want to delete template ${deleteDialog.name}?`}
-        confirmText="Delete Template"
+        onClose={() => setDeleteDialog({ isOpen: false, id: "", name: "", loading: false })}
+        onConfirm={confirmDelete}
+        title="Delete Notification Template?"
+        description={`Are you sure you want to delete template for "${deleteDialog.name}"? System will fall back to built-in defaults.`}
+        confirmLabel="Delete Template"
         variant="danger"
         isLoading={deleteDialog.loading}
-        onConfirm={handleDelete}
-        onClose={() => setDeleteDialog({ isOpen: false, id: "", name: "", loading: false })}
       />
     </div>
   );

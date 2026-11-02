@@ -73,6 +73,18 @@
   5. **Base64-to-Storage Migration**: Created `scripts/migrate-base64-to-storage.ts` that strips EXIF metadata, resizes photos/signatures via `sharp`, persists to storage adapter, updates `Visitor.avatarUrl` and `CheckIn.photoUrl` / `signatureUrl` to clean file URLs, and verifies idempotency (0 items on re-run).
   6. **UI Enhancements**: Updated `/documents` with multipart file upload (`FormData`), status filter pills, file size/SHA-256 fingerprint inspect modal, and added a dedicated "Documents" tab inside visitor inspect profiles (`VisitorsClientList`).
 
+## Decision 13: Phase 4 Multi-Channel Notifications, Branded Email Catalog & Delivery Platform
+- **Context**: The application required multi-channel notifications (Email, In-App, Web Push, Slack, Teams) across 16 lifecycle events, custom templating with approval workflows, user quiet hours, calendar invitations (.ics), and delivery reliability tracking. WhatsApp was permanently decommissioned.
+- **Decision**:
+  1. **Expanded Event Bus & Unified Routing**: Expanded `NotificationEvent` with 10 new lifecycle triggers (`INVITATION_CANCELLED`, `INVITATION_RESCHEDULED`, `VISITOR_WAITING`, `VISITOR_OVERSTAYED`, `VISITOR_REMINDER`, `APPROVAL_ESCALATED`, `DOCUMENT_EXPIRING`, `DAILY_REPORT`, `CHECKIN_CONFIRMATION`, `CHECKOUT_THANKS`). Centralized all dispatches through `notify()` in `src/services/notifications/dispatcher.ts` with multi-recipient resolution (visitor, host, backup approver, receptionists, guards, org admins).
+  2. **Multi-Lingual Template Governance**: Built `src/services/notifications/template-engine.ts` with allow-listed variables (`ALLOWED_TEMPLATE_VARIABLES`), multi-lingual built-in defaults for English (`en`), Hindi (`hi`), and Gujarati (`gu`), and a formal approval workflow: `DRAFT` -> `PENDING_APPROVAL` -> `ACTIVE` with admin audit logging. Active custom templates supersede defaults, while drafts fall back safely.
+  3. **User Quiet Hours & Security Critical Bypass**: Added `quietHoursEnabled`, `quietHoursStart`, and `quietHoursEnd` to `User`. The dispatcher evaluates quiet hours against organization timezone, suppressing noisy external channels (email, push, chat) while maintaining in-app inbox delivery. Critical security alerts (`SECURITY_ALERT`, `PASSWORD_RESET`, `MAGIC_LINK`, `TWO_FACTOR_CHALLENGE`, `EMPLOYEE_INVITED`) automatically bypass quiet hours and user-disabled preferences.
+  4. **Standard Calendar (.ics) Generator**: Implemented RFC 5545 standard `generateIcs` in `src/services/email/ics.ts` generating `VCALENDAR`/`VEVENT` with `METHOD:REQUEST`, `UID`, `SUMMARY`, `DTSTART`, `DTEND`, `ORGANIZER`, and `ATTENDEE`. Attached as base64 calendar invites in Mailjet v3.1 transactional emails for invitations and reschedules.
+  5. **Delivery Log & Dead-Letter Queue**: Added delivery tracking fields (`recipient`, `retryCount`, `lastAttemptAt`, `deliveredAt`, `isDeadLetter`) to `Notification`. Created `/api/notifications/delivery-log` with 24-hour channel metrics, granular filtering, and manual retry. Failed messages exceeding 3 attempts transition automatically to `isDeadLetter: true`.
+  6. **Daily Summary Aggregates & Background Reminders**: Implemented `/api/cron/daily-report` compiling real database aggregates (check-ins, active visitors, overstays, pending approvals) into digest reports. Implemented `/api/cron/reminders` dispatching 24h and 1h reminders before scheduled visits.
+  7. **Provider-Agnostic SMS Adapter**: Defined `SmsProviderAdapter` interface with a `NoopSmsAdapter` implementation that reports unconfigured status and refuses fake sends. Updated `/integrations` UI to clearly present Enterprise SMS Gateway as "Coming soon".
+
+
 
 
 

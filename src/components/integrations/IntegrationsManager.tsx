@@ -34,8 +34,12 @@ interface WebhookItem {
 interface IntegrationSettings {
   slackWebhook: string;
   slackEnabled: boolean;
+  slackEvents?: string;
+  slackLastStatus?: string;
   teamsWebhook: string;
   teamsEnabled: boolean;
+  teamsEvents?: string;
+  teamsLastStatus?: string;
   googleCalId: string;
   googleCalEnabled: boolean;
 }
@@ -64,11 +68,19 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
   const [slackForm, setSlackForm] = useState({
     webhook: integrations.slackWebhook || "",
     enabled: integrations.slackEnabled,
+    events: (integrations.slackEvents || "VISITOR_ARRIVED,VISITOR_WAITING,SECURITY_ALERT,VISITOR_OVERSTAYED")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   });
 
   const [teamsForm, setTeamsForm] = useState({
     webhook: integrations.teamsWebhook || "",
     enabled: integrations.teamsEnabled,
+    events: (integrations.teamsEvents || "VISITOR_ARRIVED,VISITOR_WAITING,SECURITY_ALERT,VISITOR_OVERSTAYED")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   });
 
   const [googleForm, setGoogleForm] = useState({
@@ -386,6 +398,41 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
             </a>
           </div>
         </div>
+
+        {/* SMS Gateway Card (P4-08 Coming Soon) */}
+        <div className="glass-card rounded-2xl border border-indigo-950/70 p-5 space-y-4 flex flex-col justify-between hover:border-indigo-500/40 transition-all opacity-85">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-center font-bold text-amber-400">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Enterprise SMS Gateway</h3>
+                  <p className="text-[11px] text-slate-400">Carrier SMS & OTP notifications</p>
+                </div>
+              </div>
+
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-400 border border-amber-800">
+                COMING SOON
+              </span>
+            </div>
+            <p className="text-xs text-slate-300">
+              Provider-agnostic driver architecture ready for enterprise SMS aggregators (Twilio, AWS SNS, Karix, Gupshup, Exotel). No mock dispatching.
+            </p>
+          </div>
+
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+            <span className="text-[11px] text-slate-400">Adapter Interface Ready</span>
+            <button
+              type="button"
+              disabled
+              className="px-3 py-1.5 rounded-lg bg-slate-900/60 text-slate-500 border border-slate-800 text-xs font-semibold cursor-not-allowed"
+            >
+              Provider Config (Future)
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Real Test Webhook Dispatch Card */}
@@ -590,7 +637,7 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
       {/* MODAL: SLACK */}
       {activeModal === "SLACK" && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <div className="glass-card max-w-lg w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <span className="font-bold text-[#E01E5A]">#</span> Configure Slack Concierge
@@ -613,13 +660,58 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-semibold text-white">Enable Slack Notifications</span>
+                <div>
+                  <span className="text-xs font-semibold text-white block">Enable Slack Notifications</span>
+                  <span className="text-[10px] text-slate-400">Stream arrival notifications to your channel</span>
+                </div>
                 <input
                   type="checkbox"
                   checked={slackForm.enabled}
                   onChange={(e) => setSlackForm({ ...slackForm, enabled: e.target.checked })}
                   className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
                 />
+              </div>
+
+              {/* Per-event routing */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-semibold text-slate-200 block">Routed Workplace Events</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {[
+                    { id: "VISITOR_ARRIVED", label: "Visitor Arrived" },
+                    { id: "VISITOR_WAITING", label: "Visitor Waiting in Lobby" },
+                    { id: "SECURITY_ALERT", label: "Security Incidents" },
+                    { id: "VISITOR_OVERSTAYED", label: "Overstay Alerts" },
+                    { id: "VISITOR_CHECKED_OUT", label: "Visitor Checked Out" },
+                  ].map((ev) => {
+                    const isChecked = slackForm.events.includes(ev.id);
+                    return (
+                      <label key={ev.id} className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newEvents = e.target.checked
+                              ? [...slackForm.events, ev.id]
+                              : slackForm.events.filter((x) => x !== ev.id);
+                            setSlackForm({ ...slackForm, events: newEvents });
+                          }}
+                          className="w-3.5 h-3.5 accent-indigo-600 rounded"
+                        />
+                        <span className="text-[11px]">{ev.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Last Delivery Status */}
+              <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/80">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-1">
+                  Last Delivery Status
+                </span>
+                <span className="text-xs font-mono text-slate-300">
+                  {integrations.slackLastStatus || "No delivery attempts recorded"}
+                </span>
               </div>
 
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
@@ -636,11 +728,13 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
                     saveIntegrationSetting("Slack", {
                       SLACK_WEBHOOK: slackForm.webhook,
                       SLACK_ENABLED: slackForm.enabled,
+                      SLACK_EVENTS: slackForm.events.join(","),
                     });
                     setIntegrations((prev) => ({
                       ...prev,
                       slackWebhook: slackForm.webhook,
                       slackEnabled: slackForm.enabled,
+                      slackEvents: slackForm.events.join(","),
                     }));
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-glow"
@@ -656,7 +750,7 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
       {/* MODAL: TEAMS */}
       {activeModal === "TEAMS" && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+          <div className="glass-card max-w-lg w-full rounded-2xl border border-indigo-500/30 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">Microsoft Teams Connector</h3>
               <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-white">
@@ -677,13 +771,58 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-xs font-semibold text-white">Enable Teams Alerts</span>
+                <div>
+                  <span className="text-xs font-semibold text-white block">Enable Teams Alerts</span>
+                  <span className="text-[10px] text-slate-400">Stream adaptive cards to your channel</span>
+                </div>
                 <input
                   type="checkbox"
                   checked={teamsForm.enabled}
                   onChange={(e) => setTeamsForm({ ...teamsForm, enabled: e.target.checked })}
                   className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
                 />
+              </div>
+
+              {/* Per-event routing */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-semibold text-slate-200 block">Routed Workplace Events</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {[
+                    { id: "VISITOR_ARRIVED", label: "Visitor Arrived" },
+                    { id: "VISITOR_WAITING", label: "Visitor Waiting in Lobby" },
+                    { id: "SECURITY_ALERT", label: "Security Incidents" },
+                    { id: "VISITOR_OVERSTAYED", label: "Overstay Alerts" },
+                    { id: "VISITOR_CHECKED_OUT", label: "Visitor Checked Out" },
+                  ].map((ev) => {
+                    const isChecked = teamsForm.events.includes(ev.id);
+                    return (
+                      <label key={ev.id} className="flex items-center gap-2 text-slate-300 hover:text-white cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newEvents = e.target.checked
+                              ? [...teamsForm.events, ev.id]
+                              : teamsForm.events.filter((x) => x !== ev.id);
+                            setTeamsForm({ ...teamsForm, events: newEvents });
+                          }}
+                          className="w-3.5 h-3.5 accent-indigo-600 rounded"
+                        />
+                        <span className="text-[11px]">{ev.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Last Delivery Status */}
+              <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/80">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider mb-1">
+                  Last Delivery Status
+                </span>
+                <span className="text-xs font-mono text-slate-300">
+                  {integrations.teamsLastStatus || "No delivery attempts recorded"}
+                </span>
               </div>
 
               <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
@@ -700,11 +839,13 @@ export function IntegrationsManager({ initialWebhooks, initialIntegrations }: Pr
                     saveIntegrationSetting("Microsoft Teams", {
                       TEAMS_WEBHOOK: teamsForm.webhook,
                       TEAMS_ENABLED: teamsForm.enabled,
+                      TEAMS_EVENTS: teamsForm.events.join(","),
                     });
                     setIntegrations((prev) => ({
                       ...prev,
                       teamsWebhook: teamsForm.webhook,
                       teamsEnabled: teamsForm.enabled,
+                      teamsEvents: teamsForm.events.join(","),
                     }));
                   }}
                   className="px-5 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-glow"

@@ -141,15 +141,61 @@ pnpm vapid
    - Body: `Custom message for {{visitor_name}} visiting {{host_name}} on {{date}}.`
 4. Dispatched notifications substitute variables dynamically from the event payload.
 
-### Step 5: Standalone Worker Daemon (BullMQ)
-When running in production with Redis:
-```powershell
-pnpm worker
-```
-Expected output:
-```
-[Worker] Starting Entrivo background notification worker daemon...
-[Worker] Connected to Redis queue. Listening for jobs...
-```
-When Redis is stopped, notifications continue seamlessly via the in-process fallback runner with retry intervals at 5s, 30s, and 120s.
+---
+
+## 4. Phase 4 Event Trigger Registry
+
+Every event in the system is mapped to concrete code paths:
+
+| Event | Trigger Location | Multi-Recipient Resolution |
+| :--- | :--- | :--- |
+| `VISITOR_INVITED` | `src/app/api/invitations/route.ts:301` | Visitor (Email) |
+| `INVITATION_RESCHEDULED` | `src/app/api/invitations/route.ts:404` | Visitor + Host (ICS attachment) |
+| `INVITATION_CANCELLED` | `src/app/api/invitations/route.ts:423,474` | Visitor + Host (Cancellation notice) |
+| `VISITOR_WAITING` | `src/services/visitors/checkin.service.ts:367`, `src/services/visitors/walkin.service.ts:318` | Host + Receptionist |
+| `VISITOR_ARRIVED` | `src/services/visitors/checkin.service.ts:353`, `src/services/visitors/walkin.service.ts:305` | Host + Backup Approver + Slack/Teams |
+| `CHECKIN_CONFIRMATION` | `src/services/visitors/checkin.service.ts:380`, `src/services/visitors/walkin.service.ts:331` | Visitor (Badge # confirmation) |
+| `CHECKOUT_THANKS` | `src/app/api/visitors/checkout/route.ts:129` | Visitor (Exit confirmation) |
+| `VISITOR_CHECKED_OUT` | `src/app/api/visitors/checkout/route.ts:115` | Host + Security Guard |
+| `VISITOR_OVERSTAYED` | `src/lib/queue.ts:133` | Org Admins + Security Guards |
+| `VISITOR_REMINDER` | `src/services/notifications/reminders.service.ts:50,85` | Visitor (24h and 1h reminders) |
+| `APPROVAL_REQUESTED` | `src/app/api/invitations/route.ts:284` | Host + Backup Approver |
+| `APPROVAL_DECIDED` | `src/app/api/approvals/route.ts:200` | Visitor + Host |
+| `APPROVAL_ESCALATED` | `src/app/api/approvals/route.ts:181` | Org Admins |
+| `DOCUMENT_EXPIRING` | `src/services/documents/document.service.ts:145` | Org Admins |
+| `SECURITY_ALERT` | `src/services/security/security.service.ts:88` | Org Admins + Security Guards |
+| `DAILY_REPORT` | `src/services/notifications/daily-report.service.ts:175` | Org Admins + Receptionists |
+
+---
+
+## 5. Phase 4 Features Verification
+
+### Step 5: Template Governance Workflow
+1. Navigate to `/notifications` → **Templates Manager**.
+2. Create or edit a template:
+   - Status defaults to `DRAFT`.
+   - Submit for approval: status advances to `PENDING_APPROVAL`.
+   - As an Org Admin, click **Approve Template**: status updates to `ACTIVE`, version is incremented, and an audit trail entry is created.
+   - Switch locales (`English`, `Hindi`, `Gujarati`) and click **Preview** or **Send Test**.
+
+### Step 6: User Quiet Hours & Security Critical Bypass
+1. In `/notifications` → **Notification Preferences**:
+   - Enable Quiet Hours (e.g., 22:00 to 07:00).
+   - Non-critical external notifications (marketing, reminders, non-urgent arrival) will be suppressed during this window.
+   - Security-critical alerts (`SECURITY_ALERT`, `PASSWORD_RESET`, `MAGIC_LINK`, `TWO_FACTOR_CHALLENGE`, `EMPLOYEE_INVITED`) bypass quiet hours and user-disabled channels automatically.
+
+### Step 7: Delivery Log & Dead Letter Queue
+1. In `/notifications` → **Delivery Log**:
+   - Filter by channel, status, event, or date.
+   - Inspect error text and retry counts for failed messages.
+   - Click **Retry** on a failed message to re-attempt delivery.
+   - Messages exceeding max retries (3) transition to `DEAD_LETTER` status.
+
+### Step 8: Daily Summary Digests
+- Endpoint `/api/cron/daily-report` computes real database aggregates for check-ins, active visitors, overstays, and pending approvals, and delivers reports to organization administrators.
+
+### Step 9: Enterprise SMS Gateway
+- Provider-agnostic adapter interface `SmsProviderAdapter` with no-op implementation.
+- UI in `/integrations` marks SMS as "Coming soon" with zero fake/mock sending.
+
 

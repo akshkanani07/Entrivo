@@ -1,12 +1,13 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { requirePagePermission } from "@/lib/rbac";
+import { requirePagePermission, can } from "@/lib/rbac";
 import { BellRing, ShieldCheck, Mail, Send, Bell, Share2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import { NotificationTestClient } from "./NotificationTestClient";
 import { TemplatesManager } from "@/components/notifications/TemplatesManager";
 import { PushSubscriptionManager } from "@/components/notifications/PushSubscriptionManager";
 import { NotificationPreferences } from "@/components/notifications/NotificationPreferences";
+import { DeliveryLogClient } from "@/components/notifications/DeliveryLogClient";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,14 @@ export default async function NotificationsPage() {
     );
   }
 
+  const canManage = can(user, "notifications.manage");
   let notifications: any[] = [];
   let templates: any[] = [];
   let preferences: any[] = [];
+  let dbUser: { quietHoursEnabled: boolean; quietHoursStart: string | null; quietHoursEnd: string | null } | null = null;
 
   try {
-    const [notifs, tpls, prefs] = await Promise.all([
+    const [notifs, tpls, prefs, userRecord] = await Promise.all([
       prisma.notification.findMany({
         where: { organizationId: orgId },
         orderBy: { createdAt: "desc" },
@@ -40,10 +43,15 @@ export default async function NotificationsPage() {
       prisma.notificationPreference.findMany({
         where: { userId: user.id },
       }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+      }),
     ]);
     notifications = notifs;
     templates = tpls;
     preferences = prefs;
+    dbUser = userRecord;
   } catch (err: any) {
     console.error("Notifications fetch error:", err?.message);
   }
@@ -80,10 +88,20 @@ export default async function NotificationsPage() {
       {/* 2. Interactive Test Simulator */}
       <NotificationTestClient />
 
-      {/* 3. Notification Preferences Matrix */}
-      <NotificationPreferences initialPreferences={preferences} />
+      {/* 3. Notification Preferences Matrix & Quiet Hours */}
+      <NotificationPreferences
+        initialPreferences={preferences}
+        initialQuietHours={{
+          enabled: dbUser?.quietHoursEnabled ?? false,
+          start: dbUser?.quietHoursStart ?? "22:00",
+          end: dbUser?.quietHoursEnd ?? "07:00",
+        }}
+      />
 
-      {/* 4. Two Columns: Templates Manager + Real-time Logs */}
+      {/* 4. Delivery Log & Dead Letter Queue (Admins/Managers) */}
+      {canManage && <DeliveryLogClient />}
+
+      {/* 5. Two Columns: Templates Manager + Real-time Logs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Templates Manager */}
         <div className="glass-card p-5 rounded-2xl border border-indigo-950/70">

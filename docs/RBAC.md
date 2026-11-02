@@ -47,6 +47,7 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `reports.export` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `sessions.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `notifications.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `notifications.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -90,6 +91,10 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/dashboard/stats` | GET | `dashboard.view` | API `requirePermission` |
 | `/api/notifications/templates` | GET, POST, PUT, DELETE | `templates.manage` | API `requirePermission` |
 | `/api/notifications/test-email` | POST | `templates.manage` | API `requirePermission` |
+| `/api/notifications/delivery-log` | GET, POST | `notifications.manage` | API `requirePermission` |
+| `/api/notifications/preferences` | GET, PUT | `notifications.self` | API `requirePermission` |
+| `/api/cron/reminders` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
+| `/api/cron/daily-report` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
 | `/api/auth/sessions` | GET, DELETE | `sessions.self` | API `requireUser` (scoped to user.id) |
 | `/api/cron/auto-checkout` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
 | `/api/kiosk` | GET, POST | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |

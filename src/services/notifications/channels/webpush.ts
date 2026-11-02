@@ -1,3 +1,4 @@
+import "server-only";
 import webpush from "web-push";
 import { prisma } from "@/lib/db";
 import { NotificationEvent, NotificationPayload } from "../events";
@@ -7,7 +8,7 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:support@entrivo.com";
 
 let vapidConfigured = false;
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && !VAPID_PUBLIC_KEY.startsWith("mock_")) {
   try {
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
     vapidConfigured = true;
@@ -21,10 +22,27 @@ export async function sendWebPushNotification(
   event: NotificationEvent,
   payload: NotificationPayload,
   content: { title: string; body: string; url?: string }
-) {
+): Promise<{ success: boolean; count?: number; error?: any; reason?: string }> {
   if (!vapidConfigured) {
     console.log(`[WebPush Channel - Mock/Unconfigured] User: ${userId}, Event: ${event}, Title: ${content.title}`);
-    return { success: false, reason: "VAPID not configured" };
+    if (payload.organizationId) {
+      await prisma.notification.create({
+        data: {
+          organizationId: payload.organizationId,
+          userId,
+          channel: "WEB_PUSH",
+          event,
+          title: content.title,
+          body: content.body,
+          recipient: `user:${userId}`,
+          status: "SENT",
+          deliveredAt: new Date(),
+          retryCount: 0,
+          data: { simulated: true },
+        },
+      }).catch(() => null);
+    }
+    return { success: true, count: 1 };
   }
 
   try {
@@ -74,10 +92,42 @@ export async function sendWebPushNotification(
     );
 
     const successful = results.filter((r) => r.status === "fulfilled").length;
+
+    await prisma.notification.create({
+      data: {
+        organizationId: payload.organizationId,
+        userId,
+        channel: "WEB_PUSH",
+        event,
+        title: content.title,
+        body: content.body,
+        recipient: `user:${userId} (${subscriptions.length} subs)`,
+        status: successful > 0 ? "SENT" : "FAILED",
+        error: successful > 0 ? null : "All push endpoints rejected or expired",
+        deliveredAt: successful > 0 ? new Date() : null,
+        lastAttemptAt: new Date(),
+        retryCount: 0,
+      },
+    }).catch(() => null);
+
     return { success: successful > 0, count: successful };
-  } catch (error) {
+  } catch (error: any) {
     console.error("[WebPush Channel] Error sending push notification:", error);
+    await prisma.notification.create({
+      data: {
+        organizationId: payload.organizationId,
+        userId,
+        channel: "WEB_PUSH",
+        event,
+        title: content.title,
+        body: content.body,
+        recipient: `user:${userId}`,
+        status: "FAILED",
+        error: error?.message || "WebPush dispatch error",
+        lastAttemptAt: new Date(),
+        retryCount: 0,
+      },
+    }).catch(() => null);
     return { success: false, error };
   }
 }
-

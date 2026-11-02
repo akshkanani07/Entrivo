@@ -125,6 +125,19 @@ export async function POST(request: Request) {
       entityId: checkIn.id,
     }).catch(console.error);
 
+    // Send thank you notification to visitor
+    if (checkIn.visitor?.email) {
+      await notify(NotificationEvent.CHECKOUT_THANKS, {
+        organizationId: orgId,
+        visitorName: checkIn.visitor.name,
+        visitorEmail: checkIn.visitor.email,
+        visitorCompany: checkIn.visitor.company || undefined,
+        hostName: checkIn.hostEmployee?.user?.name || "Host",
+        time: checkOutTime.toLocaleTimeString(),
+        entityId: `thanks-${checkIn.id}`,
+      }).catch(console.error);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Visitor successfully checked out",

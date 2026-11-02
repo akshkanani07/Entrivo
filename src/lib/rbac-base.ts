@@ -34,7 +34,8 @@ export type Permission =
   | "files.write"
   | "files.delete"
   | "sessions.self"
-  | "notifications.self";
+  | "notifications.self"
+  | "notifications.manage";
 
 export const ALL_PERMISSIONS: Permission[] = [
   "dashboard.view",
@@ -71,6 +72,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "files.delete",
   "sessions.self",
   "notifications.self",
+  "notifications.manage",
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -110,6 +112,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "files.delete",
     "sessions.self",
     "notifications.self",
+    "notifications.manage",
   ],
   RECEPTIONIST: [
     "dashboard.view",

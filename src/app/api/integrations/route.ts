@@ -7,8 +7,8 @@ import { encrypt, decrypt } from "@/lib/encryption";
 import crypto from "crypto";
 
 const ALLOWED_INTEGRATION_KEYS: Record<string, string[]> = {
-  SLACK: ["SLACK_WEBHOOK", "SLACK_ENABLED"],
-  TEAMS: ["TEAMS_WEBHOOK", "TEAMS_ENABLED"],
+  SLACK: ["SLACK_WEBHOOK", "SLACK_ENABLED", "SLACK_EVENTS", "SLACK_LAST_STATUS"],
+  TEAMS: ["TEAMS_WEBHOOK", "TEAMS_ENABLED", "TEAMS_EVENTS", "TEAMS_LAST_STATUS"],
   GOOGLE_CAL: ["GOOGLE_CAL_ID", "GOOGLE_CAL_ENABLED"],
 };
 
@@ -121,8 +121,12 @@ export async function GET() {
       integrations: {
         slackWebhook: maskUrl(decrypt(settingsMap["SLACK_WEBHOOK"] || "")),
         slackEnabled: settingsMap["SLACK_ENABLED"] === "true",
+        slackEvents: settingsMap["SLACK_EVENTS"] || "VISITOR_ARRIVED,VISITOR_WAITING,SECURITY_ALERT,VISITOR_OVERSTAYED",
+        slackLastStatus: settingsMap["SLACK_LAST_STATUS"] || "No delivery attempts recorded",
         teamsWebhook: maskUrl(decrypt(settingsMap["TEAMS_WEBHOOK"] || "")),
         teamsEnabled: settingsMap["TEAMS_ENABLED"] === "true",
+        teamsEvents: settingsMap["TEAMS_EVENTS"] || "VISITOR_ARRIVED,VISITOR_WAITING,SECURITY_ALERT,VISITOR_OVERSTAYED",
+        teamsLastStatus: settingsMap["TEAMS_LAST_STATUS"] || "No delivery attempts recorded",
         googleCalId: settingsMap["GOOGLE_CAL_ID"] || "",
         googleCalEnabled: settingsMap["GOOGLE_CAL_ENABLED"] === "true",
       },

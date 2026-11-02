@@ -128,3 +128,37 @@ model NdaTemplate {
   - Added `branchId` (branch-specific holidays), `endDate` (date ranges), `isRecurring` (annual recurrence), and `description`.
 ```
 
+---
+
+# Entrivo Schema Changes (Phase 4)
+
+## 1. Notification Model (Delivery Log, 24h Metrics & Retry)
+Added fields and indexes for message delivery tracking, multi-channel retry, and dead-letter queue:
+- `recipient: String?`: Recipient address (email, webhook target, or endpoint identifier).
+- `retryCount: Int @default(0)`: Number of retry attempts.
+- `lastAttemptAt: DateTime?`: Timestamp of the most recent delivery attempt.
+- `deliveredAt: DateTime?`: Successful delivery timestamp.
+- `isDeadLetter: Boolean @default(false)`: Flag for messages exceeding maximum retries (dead-letter queue).
+- Indexes:
+  - `@@index([organizationId, channel, status])`
+  - `@@index([organizationId, isDeadLetter])`
+
+## 2. NotificationTemplate Model (Overrides, Approval Workflow & Locale)
+Expanded `NotificationTemplate` to support multi-language templates, versioning, and approval workflow (`DRAFT` -> `PENDING_APPROVAL` -> `ACTIVE`):
+- `locale: String @default("en")`: Locale code (`en`, `hi`, `gu`).
+- `status: String @default("ACTIVE")`: Lifecycle status (`DRAFT`, `PENDING_APPROVAL`, `ACTIVE`, `ARCHIVED`).
+- `version: Int @default(1)`: Monotonically increasing revision number.
+- `approvedById: String?`: ID of the administrator who approved the template.
+- `approvedBy: User? @relation("TemplateApprover")`: Relation to approving user.
+- `approvedAt: DateTime?`: Timestamp of approval.
+- Indexes:
+  - `@@index([organizationId, event, channel, locale])`
+  - `@@index([organizationId, status])`
+
+## 3. User & Employee (Quiet Hours & Delegation)
+- `User.quietHoursEnabled: Boolean @default(false)`: Enables notification silencing outside working hours.
+- `User.quietHoursStart: String? @default("22:00")`: Quiet hours start time (HH:mm format).
+- `User.quietHoursEnd: String? @default("07:00")`: Quiet hours end time (HH:mm format).
+- `Employee.backupApproverId: String?`: Designated backup host/approver for out-of-office delegation.
+
+
