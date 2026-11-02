@@ -35,7 +35,11 @@ export type Permission =
   | "files.delete"
   | "sessions.self"
   | "notifications.self"
-  | "notifications.manage";
+  | "notifications.manage"
+  | "apikeys.read"
+  | "apikeys.manage"
+  | "webhooks.read"
+  | "webhooks.manage";
 
 export const ALL_PERMISSIONS: Permission[] = [
   "dashboard.view",
@@ -73,6 +77,10 @@ export const ALL_PERMISSIONS: Permission[] = [
   "sessions.self",
   "notifications.self",
   "notifications.manage",
+  "apikeys.read",
+  "apikeys.manage",
+  "webhooks.read",
+  "webhooks.manage",
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -113,6 +121,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "sessions.self",
     "notifications.self",
     "notifications.manage",
+    "apikeys.read",
+    "apikeys.manage",
+    "webhooks.read",
+    "webhooks.manage",
   ],
   RECEPTIONIST: [
     "dashboard.view",

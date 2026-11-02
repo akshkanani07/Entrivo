@@ -8,6 +8,7 @@ import { NotificationEvent } from "@/services/notifications/events";
 import { optionalString } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
 import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
 const checkoutSchema = z.object({
   checkInId: optionalString(),
@@ -156,6 +157,27 @@ export async function POST(request: Request) {
         entityId: `thanks-${checkIn.id}`,
       }).catch(console.error);
     }
+
+    // Trigger outbound webhook event
+    dispatchWebhookEvent(orgId, "visitor.checked_out", {
+      checkInId: checkIn.id,
+      badgeNumber: checkIn.badgeNumber,
+      checkInTime: checkIn.checkInTime.toISOString(),
+      checkOutTime: checkOutTime.toISOString(),
+      durationMinutes,
+      visitor: {
+        id: checkIn.visitor?.id,
+        name: checkIn.visitor?.name,
+        email: checkIn.visitor?.email,
+        phone: checkIn.visitor?.phone,
+        company: checkIn.visitor?.company,
+      },
+      host: {
+        id: checkIn.hostEmployee?.id,
+        name: checkIn.hostEmployee?.user?.name,
+        email: checkIn.hostEmployee?.user?.email,
+      },
+    }).catch(console.error);
 
     const responsePayload = {
       success: true,

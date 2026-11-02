@@ -15,6 +15,7 @@ import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-regi
 import { persistBase64Image } from "@/services/storage/persist-image";
 import { audit } from "@/services/audit/audit.service";
 import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
 export interface CheckInInput {
   invitationId: string;
@@ -398,6 +399,26 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       entityId: `conf-${checkIn.id}`,
     }).catch(console.error);
   }
+
+  // Trigger outbound webhook event
+  dispatchWebhookEvent(orgId, "visitor.checked_in", {
+    checkInId: checkIn.id,
+    badgeNumber,
+    checkInTime: checkIn.checkInTime.toISOString(),
+    visitor: {
+      id: invitation.visitor.id,
+      name: invitation.visitor.name,
+      email: invitation.visitor.email,
+      phone: invitation.visitor.phone,
+      company: invitation.visitor.company,
+    },
+    host: {
+      id: invitation.hostEmployee?.id,
+      name: invitation.hostEmployee?.user?.name,
+      email: invitation.hostEmployee?.user?.email,
+    },
+    location: invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+  }).catch(console.error);
 
   return {
     success: true,

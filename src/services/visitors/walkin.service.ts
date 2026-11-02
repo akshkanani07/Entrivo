@@ -13,6 +13,7 @@ import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-regi
 import { persistBase64Image } from "@/services/storage/persist-image";
 import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
 import { audit } from "@/services/audit/audit.service";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
 export interface WalkInInput {
   organizationId: string;
@@ -406,6 +407,27 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
       entityId: `conf-${checkIn.id}`,
     }).catch(console.error);
   }
+
+  // Trigger outbound webhook event
+  dispatchWebhookEvent(orgId, "visitor.checked_in", {
+    checkInId: checkIn.id,
+    badgeNumber,
+    checkInTime: checkIn.checkInTime.toISOString(),
+    isWalkIn: true,
+    visitor: {
+      id: checkIn.visitor?.id,
+      name: checkIn.visitor?.name,
+      email: checkIn.visitor?.email,
+      phone: checkIn.visitor?.phone,
+      company: checkIn.visitor?.company,
+    },
+    host: {
+      id: checkIn.hostEmployee?.id,
+      name: checkIn.hostEmployee?.user?.name,
+      email: checkIn.hostEmployee?.user?.email,
+    },
+    location: checkIn.hostEmployee?.office?.name ?? "Main Reception",
+  }).catch(console.error);
 
   return {
     success: true,

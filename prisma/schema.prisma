@@ -100,6 +100,8 @@ model Organization {
   files           File[]
   documents       Document[]
   ndaTemplates    NdaTemplate[]
+  webhookDeliveries WebhookDelivery[]
+  calendarConnections CalendarConnection[]
 
   @@index([slug])
 }
@@ -191,6 +193,7 @@ model User {
   pushSubscriptions       PushSubscription[]
   notificationPreferences NotificationPreference[]
   approvedTemplates       NotificationTemplate[]   @relation("TemplateApprover")
+  calendarConnections     CalendarConnection[]
 
   @@index([email])
   @@index([organizationId])
@@ -339,6 +342,8 @@ model Invitation {
   status         InvitationStatus @default(PENDING)
   qrToken        String           @unique
   passUrl        String?
+  calendarEventId String?
+  calendarProvider String?
   deletedAt      DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -708,26 +713,80 @@ model ApiKey {
   keyHash        String       @unique
   prefix         String
   permissions    String       @default("read,write")
+  scopes         String       @default("visitors:read,invitations:read")
+  rateLimit      Int          @default(120)
+  isActive       Boolean      @default(true)
+  createdById    String?
   lastUsedAt     DateTime?
   expiresAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+  @@index([keyHash])
 }
 
 model WebhookSubscription {
-  id             String       @id @default(cuid())
+  id             String            @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   url            String
   secret         String
-  events         String       @default("visitor.checkin,visitor.checkout,security.alert")
-  isActive       Boolean      @default(true)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  events         String            @default("visitor.invited,invitation.cancelled,invitation.rescheduled,visitor.checked_in,visitor.checked_out,approval.requested,approval.decided,security.alert,document.expiring")
+  isActive       Boolean           @default(true)
+  failureCount   Int               @default(0)
+  lastFailureAt  DateTime?
+  lastSuccessAt  DateTime?
+  disabledReason String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  deliveries     WebhookDelivery[]
 
   @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id                    String              @id @default(cuid())
+  webhookSubscriptionId String
+  webhookSubscription   WebhookSubscription @relation(fields: [webhookSubscriptionId], references: [id], onDelete: Cascade)
+  organizationId        String
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event                 String
+  payload               Json
+  status                String              @default("PENDING") // SUCCESS, FAILED, PENDING
+  statusCode            Int?
+  responseBody          String?
+  errorMessage          String?
+  attempts              Int                 @default(1)
+  durationMs            Int?
+  deliveredAt           DateTime?
+  createdAt             DateTime            @default(now())
+
+  @@index([webhookSubscriptionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+}
+
+model CalendarConnection {
+  id                    String       @id @default(cuid())
+  userId                String
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId        String
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider              String       // GOOGLE, OUTLOOK
+  accountEmail          String
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  expiresAt             DateTime?
+  calendarId            String?      @default("primary")
+  isActive              Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  @@unique([userId, provider])
+  @@index([organizationId])
+  @@index([userId])
 }
 
 model Setting {

@@ -8,6 +8,8 @@ import { NotificationEvent } from "@/services/notifications/events";
 
 import { requiredString, optionalString } from "@/lib/zod-helpers";
 import { getAppUrl } from "@/lib/app-url";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
+import { syncInvitationCalendar } from "@/services/calendar/calendar.service";
 
 const approvalActionSchema = z.object({
   approvalId: requiredString("Approval ID is required"),
@@ -212,6 +214,24 @@ export async function POST(request: Request) {
       reason: comments?.trim(),
       entityId: approval.id,
     }).catch(console.error);
+
+    // Trigger outbound webhook event
+    dispatchWebhookEvent(orgId, "approval.decided", {
+      approvalId: approval.id,
+      invitationId: approval.invitationId,
+      decision: action,
+      comments: comments?.trim() || null,
+      decidedBy: { id: user.id, name: user.name, role: user.role },
+      visitor: {
+        id: approval.invitation?.visitor?.id,
+        name: approval.invitation?.visitor?.name,
+        email: approval.invitation?.visitor?.email,
+      },
+    }).catch(console.error);
+
+    if (action === "APPROVED" && approval.invitationId) {
+      syncInvitationCalendar(approval.invitationId, "CREATE").catch(console.error);
+    }
 
     return NextResponse.json({
       success: true,

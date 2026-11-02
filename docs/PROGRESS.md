@@ -106,5 +106,20 @@ PWA, Service Worker v2, and Offline Check-in Capabilities.
 | **P7-03** | Offline check-in: IndexedDB (idb) queue for check-in, check-out and walk-in when offline; local validation against a minimal cached list of today's expected visitors (no ID numbers/phones; cleared on logout and kiosk revoke); Idempotency-Key header so replays are safe; Background Sync plus manual "Sync now"; server wins on conflict; clear banner with pending count; kiosk offline mode. | [x] | 2026-11-02 | `45dfdcd` |
 | **P7-04** | Mobile/responsive audit of EVERY page at 360px; camera/QR permission UX; Lighthouse PWA/accessibility evidence in the report. | [x] | 2026-11-02 | `45dfdcd` |
 
+---
+
+# Entrivo — Phase 8 Implementation Progress
+
+Integrations and Public API.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P8-01** | Outbound webhook engine: versioned event catalog (visitor.invited, invitation.cancelled, invitation.rescheduled, visitor.checked_in, visitor.checked_out, approval.requested, approval.decided, security.alert, document.expiring); HMAC-SHA256 signature + timestamp headers with rotatable secret; BullMQ retries (exponential, max 8); delivery log UI with redelivery; auto-disable after repeated failures; SSRF guard (https only, resolve DNS and block private/loopback/link-local ranges at connect time, no redirects, 5s timeout); test ping. | [ ] | | |
+| **P8-02** | API keys: ApiKey model (hashed, visible prefix, scopes, expiry, lastUsed, per-key rate limit), management UI (secret shown once), Bearer auth for /api/v1/*, scopes mapped to RBAC permissions, strictly org-scoped. | [ ] | | |
+| **P8-03** | Public REST API v1: visitors, invitations (create/cancel/reschedule), check-ins (read), employees (read), webhook subscribe/unsubscribe (REST-hook style for Zapier/Make); pagination, idempotency keys, rate-limit headers, consistent errors; OpenAPI 3 document at /api/v1/openapi.json and a read-only /developers docs page including Zapier/Make recipes. | [ ] | | |
+| **P8-04** | Calendar integrations: Google Calendar and Microsoft Outlook OAuth per host (minimum scopes), encrypted token storage with refresh, create/update/delete a calendar event when an invitation is created/rescheduled/cancelled (visitor as attendee only if policy allows), failures retried via queue, connect/disconnect UI. Independently of OAuth, ALWAYS attach an .ics file to emails. | [ ] | | |
+| **P8-05** | Slack/Teams: connect to the P4-07 routing and P8-01 event catalog; "Open in Entrivo" deep links; delivery status in UI. | [ ] | | |
+
+
 
 

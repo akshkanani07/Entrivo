@@ -11,6 +11,8 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { requiredString, requiredEmail, optionalString } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
+import { syncInvitationCalendar } from "@/services/calendar/calendar.service";
 
 const createInvitationSchema = z.object({
   visitorName: requiredString("Visitor name is required"),
@@ -345,6 +347,38 @@ export async function POST(request: Request) {
       }).catch(console.error);
     }
 
+    // Outbound webhook notification
+    dispatchWebhookEvent(
+      orgId,
+      requiresApproval ? "approval.requested" : "visitor.invited",
+      {
+        invitationId: invitation.id,
+        scheduledDate: invitation.scheduledDate.toISOString(),
+        startTime: invitation.startTime,
+        endTime: invitation.endTime,
+        purpose: invitation.purpose,
+        status: invitation.status,
+        requiresApproval,
+        visitor: {
+          id: visitor.id,
+          name: visitor.name,
+          email: visitor.email,
+          phone: visitor.phone,
+          company: visitor.company,
+        },
+        host: {
+          id: hostEmployee.id,
+          name: hostEmployee.user.name,
+          email: hostEmployee.user.email,
+        },
+        location,
+        passUrl,
+      }
+    ).catch(console.error);
+
+    // Synchronize event to host's connected calendar (Google / Outlook)
+    syncInvitationCalendar(invitation.id, "CREATE").catch(console.error);
+
     audit({
       organizationId: orgId,
       userId: user.id,
@@ -457,6 +491,16 @@ export async function PATCH(request: Request) {
         qrPassUrl: updated.passUrl || undefined,
         entityId: updated.id,
       }).catch(console.error);
+
+      dispatchWebhookEvent(orgId, "invitation.rescheduled", {
+        invitationId: updated.id,
+        scheduledDate: updated.scheduledDate.toISOString(),
+        startTime: updated.startTime,
+        endTime: updated.endTime,
+        visitor: { id: updated.visitor.id, name: updated.visitor.name, email: updated.visitor.email },
+        host: { id: updated.hostEmployee.id, name: updated.hostEmployee.user.name },
+      }).catch(console.error);
+      syncInvitationCalendar(updated.id, "UPDATE").catch(console.error);
     }
 
     // Fire INVITATION_CANCELLED notification
@@ -473,6 +517,13 @@ export async function PATCH(request: Request) {
         reason: "Cancelled by host/administrator",
         entityId: updated.id,
       }).catch(console.error);
+
+      dispatchWebhookEvent(orgId, "invitation.cancelled", {
+        invitationId: updated.id,
+        visitor: { id: updated.visitor.id, name: updated.visitor.name, email: updated.visitor.email },
+        host: { id: updated.hostEmployee.id, name: updated.hostEmployee.user.name },
+      }).catch(console.error);
+      syncInvitationCalendar(updated.id, "CANCEL").catch(console.error);
     }
 
     audit({
@@ -544,6 +595,13 @@ export async function DELETE(request: Request) {
       reason: reasonParam || "Cancelled by host",
       entityId: existing.id,
     }).catch(console.error);
+
+    dispatchWebhookEvent(orgId, "invitation.cancelled", {
+      invitationId: existing.id,
+      visitor: { id: existing.visitor.id, name: existing.visitor.name, email: existing.visitor.email },
+      host: { id: existing.hostEmployee.id, name: existing.hostEmployee.user.name },
+    }).catch(console.error);
+    syncInvitationCalendar(existing.id, "CANCEL").catch(console.error);
 
     audit({
       organizationId: orgId,
