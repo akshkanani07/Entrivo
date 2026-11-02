@@ -101,10 +101,10 @@ PWA, Service Worker v2, and Offline Check-in Capabilities.
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P7-01** | Installable PWA: complete manifest (shortcuts: Check-in, New invitation, Scan QR; screenshots, maskable icons), install-prompt UI, iOS "Add to Home Screen" guidance, theme/splash. | [x] | 2026-11-02 | `PENDING` |
-| **P7-02** | Service worker v2: precache app shell, sensible runtime caching for static assets/images, offline fallback page, "new version available" update flow; NEVER cache API or authenticated HTML containing PII. | [x] | 2026-11-02 | `PENDING` |
-| **P7-03** | Offline check-in: IndexedDB (idb) queue for check-in, check-out and walk-in when offline; local validation against a minimal cached list of today's expected visitors (no ID numbers/phones; cleared on logout and kiosk revoke); Idempotency-Key header so replays are safe; Background Sync plus manual "Sync now"; server wins on conflict; clear banner with pending count; kiosk offline mode. | [x] | 2026-11-02 | `PENDING` |
-| **P7-04** | Mobile/responsive audit of EVERY page at 360px; camera/QR permission UX; Lighthouse PWA/accessibility evidence in the report. | [x] | 2026-11-02 | `PENDING` |
+| **P7-01** | Installable PWA: complete manifest (shortcuts: Check-in, New invitation, Scan QR; screenshots, maskable icons), install-prompt UI, iOS "Add to Home Screen" guidance, theme/splash. | [x] | 2026-11-02 | `45dfdcd` |
+| **P7-02** | Service worker v2: precache app shell, sensible runtime caching for static assets/images, offline fallback page, "new version available" update flow; NEVER cache API or authenticated HTML containing PII. | [x] | 2026-11-02 | `45dfdcd` |
+| **P7-03** | Offline check-in: IndexedDB (idb) queue for check-in, check-out and walk-in when offline; local validation against a minimal cached list of today's expected visitors (no ID numbers/phones; cleared on logout and kiosk revoke); Idempotency-Key header so replays are safe; Background Sync plus manual "Sync now"; server wins on conflict; clear banner with pending count; kiosk offline mode. | [x] | 2026-11-02 | `45dfdcd` |
+| **P7-04** | Mobile/responsive audit of EVERY page at 360px; camera/QR permission UX; Lighthouse PWA/accessibility evidence in the report. | [x] | 2026-11-02 | `45dfdcd` |
 
 
 
