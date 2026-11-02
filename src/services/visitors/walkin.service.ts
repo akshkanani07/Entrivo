@@ -12,6 +12,7 @@ import { NotificationEvent } from "@/services/notifications/events";
 import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
 import { persistBase64Image } from "@/services/storage/persist-image";
 import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
+import { audit } from "@/services/audit/audit.service";
 
 export interface WalkInInput {
   organizationId: string;
@@ -300,6 +301,14 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
       console.error("[WalkIn] Failed to generate/store NDA Document:", ndaErr);
     }
   }
+
+  audit({
+    organizationId: orgId,
+    action: "CHECKIN_SUCCESS",
+    entity: "CHECKIN",
+    entityId: checkIn.id,
+    details: { badgeNumber, walkin: true, visitorName: checkIn.visitor?.name, hostName: checkIn.hostEmployee?.user?.name },
+  }).catch(console.error);
 
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {

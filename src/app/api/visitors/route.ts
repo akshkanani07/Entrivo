@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const createVisitorSchema = z.object({
   name: requiredString("Name is required"),
@@ -169,6 +170,15 @@ export async function POST(request: Request) {
       },
     });
 
+    audit({
+      organizationId: orgId,
+      userId: auth.user.id,
+      action: "VISITOR_CREATE",
+      entity: "VISITOR",
+      entityId: visitor.id,
+      details: { name: visitor.name, email: visitor.email, phone: visitor.phone, company: visitor.company },
+    }).catch(console.error);
+
     return NextResponse.json({ success: true, data: visitor, message: "Visitor created successfully" });
   } catch (error) {
     console.error("Create visitor error:", error);
@@ -223,6 +233,16 @@ export async function PATCH(request: Request) {
       },
     });
 
+    audit({
+      organizationId: orgId,
+      userId: auth.user.id,
+      action: "VISITOR_UPDATE",
+      entity: "VISITOR",
+      entityId: updated.id,
+      before: existing,
+      after: updated,
+    }).catch(console.error);
+
     return NextResponse.json({ success: true, data: updated, message: "Visitor updated successfully" });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Failed to update visitor";
@@ -257,6 +277,15 @@ export async function DELETE(request: Request) {
     await prisma.visitor.delete({
       where: { id },
     });
+
+    audit({
+      organizationId: orgId,
+      userId: auth.user.id,
+      action: "VISITOR_DELETE",
+      entity: "VISITOR",
+      entityId: id,
+      details: { name: visitor.name, email: visitor.email },
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "Visitor record deleted successfully" });
   } catch (error: unknown) {

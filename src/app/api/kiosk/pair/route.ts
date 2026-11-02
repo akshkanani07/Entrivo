@@ -114,8 +114,8 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({
       data: {
         organizationId: kiosk.organizationId,
-        action: "KIOSK_PAIRED",
-        entity: "Kiosk",
+        action: "KIOSK_PAIR",
+        entity: "KIOSK",
         entityId: kiosk.id,
         details: `Kiosk '${kiosk.name}' paired successfully via pairing code from IP ${ip}`,
       },

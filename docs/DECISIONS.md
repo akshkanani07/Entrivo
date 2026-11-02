@@ -84,6 +84,31 @@
   6. **Daily Summary Aggregates & Background Reminders**: Implemented `/api/cron/daily-report` compiling real database aggregates (check-ins, active visitors, overstays, pending approvals) into digest reports. Implemented `/api/cron/reminders` dispatching 24h and 1h reminders before scheduled visits.
   7. **Provider-Agnostic SMS Adapter**: Defined `SmsProviderAdapter` interface with a `NoopSmsAdapter` implementation that reports unconfigured status and refuses fake sends. Updated `/integrations` UI to clearly present Enterprise SMS Gateway as "Coming soon".
 
+## Decision 14: Phase 5 — Dashboard Real Telemetry, Reports Engine with Formula Protection, Global Search Palette, and Audit Log Append-Only Architecture
+- **Dashboard Telemetry (`P5-01`)**:
+  - Removed every hardcoded chart array and mock number from `page.tsx` and chart components. Strict grep verification asserts zero `Math.random` across all dashboard and report modules.
+  - Implemented 6 real metric cards (`todayVisitors`, `checkedInNow`, `pendingApprovals`, `upcomingNext3h`, `overstaying`, `checkedOutToday`) and 6 real chart aggregations (`dailyVisitors` 7/30 days, `byDepartment`, `visitorTypeMix`, `purposeAnalysis`, `hourlyFootfall` 00-23h, `topHosts`).
+  - Implemented dynamic branch filtering, date-range presets ("today", "7d", "30d", "custom"), auto-refresh (30s interval with live indicator), and role-specific scoping (EMPLOYEE role is restricted strictly to visits they host).
+  - Backed by an in-memory cache with 20-second TTL keyed by organization, role, branch, and date range.
+- **Reports Engine & Multi-Format Exports (`P5-02`)**:
+  - Built `/api/reports` and `/api/reports/export` with granular filters (branch, department, visitor type, host, status, purpose, search) and real-time KPI computations (total visits, completed, active, average dwell duration, overstay rate).
+  - Export formats:
+    - **CSV**: Streaming CSV output with formula injection neutralization (cells beginning with `=`, `+`, `-`, `@`, `\t`, `\r` are prefixed with `'`).
+    - **Excel**: Multi-sheet formatted workbook via `exceljs` featuring an "Executive Summary" sheet and a styled "Visitor Records" sheet with brand header fills and auto-fitted columns.
+    - **PDF**: Branded vector PDF via `pdfkit` featuring header branding, metadata, KPI summary boxes, and tabular visitor log.
+  - Audit logging: Every export automatically logs `REPORT_EXPORT` with the format and record count.
+  - Saved & Scheduled Reports: Extended the `Report` model to persist report parameters, recurrence crons (`scheduleCron`), and recipient distribution lists.
+- **Global Search & Omnisearch Command Palette (`P5-03`)**:
+  - Created `CommandPalette.tsx` with global `Ctrl+K` and `Cmd+K` keyboard shortcut detection, escape handling, and keyboard arrow navigation (`↑`, `↓`, `↵`).
+  - Search engine `/api/search` supports visitor name, company, host employee name, normalized phone digits (`q.replace(/\D/g, '')`), and ISO/local date parsing.
+  - Strict RBAC: visitors require `visitors.read`, employees require `employees.read`, invitations require `invitations.read.all` or own-host filtering for `EMPLOYEE`, active badges require `checkin.perform`. Never exposes sensitive tokens or visitor PII.
+  - Recent searches are stored in and managed via `localStorage` with clear history functionality.
+- **Audit Log Append-Only Architecture (`P5-04`)**:
+  - Created `src/services/audit/audit.service.ts` with a uniform `audit()` helper and automated diff engine (`computeDiff(before, after)`) that redacts passwords and secrets.
+  - Wired audit events across authentication (login success/failure, logout), visitors (create, update with diff, delete), invitations (create, cancel, reschedule), approvals (approve, escalate, reject), check-in/checkout, organization settings changes (with before/after diff), employee role changes, kiosk pairing/revocation, document uploads/downloads/deletions, integrations, and report/audit exports.
+  - Strict append-only enforcement: `/api/audit` returns HTTP 405 Method Not Allowed for `POST`, `PUT`, `PATCH`, and `DELETE` requests.
+  - UI at `/audit-logs` provides real-time search, filters (action, entity, date range), pagination, structured diff viewer drawer, and injection-protected CSV export.
+
 
 
 

@@ -39,8 +39,8 @@ export async function DELETE(
       data: {
         organizationId: orgCheck.organizationId,
         userId: auth.user.id,
-        action: "KIOSK_REVOKED",
-        entity: "Kiosk",
+        action: "KIOSK_REVOKE",
+        entity: "KIOSK",
         entityId: kiosk.id,
         details: `Kiosk '${kiosk.name}' revoked`,
       },

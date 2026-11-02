@@ -13,6 +13,7 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
 import { persistBase64Image } from "@/services/storage/persist-image";
+import { audit } from "@/services/audit/audit.service";
 import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
 
 export interface CheckInInput {
@@ -348,6 +349,14 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       console.error("[CheckIn] Failed to generate/store NDA Document:", ndaErr);
     }
   }
+
+  audit({
+    organizationId: orgId,
+    action: "CHECKIN_SUCCESS",
+    entity: "CHECKIN",
+    entityId: checkIn.id,
+    details: { badgeNumber, visitorName: invitation.visitor?.name, hostName: invitation.hostEmployee?.user?.name },
+  }).catch(console.error);
 
   // Notify host (fire-and-forget)
   notify(NotificationEvent.VISITOR_ARRIVED, {

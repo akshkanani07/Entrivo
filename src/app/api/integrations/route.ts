@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { encrypt, decrypt } from "@/lib/encryption";
 import crypto from "crypto";
+import { audit } from "@/services/audit/audit.service";
 
 const ALLOWED_INTEGRATION_KEYS: Record<string, string[]> = {
   SLACK: ["SLACK_WEBHOOK", "SLACK_ENABLED", "SLACK_EVENTS", "SLACK_LAST_STATUS"],
@@ -316,6 +317,14 @@ export async function POST(request: Request) {
         });
       }
 
+      audit({
+        organizationId: orgId,
+        userId: auth.user.id,
+        action: "INTEGRATION_UPDATE",
+        entity: "INTEGRATION",
+        details: { type: integrationType, updatedKeys: Object.keys(config) },
+      }).catch(console.error);
+
       return NextResponse.json({
         success: true,
         message: `${integrationType} integration settings saved!`,
@@ -353,6 +362,16 @@ export async function DELETE(request: Request) {
     }
 
     await prisma.webhookSubscription.delete({ where: { id: webhook.id } });
+
+    audit({
+      organizationId: orgId,
+      userId: auth.user.id,
+      action: "INTEGRATION_DELETE",
+      entity: "WEBHOOK",
+      entityId: webhook.id,
+      details: { url: webhook.url },
+    }).catch(console.error);
+
     return NextResponse.json({ success: true, message: "Webhook subscription deleted successfully." });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Failed to delete webhook";

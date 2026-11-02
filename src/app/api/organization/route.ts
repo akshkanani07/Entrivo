@@ -4,6 +4,7 @@ import { requireUser, requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 import { optionalString, optionalEmail } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const updateOrgSchema = z.object({
   name: optionalString(),
@@ -86,6 +87,10 @@ export async function PUT(request: Request) {
       policies,
     } = parsed.data;
 
+    const existingOrg = await prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
     // 1. Update Organization core details
     const updatedOrg = await prisma.organization.update({
       where: { id: organizationId },
@@ -128,17 +133,17 @@ export async function PUT(request: Request) {
       }
     }
 
-    // 3. Log Audit
-    await prisma.auditLog.create({
-      data: {
-        organizationId,
-        userId: auth.user.id,
-        action: "ORGANIZATION_SETTINGS_UPDATED",
-        entity: "ORGANIZATION",
-        entityId: organizationId,
-        details: `Organization profile and compliance policies updated by ${auth.user.name}`,
-      },
-    });
+    // 3. Log Audit with before/after state diff
+    audit({
+      organizationId,
+      userId: auth.user.id,
+      action: "SETTINGS_CHANGE",
+      entity: "ORGANIZATION",
+      entityId: organizationId,
+      before: existingOrg || undefined,
+      after: updatedOrg,
+      details: { summary: `Organization profile and compliance policies updated by ${auth.user.name}` },
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, data: updatedOrg });
   } catch (error: any) {

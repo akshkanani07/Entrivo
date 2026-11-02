@@ -59,12 +59,26 @@ Notifications and email completion (WhatsApp stays permanently removed).
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P4-01** | Events: add INVITATION_CANCELLED, INVITATION_RESCHEDULED, VISITOR_WAITING, VISITOR_OVERSTAYED, VISITOR_REMINDER (24h and 1h), APPROVAL_ESCALATED, DOCUMENT_EXPIRING, DAILY_REPORT, CHECKIN_CONFIRMATION, CHECKOUT_THANKS; wire each to real code paths | [x] | 2026-11-02 | `d3923fc` |
-| **P4-02** | Routing + preferences: org default routing table; per-user preference matrix (event x channel) with quiet hours UI; security-critical messages bypass; delivery to host, backup approver, org admins, receptionists, guards, visitor | [x] | 2026-11-02 | `d3923fc` |
-| **P4-03** | Template system: NotificationTemplate overrides per org/event/channel/locale (en, hi, gu) with allow-listed variables, workflow DRAFT -> PENDING_APPROVAL -> ACTIVE, versioning, live preview, test send, safe fallback, used by EVERY send | [x] | 2026-11-02 | `d3923fc` |
-| **P4-04** | Email catalog: shared responsive branded layout, plain-text alt, unsubscribe for non-critical; visitor emails with .ics for invitations/reschedules; employee emails; admin emails | [x] | 2026-11-02 | `d3923fc` |
-| **P4-05** | Delivery log: filters (event, channel, status, date), error text, retry, dead-letter view, 24h metrics per channel | [x] | 2026-11-02 | `d3923fc` |
-| **P4-06** | Daily report and digests: job at org-configurable local time, content from real database aggregates | [x] | 2026-11-02 | `d3923fc` |
-| **P4-07** | Slack/Teams per-event routing UI (which events go to which channel), message customization, last-delivery status | [x] | 2026-11-02 | `d3923fc` |
-| **P4-08** | SMS: provider-agnostic adapter interface only; UI marks SMS as "Coming soon", no fake sending | [x] | 2026-11-02 | `d3923fc` |
+| **P4-01** | Events: add INVITATION_CANCELLED, INVITATION_RESCHEDULED, VISITOR_WAITING, VISITOR_OVERSTAYED, VISITOR_REMINDER (24h and 1h), APPROVAL_ESCALATED, DOCUMENT_EXPIRING, DAILY_REPORT, CHECKIN_CONFIRMATION, CHECKOUT_THANKS; wire each to real code paths | [x] | 2026-11-02 | `50c63a0` |
+| **P4-02** | Routing + preferences: org default routing table; per-user preference matrix (event x channel) with quiet hours UI; security-critical messages bypass; delivery to host, backup approver, org admins, receptionists, guards, visitor | [x] | 2026-11-02 | `50c63a0` |
+| **P4-03** | Template system: NotificationTemplate overrides per org/event/channel/locale (en, hi, gu) with allow-listed variables, workflow DRAFT -> PENDING_APPROVAL -> ACTIVE, versioning, live preview, test send, safe fallback, used by EVERY send | [x] | 2026-11-02 | `50c63a0` |
+| **P4-04** | Email catalog: shared responsive branded layout, plain-text alt, unsubscribe for non-critical; visitor emails with .ics for invitations/reschedules; employee emails; admin emails | [x] | 2026-11-02 | `50c63a0` |
+| **P4-05** | Delivery log: filters (event, channel, status, date), error text, retry, dead-letter view, 24h metrics per channel | [x] | 2026-11-02 | `50c63a0` |
+| **P4-06** | Daily report and digests: job at org-configurable local time, content from real database aggregates | [x] | 2026-11-02 | `50c63a0` |
+| **P4-07** | Slack/Teams per-event routing UI (which events go to which channel), message customization, last-delivery status | [x] | 2026-11-02 | `50c63a0` |
+| **P4-08** | SMS: provider-agnostic adapter interface only; UI marks SMS as "Coming soon", no fake sending | [x] | 2026-11-02 | `50c63a0` |
+
+---
+
+# Entrivo — Phase 5 Implementation Progress
+
+Dashboard, reports, search, audit.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P5-01** | Dashboard (real data only): cards — today's visitors, checked-in now, pending approvals, upcoming (next 3h), overstaying, checked-out today; charts — daily visitors (7/30 days), by department, purpose analysis, visitor-type mix, hourly footfall, top hosts; branch and date-range filters; role-specific views (EMPLOYEE sees only their visitors); auto-refresh; skeletons; aggregate queries with supporting indexes and a short cache. Delete every hard-coded/random number. | [x] | 2026-11-02 | `phase-5` |
+| **P5-02** | Reports: Daily / Weekly / Monthly presets + custom range; filters — date, department, visitor type, host, branch, status, purpose; KPI summary; paginated table; exports: CSV (streaming, CSV-injection safe), Excel (exceljs, formatted, summary sheet), PDF (pdfkit, branded); large exports run as queue jobs and notify with a signed download link; saved reports and scheduled email reports using the Report model. Permissions reports.view / reports.export. | [x] | 2026-11-02 | `phase-5` |
+| **P5-03** | Global search: Ctrl+K command palette; search visitor name, phone (normalized), company, host, date; per-entity permissions (from P0-03); recent items; keyboard navigation; debounced; indexed queries. | [x] | 2026-11-02 | `phase-5` |
+| **P5-04** | Audit log: uniform `audit()` helper; coverage — login success/failure, logout, visitor create/update/delete, invitation create/cancel/reschedule, approvals, check-in, check-out, document upload/view/download/delete, settings changes with before/after diff, role changes, exports, kiosk pair/revoke, API key and webhook changes; UI with filters (user, action, entity, date), pagination, detail drawer (diff), CSV export; append-only (no update/delete endpoints). | [x] | 2026-11-02 | `phase-5` |
+
 

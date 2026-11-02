@@ -10,6 +10,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { requiredString, requiredEmail, optionalString } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const createInvitationSchema = z.object({
   visitorName: requiredString("Visitor name is required"),
@@ -315,6 +316,15 @@ export async function POST(request: Request) {
       }).catch(console.error);
     }
 
+    audit({
+      organizationId: orgId,
+      userId: user.id,
+      action: "INVITATION_CREATE",
+      entity: "INVITATION",
+      entityId: invitation.id,
+      details: { visitorName: visitor.name, date: formattedDate, requiresApproval },
+    }).catch(console.error);
+
     return NextResponse.json({
       success: true,
       message: requiresApproval
@@ -436,6 +446,16 @@ export async function PATCH(request: Request) {
       }).catch(console.error);
     }
 
+    audit({
+      organizationId: orgId,
+      userId: user.id,
+      action: isCancelled ? "INVITATION_CANCEL" : isReschedule ? "INVITATION_RESCHEDULE" : "INVITATION_UPDATE",
+      entity: "INVITATION",
+      entityId: updated.id,
+      before: existing,
+      after: updated,
+    }).catch(console.error);
+
     return NextResponse.json({ success: true, data: updated, message: "Invitation updated successfully." });
   } catch (error) {
     console.error("Update invitation error:", error);
@@ -494,6 +514,15 @@ export async function DELETE(request: Request) {
       date: formatDate(existing.scheduledDate),
       reason: reasonParam || "Cancelled by host",
       entityId: existing.id,
+    }).catch(console.error);
+
+    audit({
+      organizationId: orgId,
+      userId: user.id,
+      action: "INVITATION_CANCEL",
+      entity: "INVITATION",
+      entityId: existing.id,
+      details: { visitorName: existing.visitor.name, reason: reasonParam || "Cancelled by host" },
     }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "Invitation cancelled successfully" });

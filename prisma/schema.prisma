@@ -383,6 +383,9 @@ model CheckIn {
   @@index([status])
   @@index([badgeNumber])
   @@index([checkInTime])
+  @@index([visitorId])
+  @@index([hostEmployeeId])
+  @@index([checkInTime, status])
 }
 
 model CheckOut {
@@ -589,6 +592,9 @@ model AuditLog {
   @@index([organizationId])
   @@index([userId])
   @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action])
+  @@index([organizationId, entity])
 }
 
 model Notification {
@@ -746,11 +752,17 @@ model Report {
   reportType     String       @default("VISITOR_SUMMARY")
   dateRange      String
   statsJson      String
+  parameters     Json?
+  isScheduled    Boolean      @default(false)
+  scheduleCron   String?
+  recipients     String?
+  lastSentAt     DateTime?
   generatedBy    String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+  @@index([organizationId, isScheduled])
 }
 
 model Kiosk {

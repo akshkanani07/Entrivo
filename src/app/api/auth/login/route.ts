@@ -8,6 +8,7 @@ import { verifyPassword, createDatabaseSession, getClientIp } from "@/lib/auth";
 import { loginRateLimiter, clearLoginEmailRateLimit } from "@/lib/rate-limit";
 import { LEGAL_VERSION } from "@/lib/legal";
 import { requiredString, requiredEmail } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const loginSchema = z.object({
   email: requiredEmail("A valid email address is required"),
@@ -61,18 +62,16 @@ export async function POST(request: Request) {
     if (!user || user.deletedAt || !isValid) {
       // Record failed attempt in audit log if org can be determined
       if (user?.organizationId) {
-        await prisma.auditLog.create({
-          data: {
-            organizationId: user.organizationId,
-            userId: user.id,
-            action: "USER_LOGIN_FAILED",
-            entity: "USER",
-            entityId: user.id,
-            details: `Failed password login attempt for ${cleanEmail} from IP ${ip}`,
-            ipAddress: ip,
-            userAgent,
-          },
-        });
+        audit({
+          organizationId: user.organizationId,
+          userId: user.id,
+          action: "LOGIN_FAILURE",
+          entity: "USER",
+          entityId: user.id,
+          details: `Failed password login attempt for ${cleanEmail} from IP ${ip}`,
+          ipAddress: ip,
+          userAgent,
+        }).catch(console.error);
       }
 
       return NextResponse.json(
@@ -152,18 +151,16 @@ export async function POST(request: Request) {
     });
 
     // Record Audit Log
-    await prisma.auditLog.create({
-      data: {
-        organizationId: user.organizationId,
-        userId: user.id,
-        action: "USER_LOGIN",
-        entity: "USER",
-        entityId: user.id,
-        details: `Successful login by ${user.name} (${user.role}) from IP ${ip} - Session ${sessionId}`,
-        ipAddress: ip,
-        userAgent,
-      },
-    });
+    audit({
+      organizationId: user.organizationId,
+      userId: user.id,
+      action: "LOGIN_SUCCESS",
+      entity: "USER",
+      entityId: user.id,
+      details: `Successful login by ${user.name} (${user.role}) from IP ${ip} - Session ${sessionId}`,
+      ipAddress: ip,
+      userAgent,
+    }).catch(console.error);
 
     const response = NextResponse.json({
       success: true,

@@ -167,7 +167,7 @@ export async function POST(request: Request) {
         data: {
           organizationId: orgId,
           userId: user.id,
-          action: action === "APPROVED" ? "APPROVAL_GRANTED" : "APPROVAL_REJECTED",
+          action: action === "APPROVED" ? "APPROVAL_APPROVED" : "APPROVAL_REJECTED",
           entity: "APPROVAL",
           entityId: approval.id,
           details: `Approval for visitor ${approval.invitation?.visitor?.name || "guest"} ${action.toLowerCase()} by ${user.name} (${user.role}).`,

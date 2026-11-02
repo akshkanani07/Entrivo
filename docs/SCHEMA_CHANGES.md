@@ -1,4 +1,28 @@
-# Entrivo Schema Changes (Phase 0)
+---
+
+# Entrivo Schema Changes (Phase 5)
+
+## 1. AuditLog Model Indexes
+Added compound and query-specific indexes to optimize audit queries and filtering:
+- `@@index([organizationId, createdAt])`: Accelerates chronological timeline queries.
+- `@@index([organizationId, action])`: Speeds up action-specific filter views.
+- `@@index([organizationId, entity])`: Optimizes entity-specific change logs.
+
+## 2. Report Model Enhancements
+Expanded `Report` model to support saved parameters and scheduled exports:
+- `parameters Json?`: Stores structured filter configurations (`departmentId`, `visitorTypeId`, `branchId`, `status`, etc.).
+- `isScheduled Boolean @default(false)`: Distinguishes manual reports from automated scheduled reports.
+- `scheduleCron String?`: Cron recurrence pattern (e.g. `0 8 * * 1` for weekly on Mondays).
+- `recipients String?`: Comma-separated email distribution list.
+- `lastSentAt DateTime?`: Timestamp of last automated email dispatch.
+- Added compound index: `@@index([organizationId, isScheduled])`.
+
+## 3. CheckIn Model Query Optimization Indexes
+Added dedicated join and filter indexes:
+- `@@index([visitorId])`: Accelerates visitor-to-checkin joins in reports.
+- `@@index([hostEmployeeId])`: Accelerates employee-to-checkin joins and top hosts chart aggregation.
+- `@@index([checkInTime, status])`: Optimizes footfall volume, dwell-time, and active premises telemetry queries.
+
 
 All database schema updates are applied directly using `prisma db push` (PostgreSQL).
 

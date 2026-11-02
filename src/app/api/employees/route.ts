@@ -9,6 +9,7 @@ import { emailService } from "@/services/email/mailjet.service";
 import { UserRole } from "@/types";
 import { getAppUrl } from "@/lib/app-url";
 import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const createEmployeeSchema = z.object({
   name: requiredString("Employee name is required"),
@@ -498,6 +499,17 @@ export async function PUT(request: Request) {
         where: { id: existing.userId },
         data: { role: role as UserRole },
       });
+
+      audit({
+        organizationId: orgId,
+        userId: currentUser.id,
+        action: "ROLE_CHANGE",
+        entity: "USER",
+        entityId: existing.userId,
+        before: { role: existing.user.role },
+        after: { role: role },
+        details: { employeeName: existing.user.name, changedBy: currentUser.name },
+      }).catch(console.error);
     }
 
     // Verify department if updated

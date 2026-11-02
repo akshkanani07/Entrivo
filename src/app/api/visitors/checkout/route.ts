@@ -6,6 +6,7 @@ import { requireOrg } from "@/lib/tenant";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { optionalString } from "@/lib/zod-helpers";
+import { audit } from "@/services/audit/audit.service";
 
 const checkoutSchema = z.object({
   checkInId: optionalString(),
@@ -110,6 +111,15 @@ export async function POST(request: Request) {
         },
       });
     });
+
+    audit({
+      organizationId: orgId,
+      userId: user.id,
+      action: "CHECKOUT_SUCCESS",
+      entity: "CHECKIN",
+      entityId: checkIn.id,
+      details: { badgeNumber: checkIn.badgeNumber, durationMinutes, visitorName: checkIn.visitor?.name },
+    }).catch(console.error);
 
     // Notify about visitor checkout
     await notify(NotificationEvent.VISITOR_CHECKED_OUT, {
