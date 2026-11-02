@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import crypto from "crypto";
 import prisma from "@/lib/db";
 import { KioskClientView } from "./KioskClientView";
-import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
+import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
 import { Clock, CalendarX, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -45,8 +45,10 @@ export default async function KioskPage() {
 
   const org = kiosk.organization;
 
-  // Check schedule and holiday policy for the kiosk terminal
-  const scheduleCheck = await checkScheduleAndHolidayPolicy(org.id, new Date());
+  const [{ policy }, scheduleCheck] = await Promise.all([
+    getOrgPolicy(org.id),
+    checkScheduleAndHolidayPolicy(org.id, new Date()),
+  ]);
   if (!scheduleCheck.canProceed) {
     return (
       <div className="min-h-screen bg-[#060a12] text-slate-100 flex flex-col justify-center items-center p-6 md:p-10 relative overflow-hidden select-none">
@@ -95,6 +97,7 @@ export default async function KioskPage() {
         kioskName={kiosk.name}
         employees={org.employees}
         visitorTypes={org.visitorTypes}
+        policy={policy}
       />
     </div>
   );

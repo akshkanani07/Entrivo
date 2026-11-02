@@ -27,6 +27,7 @@ import { BadgeCard, BadgeData } from "@/components/visitor/BadgeCard";
 import confetti from "canvas-confetti";
 import { formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { OrgPolicy } from "@/lib/settings-schema";
 
 interface EmployeeOption {
   id: string;
@@ -46,11 +47,13 @@ export function KioskClientView({
   kioskName,
   employees,
   visitorTypes,
+  policy,
 }: {
   orgName: string;
   kioskName?: string;
   employees: EmployeeOption[];
   visitorTypes: VisitorTypeOption[];
+  policy?: OrgPolicy;
 }) {
   const router = useRouter();
   const [step, setStep] = useState<"WELCOME" | "QR_CHECKIN" | "WALKIN_INFO" | "WALKIN_PHOTO" | "WALKIN_NDA" | "SUCCESS">("WELCOME");
@@ -191,7 +194,7 @@ export function KioskClientView({
           photoUrl,
           signatureUrl,
           consentGiven: true,
-          consentVersion: "v1.0",
+          consentVersion: policy?.privacyPolicyNoticeVersion || "v1.0",
           purpose: "Self-Checkin Workplace Visit",
         }),
       });
@@ -309,26 +312,40 @@ export function KioskClientView({
             </button>
 
             {/* Option B: Walk-in Visitor */}
-            <button
-              onClick={() => setStep("WALKIN_INFO")}
-              className="glass-card-interactive p-8 rounded-3xl text-left border-2 border-cyan-500/30 hover:border-cyan-400 flex flex-col justify-between group transition-all"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <UserPlus className="w-8 h-8" />
+            {policy?.allowWalkIn === false ? (
+              <div className="glass-card p-8 rounded-3xl text-left border border-slate-800 opacity-60 flex flex-col justify-between">
+                <div className="w-14 h-14 rounded-2xl bg-slate-800 text-slate-500 border border-slate-700 flex items-center justify-center mb-6">
+                  <UserPlus className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-400">Walk-Ins Disabled</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Unscheduled walk-in registrations are disabled by workplace policy. Please report to security or reception.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
-                  I am a Walk-In Visitor
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  First-time guest registration, meeting host selection, and digital pass generation.
-                </p>
-              </div>
-              <div className="mt-6 flex items-center gap-2 text-xs font-bold text-cyan-400">
-                <span>Register Entry</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
+            ) : (
+              <button
+                onClick={() => setStep("WALKIN_INFO")}
+                className="glass-card-interactive p-8 rounded-3xl text-left border-2 border-cyan-500/30 hover:border-cyan-400 flex flex-col justify-between group transition-all"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                  <UserPlus className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
+                    I am a Walk-In Visitor
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    First-time guest registration, meeting host selection, and digital pass generation.
+                  </p>
+                </div>
+                <div className="mt-6 flex items-center gap-2 text-xs font-bold text-cyan-400">
+                  <span>Register Entry</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -438,7 +455,9 @@ export function KioskClientView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Your Company Name</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Your Company Name {policy?.requireCompany ? "*" : ""}
+              </label>
               <input
                 type="text"
                 placeholder="Company / Client Name"
@@ -469,6 +488,10 @@ export function KioskClientView({
               onClick={() => {
                 if (!name || !phone) {
                   toast.error("Please enter both your name and phone number");
+                  return;
+                }
+                if (policy?.requireCompany && !company.trim()) {
+                  toast.error("Company / organization is required by workplace policy");
                   return;
                 }
                 setStep("WALKIN_PHOTO");
@@ -546,9 +569,9 @@ export function KioskClientView({
                 className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
               />
               <span className="text-[11px] leading-relaxed text-slate-400">
-                I agree to the collection and processing of my name, photo, and visit record under the{" "}
+                I agree to the collection and processing of my name, photo (retained for {policy?.retentionPhotosDays ?? 90} days), and digital signature (retained for {policy?.retentionSignaturesDays ?? 180} days) under the{" "}
                 <a href="/privacy" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">
-                  DPDP Act 2023 & Privacy Policy
+                  DPDP Act 2023 & Privacy Policy ({policy?.privacyPolicyNoticeVersion ?? "v1.0"})
                 </a>{" "}
                 and accept the workplace{" "}
                 <a href="/terms" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">

@@ -52,7 +52,7 @@ export default async function NewWalkinPage() {
       <WalkinForm
         employees={employees}
         visitorTypes={visitorTypes}
-        requireNda={policy.requireNda}
+        policy={policy}
       />
     </div>
   );

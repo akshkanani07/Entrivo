@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUser, requirePermission } from "@/lib/rbac";
+import { requireUser, can } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 import { optionalString, optionalEmail } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
+import { invalidateOrgPolicyCache } from "@/lib/settings-registry";
 
 const updateOrgSchema = z.object({
   name: optionalString(),
@@ -58,8 +59,15 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const auth = await requirePermission("org.manage");
+    const auth = await requireUser();
     if (auth.response) return auth.response;
+
+    if (!can(auth.user, "org.manage") && !can(auth.user, "settings.manage")) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: missing permission 'settings.manage' or 'org.manage'" },
+        { status: 403 }
+      );
+    }
 
     const org = requireOrg(auth.user);
     if (org.response) return org.response;
@@ -87,9 +95,19 @@ export async function PUT(request: Request) {
       policies,
     } = parsed.data;
 
-    const existingOrg = await prisma.organization.findUnique({
-      where: { id: organizationId },
-    });
+    const [existingOrg, existingSettings] = await Promise.all([
+      prisma.organization.findUnique({
+        where: { id: organizationId },
+      }),
+      prisma.setting.findMany({
+        where: { organizationId },
+      }),
+    ]);
+
+    const existingSettingsMap: Record<string, any> = {};
+    for (const s of existingSettings) {
+      existingSettingsMap[s.key] = s.value;
+    }
 
     // 1. Update Organization core details
     const updatedOrg = await prisma.organization.update({
@@ -111,26 +129,31 @@ export async function PUT(request: Request) {
     });
 
     // 2. If security policies provided, update Settings table
+    const updatedSettingsMap: Record<string, any> = { ...existingSettingsMap };
     if (policies && typeof policies === "object") {
       for (const [key, val] of Object.entries(policies)) {
+        const valStr = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val);
+        const settingKey = key.startsWith("policy_") ? key : `policy_${key}`;
         await prisma.setting.upsert({
           where: {
             organizationId_key: {
               organizationId,
-              key: `policy_${key}`,
+              key: settingKey,
             },
           },
           update: {
-            value: String(val),
+            value: valStr,
           },
           create: {
             organizationId,
             category: "SECURITY_POLICY",
-            key: `policy_${key}`,
-            value: String(val),
+            key: settingKey,
+            value: valStr,
           },
         });
+        updatedSettingsMap[settingKey] = valStr;
       }
+      invalidateOrgPolicyCache(organizationId);
     }
 
     // 3. Log Audit with before/after state diff
@@ -140,8 +163,20 @@ export async function PUT(request: Request) {
       action: "SETTINGS_CHANGE",
       entity: "ORGANIZATION",
       entityId: organizationId,
-      before: existingOrg || undefined,
-      after: updatedOrg,
+      before: {
+        name: existingOrg?.name,
+        brandColor: existingOrg?.brandColor,
+        timezone: existingOrg?.timezone,
+        locale: existingOrg?.locale,
+        settings: existingSettingsMap,
+      },
+      after: {
+        name: updatedOrg.name,
+        brandColor: updatedOrg.brandColor,
+        timezone: updatedOrg.timezone,
+        locale: updatedOrg.locale,
+        settings: updatedSettingsMap,
+      },
       details: { summary: `Organization profile and compliance policies updated by ${auth.user.name}` },
     }).catch(console.error);
 

@@ -145,10 +145,10 @@ export async function GET(request: Request) {
     const avgDuration =
       completedCount > 0
         ? Math.round(
-            checkIns
-              .filter((c) => c.checkOut?.durationMinutes)
-              .reduce((sum, c) => sum + (c.checkOut?.durationMinutes || 0), 0) / completedCount
-          )
+          checkIns
+            .filter((c) => c.checkOut?.durationMinutes)
+            .reduce((sum, c) => sum + (c.checkOut?.durationMinutes || 0), 0) / completedCount
+        )
         : 0;
 
     // Log REPORT_EXPORT audit event

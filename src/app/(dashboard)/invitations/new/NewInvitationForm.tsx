@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Phone, User, Building, Calendar, Clock, MapPin, Send, Loader2, CheckCircle2, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { OrgPolicy } from "@/lib/settings-schema";
 
 interface EmployeeItem {
   id: string;
@@ -28,13 +29,26 @@ export function NewInvitationForm({
   rooms,
   visitorTypes,
   currentEmployeeId,
+  policy,
 }: {
   employees: EmployeeItem[];
   rooms: RoomItem[];
   visitorTypes: TypeItem[];
   currentEmployeeId?: string | null;
+  policy?: OrgPolicy;
 }) {
   const router = useRouter();
+  const todayStr = new Date().toISOString().split("T")[0];
+  const advanceDays = policy?.advanceBookingDays ?? 30;
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + advanceDays);
+  const maxDateStr = maxDate.toISOString().split("T")[0];
+
+  const isCompanyRequired = policy?.requireCompany ?? true;
+  const isEmailRequired = policy?.requireEmail ?? true;
+  const isPhoneRequired = policy?.requirePhone ?? true;
+  const isPurposeRequired = policy?.requirePurpose ?? true;
+
   const [formData, setFormData] = useState({
     visitorName: "",
     visitorEmail: "",
@@ -42,7 +56,7 @@ export function NewInvitationForm({
     visitorCompany: "",
     visitorTypeId: visitorTypes[0]?.id || "",
     hostEmployeeId: currentEmployeeId || employees[0]?.id || "",
-    scheduledDate: new Date().toISOString().split("T")[0],
+    scheduledDate: todayStr,
     startTime: "11:00",
     endTime: "12:00",
     purpose: "Strategic Enterprise Review",
@@ -56,8 +70,28 @@ export function NewInvitationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.visitorName || !formData.visitorEmail || !formData.visitorPhone) {
-      setError("Please fill all required visitor fields");
+    if (!formData.visitorName.trim()) {
+      setError("Visitor full name is required");
+      return;
+    }
+    if (isEmailRequired && !formData.visitorEmail.trim()) {
+      setError("Valid visitor email address is required by workplace policy");
+      return;
+    }
+    if (isPhoneRequired && !formData.visitorPhone.trim()) {
+      setError("Visitor phone number is required by workplace policy");
+      return;
+    }
+    if (isCompanyRequired && !formData.visitorCompany.trim()) {
+      setError("Company / Organization is required by workplace policy");
+      return;
+    }
+    if (isPurposeRequired && !formData.purpose.trim()) {
+      setError("Meeting purpose is required by workplace policy");
+      return;
+    }
+    if (formData.scheduledDate > maxDateStr) {
+      setError(`Invitations cannot be scheduled more than ${advanceDays} days in advance`);
       return;
     }
 
@@ -152,11 +186,14 @@ export function NewInvitationForm({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Company / Organization</label>
+          <label className="block text-xs font-semibold text-slate-300 mb-1">
+            Company / Organization {isCompanyRequired ? "*" : ""}
+          </label>
           <div className="relative">
             <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="text"
+              required={isCompanyRequired}
               placeholder="e.g. Sequoia Capital"
               value={formData.visitorCompany}
               onChange={(e) => setFormData({ ...formData, visitorCompany: e.target.value })}
@@ -166,12 +203,14 @@ export function NewInvitationForm({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address *</label>
+          <label className="block text-xs font-semibold text-slate-300 mb-1">
+            Email Address {isEmailRequired ? "*" : ""}
+          </label>
           <div className="relative">
             <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="email"
-              required
+              required={isEmailRequired}
               placeholder="maya@sequoiacap.com"
               value={formData.visitorEmail}
               onChange={(e) => setFormData({ ...formData, visitorEmail: e.target.value })}
@@ -181,12 +220,14 @@ export function NewInvitationForm({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Mobile Number *</label>
+          <label className="block text-xs font-semibold text-slate-300 mb-1">
+            Mobile Number {isPhoneRequired ? "*" : ""}
+          </label>
           <div className="relative">
             <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input
               type="tel"
-              required
+              required={isPhoneRequired}
               placeholder="+91 99000 11223"
               value={formData.visitorPhone}
               onChange={(e) => setFormData({ ...formData, visitorPhone: e.target.value })}
@@ -203,12 +244,16 @@ export function NewInvitationForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Scheduled Date *</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Scheduled Date * {policy?.advanceBookingDays ? `(Max ${policy.advanceBookingDays}d in advance)` : ""}
+            </label>
             <div className="relative">
               <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
                 type="date"
                 required
+                min={todayStr}
+                max={maxDateStr}
                 value={formData.scheduledDate}
                 onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
                 className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"

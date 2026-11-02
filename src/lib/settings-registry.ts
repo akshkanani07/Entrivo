@@ -33,10 +33,24 @@ export async function getOrgPolicy(orgId: string): Promise<{ policy: OrgPolicy; 
   const rawMap: Record<string, any> = {};
 
   for (const s of settings) {
+    let parsedVal: any;
     try {
-      rawMap[s.key] = JSON.parse(s.value);
+      parsedVal = JSON.parse(s.value);
     } catch {
-      rawMap[s.key] = s.value;
+      parsedVal = s.value;
+    }
+
+    // Auto-coerce strings to boolean or numbers when applicable
+    if (parsedVal === "true") parsedVal = true;
+    else if (parsedVal === "false") parsedVal = false;
+    else if (typeof parsedVal === "string" && /^-?\d+(\.\d+)?$/.test(parsedVal.trim())) {
+      parsedVal = Number(parsedVal);
+    }
+
+    rawMap[s.key] = parsedVal;
+    if (s.key.startsWith("policy_")) {
+      const strippedKey = s.key.replace("policy_", "");
+      rawMap[strippedKey] = parsedVal;
     }
   }
 

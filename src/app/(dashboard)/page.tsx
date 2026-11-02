@@ -116,13 +116,13 @@ export default async function DashboardPage() {
     },
     hostEmployee: ci.hostEmployee
       ? {
-          id: ci.hostEmployee.id,
-          user: {
-            name: ci.hostEmployee.user.name,
-            email: ci.hostEmployee.user.email,
-          },
-          office: ci.hostEmployee.office,
-        }
+        id: ci.hostEmployee.id,
+        user: {
+          name: ci.hostEmployee.user.name,
+          email: ci.hostEmployee.user.email,
+        },
+        office: ci.hostEmployee.office,
+      }
       : null,
   }));
 

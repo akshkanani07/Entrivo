@@ -120,8 +120,10 @@ export async function audit(params: AuditParams): Promise<void> {
 
     await prisma.auditLog.create({
       data: {
-        organizationId: params.organizationId || null,
-        userId: params.userId || null,
+        ...(params.organizationId
+          ? { organization: { connect: { id: params.organizationId } } }
+          : {}),
+        ...(params.userId ? { user: { connect: { id: params.userId } } } : {}),
         action: params.action,
         entity: params.entity,
         entityId: params.entityId || null,
@@ -134,3 +136,4 @@ export async function audit(params: AuditParams): Promise<void> {
     console.error("[AuditService] Failed to record audit log entry:", err?.message || err);
   }
 }
+

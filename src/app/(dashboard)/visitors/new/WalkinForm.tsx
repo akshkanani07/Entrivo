@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { formatDateTime } from "@/lib/utils";
+import { OrgPolicy } from "@/lib/settings-schema";
 
 interface EmployeeOption {
   id: string;
@@ -38,10 +39,12 @@ interface VisitorTypeOption {
 export function WalkinForm({
   employees,
   visitorTypes,
+  policy,
   requireNda = false,
 }: {
   employees: EmployeeOption[];
   visitorTypes: VisitorTypeOption[];
+  policy?: OrgPolicy;
   requireNda?: boolean;
 }) {
   const router = useRouter();
@@ -58,7 +61,14 @@ export function WalkinForm({
   });
 
   const selectedType = visitorTypes.find((t) => t.id === formData.visitorTypeId);
-  const isNdaRequired = requireNda || (selectedType?.requiresNDA ?? false);
+  const isNdaRequired = (policy?.requireNda ?? requireNda) || (selectedType?.requiresNDA ?? false);
+  const isPhotoRequired = policy?.requirePhoto ?? true;
+  const isCompanyRequired = policy?.requireCompany ?? true;
+  const isEmailRequired = policy?.requireEmail ?? true;
+  const isPurposeRequired = policy?.requirePurpose ?? true;
+  const isIdProofRequired = policy?.requireIdProof ?? false;
+  const isIdNumberRequired = policy?.requireIdNumber ?? false;
+  const isWalkInAllowed = policy?.allowWalkIn ?? true;
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
@@ -68,11 +78,34 @@ export function WalkinForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isWalkInAllowed) {
+      setError("Walk-in visitor registration is currently disabled by workplace policy.");
+      return;
+    }
     if (!formData.name || !formData.phone || !formData.hostEmployeeId) {
       setError("Please fill all required fields (Visitor name, phone, and host employee)");
       return;
     }
-
+    if (isCompanyRequired && !formData.company.trim()) {
+      setError("Company / Organization is required by workplace policy.");
+      return;
+    }
+    if (isEmailRequired && !formData.email.trim()) {
+      setError("Email address is required by workplace policy.");
+      return;
+    }
+    if (isPurposeRequired && !formData.purpose.trim()) {
+      setError("Purpose of visit is required by workplace policy.");
+      return;
+    }
+    if (isIdNumberRequired && !formData.idProofNumber.trim()) {
+      setError("ID proof number is required by workplace policy.");
+      return;
+    }
+    if (isPhotoRequired && !photoUrl) {
+      setError("A verification photo is required by workplace policy before check-in.");
+      return;
+    }
     if (isNdaRequired && !signatureUrl) {
       setError("A digital signature is required for the Non-Disclosure Agreement (NDA) before check-in.");
       return;
@@ -190,6 +223,15 @@ export function WalkinForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {!isWalkInAllowed && (
+        <div className="p-4 rounded-xl bg-rose-950/70 border border-rose-600/50 text-rose-200 text-xs flex items-center gap-3 mb-4">
+          <ShieldAlert className="w-5 h-5 flex-shrink-0 text-rose-400" />
+          <span>
+            <strong>Walk-in Policy Notice:</strong> Unscheduled walk-in registrations are currently disabled by workplace policy.
+          </span>
+        </div>
+      )}
+
       {error && (
         <div className="p-4 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-200 text-xs flex items-center gap-2.5">
           <ShieldAlert className="w-5 h-5 flex-shrink-0 text-rose-400" />
@@ -273,11 +315,14 @@ export function WalkinForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Email Address {isEmailRequired ? "*" : ""}
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
+                  required={isEmailRequired}
                   placeholder="vikram@guestcorp.com"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -288,12 +333,13 @@ export function WalkinForm({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Company / Organization
+                Company / Organization {isCompanyRequired ? "*" : ""}
               </label>
               <div className="relative">
                 <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="text"
+                  required={isCompanyRequired}
                   placeholder="e.g. Google Cloud, Deloitte, Self"
                   value={formData.company}
                   onChange={(e) => setFormData({ ...formData, company: e.target.value })}
@@ -339,7 +385,9 @@ export function WalkinForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">ID Proof Type</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                ID Proof Type {isIdProofRequired ? "*" : ""}
+              </label>
               <select
                 value={formData.idProofType}
                 onChange={(e) => setFormData({ ...formData, idProofType: e.target.value })}
@@ -353,9 +401,12 @@ export function WalkinForm({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">ID Proof Number</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                ID Proof Number {isIdNumberRequired ? "*" : ""}
+              </label>
               <input
                 type="text"
+                required={isIdNumberRequired}
                 placeholder="XXXX-XXXX-1234"
                 value={formData.idProofNumber}
                 onChange={(e) => setFormData({ ...formData, idProofNumber: e.target.value })}
@@ -365,9 +416,12 @@ export function WalkinForm({
           </div>
 
           <div className="pt-2">
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Purpose of Visit</label>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Purpose of Visit {isPurposeRequired ? "*" : ""}
+            </label>
             <input
               type="text"
+              required={isPurposeRequired}
               placeholder="e.g. Vendor server maintenance, Client product demo"
               value={formData.purpose}
               onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}

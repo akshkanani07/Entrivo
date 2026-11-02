@@ -1,6 +1,7 @@
 import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
+import { getOrgPolicy } from "@/lib/settings-registry";
 import { NewInvitationForm } from "./NewInvitationForm";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,8 @@ export default async function NewInvitationPage() {
     );
   }
 
-  const [employees, rooms, visitorTypes] = await Promise.all([
+  const [{ policy }, employees, rooms, visitorTypes] = await Promise.all([
+    getOrgPolicy(orgId),
     prisma.employee.findMany({
       where: { organizationId: orgId },
       include: { user: { select: { name: true, email: true } }, department: true },
@@ -49,6 +51,7 @@ export default async function NewInvitationPage() {
         rooms={rooms}
         visitorTypes={visitorTypes}
         currentEmployeeId={user?.employeeId || employees[0]?.id}
+        policy={policy}
       />
     </div>
   );

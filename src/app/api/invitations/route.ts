@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkScheduleAndHolidayPolicy } from "@/lib/settings-registry";
+import { checkScheduleAndHolidayPolicy, getOrgPolicy } from "@/lib/settings-registry";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAnyPermission, can } from "@/lib/rbac";
@@ -130,6 +130,35 @@ export async function POST(request: Request) {
       meetingRoomId,
       notes,
     } = parsed.data;
+
+    // Enforce dynamic policy rules (P6-01, P6-02)
+    const { policy } = await getOrgPolicy(orgId);
+
+    if (policy.advanceBookingDays) {
+      const scheduled = new Date(scheduledDate);
+      const maxAdvanceDate = new Date();
+      maxAdvanceDate.setDate(maxAdvanceDate.getDate() + policy.advanceBookingDays);
+      maxAdvanceDate.setHours(23, 59, 59, 999);
+      if (scheduled > maxAdvanceDate) {
+        return NextResponse.json(
+          { success: false, error: `Invitations cannot be scheduled more than ${policy.advanceBookingDays} days in advance.` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (policy.requireCompany && (!visitorCompany || !visitorCompany.trim())) {
+      return NextResponse.json({ success: false, error: "Company is required by workplace policy." }, { status: 400 });
+    }
+    if (policy.requireEmail && (!visitorEmail || !visitorEmail.trim())) {
+      return NextResponse.json({ success: false, error: "Email is required by workplace policy." }, { status: 400 });
+    }
+    if (policy.requirePhone && (!visitorPhone || !visitorPhone.trim())) {
+      return NextResponse.json({ success: false, error: "Phone number is required by workplace policy." }, { status: 400 });
+    }
+    if (policy.requirePurpose && (!purpose || !purpose.trim())) {
+      return NextResponse.json({ success: false, error: "Purpose of visit is required by workplace policy." }, { status: 400 });
+    }
 
     // Resolve Host Employee scoped to org
     let effectiveHostId = hostEmployeeId;

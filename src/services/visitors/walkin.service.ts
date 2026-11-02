@@ -79,6 +79,64 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
     return { success: false, error: "Host employee not found in organization.", status: 400 };
   }
 
+  // 1. Policy & Dynamic Required Fields Enforcement (P6-01, P6-02)
+  const { policy } = await getOrgPolicy(orgId);
+
+  if (!policy.allowWalkIn) {
+    return {
+      success: false,
+      error: "Walk-in visitor registration is currently disabled by workplace policy.",
+      status: 403,
+    };
+  }
+
+  if (policy.requireCompany && (!input.company || !input.company.trim())) {
+    return { success: false, error: "Company / Organization name is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requireEmail && (!input.email || !input.email.trim())) {
+    return { success: false, error: "Email address is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requirePhone && (!input.phone || !input.phone.trim())) {
+    return { success: false, error: "Phone number is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requirePurpose && (!input.purpose || !input.purpose.trim())) {
+    return { success: false, error: "Purpose of visit is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requireIdProof && (!input.idProofType || !input.idProofType.trim())) {
+    return { success: false, error: "Government ID proof type is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requireIdNumber && (!input.idProofNumber || !input.idProofNumber.trim())) {
+    return { success: false, error: "Government ID proof number is required by workplace policy.", status: 400 };
+  }
+
+  if (policy.requirePhoto && !input.photoUrl) {
+    return { success: false, error: "Visitor verification photo is required before badge issuance.", status: 400 };
+  }
+
+  // Max visitors per host per day enforcement
+  if (policy.maxVisitorsPerHostPerDay) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const hostVisitsToday = await prisma.checkIn.count({
+      where: {
+        hostEmployeeId: input.hostEmployeeId,
+        checkInTime: { gte: startOfToday },
+      },
+    });
+    if (hostVisitsToday >= policy.maxVisitorsPerHostPerDay) {
+      return {
+        success: false,
+        error: `Host has reached their maximum daily visitor capacity (${policy.maxVisitorsPerHostPerDay} visitors).`,
+        status: 400,
+      };
+    }
+  }
+
   // Working Hours & Holiday Enforcement Check
   const scheduleCheck = await checkScheduleAndHolidayPolicy(orgId, new Date(), {
     officeId: hostEmp.officeId || undefined,
@@ -113,7 +171,6 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
   });
 
   // NDA Policy Enforcement Check (P3-02)
-  const { policy } = await getOrgPolicy(orgId);
   const requiresNda = (vType?.requiresNDA ?? false) || policy.requireNda;
 
   let ndaSigned = false;
