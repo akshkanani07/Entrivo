@@ -7,6 +7,36 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Starting Entrivo Enterprise Database Seeding...");
 
+  // 0. Idempotent cleanup of existing records
+  await prisma.auditLog.deleteMany({});
+  await prisma.securityLog.deleteMany({});
+  await prisma.webhookDelivery.deleteMany({});
+  await prisma.webhookSubscription.deleteMany({});
+  await prisma.apiKey.deleteMany({});
+  await prisma.calendarConnection.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.badge.deleteMany({});
+  await prisma.qRCode.deleteMany({});
+  await prisma.checkOut.deleteMany({});
+  await prisma.checkIn.deleteMany({});
+  await prisma.approval.deleteMany({});
+  await prisma.invitation.deleteMany({});
+  await prisma.document.deleteMany({});
+  await prisma.ndaTemplate.deleteMany({});
+  await prisma.visitor.deleteMany({});
+  await prisma.blacklistVisitor.deleteMany({});
+  await prisma.visitorType.deleteMany({});
+  await prisma.meetingRoom.deleteMany({});
+  await prisma.employee.deleteMany({});
+  await prisma.user.deleteMany({});
+  await prisma.department.deleteMany({});
+  await prisma.office.deleteMany({});
+  await prisma.branch.deleteMany({});
+  await prisma.setting.deleteMany({});
+  await prisma.notificationTemplate.deleteMany({});
+  await prisma.report.deleteMany({});
+  await prisma.organization.deleteMany({});
+
   // 1. Create Organization
   const org = await prisma.organization.create({
     data: {

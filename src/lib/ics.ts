@@ -69,3 +69,4 @@ export function generateIcsFile(event: IcsEventOptions): string {
 
   return lines.join("\r\n");
 }
+

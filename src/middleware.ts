@@ -40,9 +40,14 @@ const PUBLIC_ROUTES = [
   "/forbidden",
   "/pass",
   "/kiosk",
+  "/offline",
+  "/developers",
   "/manifest.json",
   "/sw.js",
   "/icons",
+  // Public API v1 & health check:
+  "/api/v1",
+  "/api/health",
   // Public auth API handlers only:
   "/api/auth/login",
   "/api/auth/register",

@@ -33,3 +33,4 @@ export async function GET(request: Request) {
 
   return NextResponse.redirect(`${appUrl}/integrations?calendar_connected=${provider}`);
 }
+

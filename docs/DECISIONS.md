@@ -157,6 +157,32 @@
   - Connects to notification routing and webhook event catalog, delivering rich notifications with deep links ("Open in Entrivo") back to the dashboard.
   - Integrations management console (`/integrations`) with multi-tab interface (`Apps & Services`, `Webhooks`, `API Keys`), real-time delivery logs table, manual redelivery trigger, test pinging simulator, and secret rotation.
 
+## Decision 19: Comprehensive Testing Suites, Route Auto-Discovery, Pino Observability, Containerization, and Final Regression (Phase 9)
+- **Vitest Unit Test Suite (`P9-01`)**:
+  - Configured `vitest.config.mts` with path alias `@` -> `./src` and shims for Next.js `server-only` to enable testing server-isolated utility modules directly.
+  - Implemented 8 test suites containing 36 unit tests covering RBAC permissions & escalation guards (`rbac.test.ts`), multi-tenant resolution & rejection (`tenant.test.ts`), HMAC-SHA256 QR token verification and tampering detection (`qr.test.ts`), RFC 6238 TOTP 2FA secret generation, timing, and single-use backup codes (`totp.test.ts`), notification template variable interpolation and safety (`templates.test.ts`), typed policy schemas and working hours validation (`policies.test.ts`), timezone calculations and day boundary shifts across UTC and IST (`timezone.test.ts`), and approval workflow triggers, delegation, and escalation (`approvals.test.ts`).
+- **Route Auto-Discovery & Tenant Boundary Verification (`P9-01`)**:
+  - Expanded `scripts/verify-tenant-isolation.ts` with recursive filesystem scanning to dynamically discover every `route.ts` under `src/app/api` (108 total API endpoints).
+  - Classified routes into strict security tiers: `PUBLIC` (login, healthcheck, openapi.json, public kiosks), `CRON` (bearer secret validated), `SIGNED_URL` (HMAC token validated), `USER_SELF` (authenticated user session validated), `KIOSK` (hardware terminal token validated), `API_V1` (Bearer API key validated), and `TENANT_SESSION` (`requireOrg` tenant boundary enforced).
+  - The script executes in CI / `pnpm test:tenant` and asserts 100% compliance, exiting non-zero if any unprotected or non-isolated route is added.
+- **Playwright End-to-End Suite (`P9-01`)**:
+  - Configured `playwright.config.ts` with local Next.js web server orchestration and Chromium headless execution.
+  - Auth & 2FA (`auth-2fa.spec.ts`): Tests login rendering, required form constraints, invalid credential rejection without user enumeration, and 2FA challenge handling.
+  - Visitor Lifecycle (`visitor-lifecycle.spec.ts`): Tests invitation creation, pre-registration flows, QR pass rendering, check-in portal token validation, and pass security requirements.
+  - Kiosk Self-Service (`kiosk-flow.spec.ts`): Tests 8-character pairing code generation, kiosk terminal public view, and PIN input validation.
+  - Offline & PWA Sync (`offline-sync.spec.ts`): Tests `/offline` service worker fallback page rendering, PWA manifest configuration, icons, and theme color.
+  - RBAC Navigation & UI Hiding (`rbac-ui.spec.ts`): Verifies HTTP 403 Forbidden page, unauthenticated redirects on sensitive admin routes (`/settings`, `/audit-logs`), developer portal accessibility, and legal terms gating.
+- **Production Observability & Health Check (`P9-03`)**:
+  - Implemented `src/lib/logger.ts` utilizing Pino structured JSON logging with custom contextual child loggers (`createRequestLogger({ reqId, organizationId, userId, path })`).
+  - Strict PII Redaction: Automatically masks sensitive fields in log outputs (`password`, `secret`, `token`, `keyHash`, `idProofNumber`, `phone`, `encryptedAccessToken`, `backupCodes`).
+  - Production Health Check (`/api/health`): Monitors PostgreSQL connectivity via `SELECT 1`, Redis connectivity via `client.ping()`, BullMQ queue readiness, and Sentry telemetry status. Returns HTTP 200 with service breakdown or HTTP 503 if primary database is unreachable.
+  - User-Friendly Error Pages: Created custom dark/glass themed 404 page (`src/app/not-found.tsx`) and enhanced error boundaries.
+- **Production Containerization & Documentation (`P9-04`)**:
+  - Implemented multi-stage `Dockerfile` (deps -> builder -> runner) using Node.js 22 alpine, non-root user `nextjs`, standalone output, and automated health checks.
+  - Implemented `docker-compose.yml` orchestrating PostgreSQL 16, Redis 7, Next.js web application, and dedicated BullMQ worker container with persistent volumes, dependencies, and private network bridge.
+  - Authored comprehensive documentation: `README.md` (Windows setup, Mermaid architecture diagram, quickstart), `docs/ENV.md` (detailed specification of all 36 environment variables), `docs/DEPLOYMENT.md` (Vercel, Docker, Windows Server, BullMQ worker, and crons), and `docs/SECURITY.md` (STRIDE threat model and verification checklist).
+
+
 
 
 

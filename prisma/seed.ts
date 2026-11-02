@@ -10,6 +10,10 @@ async function main() {
   // 1. Clean existing records if any
   await prisma.auditLog.deleteMany({});
   await prisma.securityLog.deleteMany({});
+  await prisma.webhookDelivery.deleteMany({});
+  await prisma.webhookSubscription.deleteMany({});
+  await prisma.apiKey.deleteMany({});
+  await prisma.calendarConnection.deleteMany({});
   await prisma.notification.deleteMany({});
   await prisma.badge.deleteMany({});
   await prisma.qRCode.deleteMany({});

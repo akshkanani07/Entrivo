@@ -431,3 +431,4 @@ export async function syncInvitationCalendar(
     return { success: false, error: err.message };
   }
 }
+

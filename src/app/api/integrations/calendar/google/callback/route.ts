@@ -54,3 +54,4 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(err.message || "Failed to complete Google Calendar pairing")}`);
   }
 }
+

@@ -18,3 +18,4 @@ export async function GET() {
   const authUrl = getOutlookCalendarAuthUrl(state, redirectUri);
   return NextResponse.redirect(authUrl);
 }
+
