@@ -128,11 +128,11 @@ Quality, Performance, Docs.
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
-| **P9-01** | Tests: vitest units (rbac, tenant helpers, policies, qr, totp, template rendering, approval engine, timezone logic); integration tests on a test database for critical flows; expand scripts/verify-tenant-isolation.ts to AUTO-DISCOVER every API route and assert cross-tenant and cross-role denial (exit non-zero on any leak); Playwright E2E: login (+2FA), invitation -> approval -> QR check-in -> checkout, kiosk pairing + self check-in, offline queue replay, RBAC UI hiding. Scripts: pnpm test, test:e2e, test:tenant. | [ ] | | |
-| **P9-02** | Performance: review indexes for every org-scoped list and search, remove N+1 queries, cursor pagination everywhere, caching where safe, bundle audit (no server code in client bundles), image optimization. | [ ] | | |
-| **P9-03** | Observability: pino structured logs with request ids and PII masking, /api/health (db, redis, queue), friendly error pages, optional Sentry via env. | [ ] | | |
-| **P9-04** | Seed and docs: idempotent realistic demo seed (never default passwords); README (Windows setup, architecture diagram in mermaid); docs/ENV.md (every variable), docs/DEPLOYMENT.md (Vercel and Docker, worker and cron setup), docs/SECURITY.md (threat model + checklist), Dockerfile + docker-compose (postgres, redis, app, worker); complete .env.example. | [ ] | | |
-| **P9-05** | Final regression: tsc, build, lint, all tests, pnpm audit; remove dead code; PROGRESS.md 100%; final report with evidence and the human-needed list. | [ ] | | |
+| **P9-01** | Tests: vitest units (rbac, tenant helpers, policies, qr, totp, template rendering, approval engine, timezone logic); integration tests on a test database for critical flows; expand scripts/verify-tenant-isolation.ts to AUTO-DISCOVER every API route and assert cross-tenant and cross-role denial (exit non-zero on any leak); Playwright E2E: login (+2FA), invitation -> approval -> QR check-in -> checkout, kiosk pairing + self check-in, offline queue replay, RBAC UI hiding. Scripts: pnpm test, test:e2e, test:tenant. | [x] | 2026-11-02 | `ed8fa8c` |
+| **P9-02** | Performance: review indexes for every org-scoped list and search, remove N+1 queries, cursor pagination everywhere, caching where safe, bundle audit (no server code in client bundles), image optimization. | [x] | 2026-11-02 | `ed8fa8c` |
+| **P9-03** | Observability: pino structured logs with request ids and PII masking, /api/health (db, redis, queue), friendly error pages, optional Sentry via env. | [x] | 2026-11-02 | `ed8fa8c` |
+| **P9-04** | Seed and docs: idempotent realistic demo seed (never default passwords); README (Windows setup, architecture diagram in mermaid); docs/ENV.md (every variable), docs/DEPLOYMENT.md (Vercel and Docker, worker and cron setup), docs/SECURITY.md (threat model + checklist), Dockerfile + docker-compose (postgres, redis, app, worker); complete .env.example. | [x] | 2026-11-02 | `ed8fa8c` |
+| **P9-05** | Final regression: tsc, build, lint, all tests, pnpm audit; remove dead code; PROGRESS.md 100%; final report with evidence and the human-needed list. | [x] | 2026-11-02 | `ed8fa8c` |
 
 
 
