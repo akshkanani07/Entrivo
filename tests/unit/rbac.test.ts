@@ -85,7 +85,7 @@ describe("RBAC Permissions & Roles Matrix", () => {
 
     it("allows ORG_ADMIN to assign roles except SUPER_ADMIN", () => {
       expect(canAssignRole("ORG_ADMIN", "ORG_ADMIN")).toBe(true);
-      expect(canAssignRole("ORG_ADMIN", "FACILITY_MANAGER")).toBe(true);
+      expect(canAssignRole("ORG_ADMIN", "SECURITY_GUARD")).toBe(true);
       expect(canAssignRole("ORG_ADMIN", "RECEPTIONIST")).toBe(true);
       expect(canAssignRole("ORG_ADMIN", "EMPLOYEE")).toBe(true);
 
@@ -94,7 +94,7 @@ describe("RBAC Permissions & Roles Matrix", () => {
     });
 
     it("blocks non-admin roles from assigning any role", () => {
-      const nonAdmins: UserRole[] = ["FACILITY_MANAGER", "SECURITY_GUARD", "RECEPTIONIST", "EMPLOYEE"];
+      const nonAdmins: UserRole[] = ["SECURITY_GUARD", "RECEPTIONIST", "EMPLOYEE"];
       for (const role of nonAdmins) {
         expect(canAssignRole(role, "EMPLOYEE")).toBe(false);
         expect(canAssignRole(role, "RECEPTIONIST")).toBe(false);

@@ -8,3 +8,5 @@ tsbuildinfo
 .DS_Store
 dist
 .uploads/
+test-results/
+playwright-report/

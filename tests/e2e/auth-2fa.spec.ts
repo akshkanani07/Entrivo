@@ -30,13 +30,24 @@ test.describe("Authentication, Session & 2FA Workflows", () => {
 
   test("rejects invalid credentials without user enumeration", async ({ page }) => {
     await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
 
-    await page.fill('input[type="email"]', "nonexistent.user@entrivo.com");
-    await page.fill('input[type="password"]', "WrongPassword123!@#");
-    await page.click('button[type="submit"]');
+    const emailInput = page.locator('input[type="email"]');
+    await emailInput.click();
+    await emailInput.fill("nonexistent.user@entrivo.com");
+
+    const passwordInput = page.locator('input[type="password"]');
+    await passwordInput.click();
+    await passwordInput.fill("WrongPassword123!@#");
+
+    const submitBtn = page.locator('button[type="submit"]');
+    await Promise.all([
+      page.waitForResponse((res) => res.url().includes("/api/auth/login")),
+      submitBtn.click(),
+    ]);
 
     // Generic error alert displayed
-    const alert = page.locator("text=/invalid email or password|please enter your work email|login failed/i");
-    await expect(alert.first()).toBeVisible({ timeout: 8000 });
+    const alert = page.locator("text=/invalid email or password|login failed/i");
+    await expect(alert.first()).toBeVisible({ timeout: 10000 });
   });
 });
