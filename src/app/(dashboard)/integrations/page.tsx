@@ -45,6 +45,45 @@ export default async function IntegrationsPage() {
     webhooks = whs.map((w) => ({
       ...w,
       createdAt: w.createdAt.toISOString(),
+      lastFailureAt: w.lastFailureAt ? w.lastFailureAt.toISOString() : null,
+      lastSuccessAt: w.lastSuccessAt ? w.lastSuccessAt.toISOString() : null,
+    }));
+
+    const [keys, calConns, deliveries] = await Promise.all([
+      prisma.apiKey.findMany({
+        where: { organizationId: orgId },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.calendarConnection.findMany({
+        where: { organizationId: orgId, isActive: true },
+        include: { user: { select: { name: true, email: true } } },
+      }),
+      prisma.webhookDelivery.findMany({
+        where: { organizationId: orgId },
+        include: { webhookSubscription: { select: { url: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+    ]);
+
+    const serializedKeys = keys.map((k) => ({
+      ...k,
+      createdAt: k.createdAt.toISOString(),
+      updatedAt: k.updatedAt.toISOString(),
+      lastUsedAt: k.lastUsedAt ? k.lastUsedAt.toISOString() : null,
+      expiresAt: k.expiresAt ? k.expiresAt.toISOString() : null,
+    }));
+
+    const serializedCal = calConns.map((c) => ({
+      ...c,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+    }));
+
+    const serializedDeliveries = deliveries.map((d) => ({
+      ...d,
+      createdAt: d.createdAt.toISOString(),
+      deliveredAt: d.deliveredAt ? d.deliveredAt.toISOString() : null,
     }));
 
     const settingsMap = settings.reduce((acc: Record<string, string>, item) => {
@@ -64,14 +103,26 @@ export default async function IntegrationsPage() {
       googleCalId: settingsMap["GOOGLE_CAL_ID"] || "",
       googleCalEnabled: settingsMap["GOOGLE_CAL_ENABLED"] === "true",
     };
+
+    return (
+      <IntegrationsManager
+        initialWebhooks={webhooks}
+        initialIntegrations={integrationsData}
+        initialApiKeys={serializedKeys}
+        initialCalendarConnections={serializedCal}
+        initialDeliveries={serializedDeliveries}
+      />
+    );
   } catch (err: any) {
     console.error("Integrations fetch error:", err?.message);
+    return (
+      <IntegrationsManager
+        initialWebhooks={webhooks}
+        initialIntegrations={integrationsData}
+        initialApiKeys={[]}
+        initialCalendarConnections={[]}
+        initialDeliveries={[]}
+      />
+    );
   }
-
-  return (
-    <IntegrationsManager
-      initialWebhooks={webhooks}
-      initialIntegrations={integrationsData}
-    />
-  );
 }

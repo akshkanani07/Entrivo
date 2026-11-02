@@ -131,6 +131,32 @@
   - Main container enforces `overflow-x-hidden min-w-0` to prevent horizontal blowouts on viewports down to 360px.
   - `QRScannerModal` provides live camera scanning with Chromium `BarcodeDetector` support, explicit camera permission error handling (`NotAllowedError`, `NotFoundError`), and seamless manual token fallbacks.
 
+## Decision 18: Integrations, Outbound Webhooks, Public REST API v1, API Keys, and Calendar Synchronization (Phase 8)
+- **Outbound Webhook Engine & SSRF Protection (`P8-01`)**:
+  - Implemented 9-event versioned catalog (`visitor.invited`, `invitation.cancelled`, `invitation.rescheduled`, `visitor.checked_in`, `visitor.checked_out`, `approval.requested`, `approval.decided`, `security.alert`, `document.expiring`).
+  - HMAC-SHA256 signatures generated using subscription secret over `timestamp.payload`, delivered in `X-Entrivo-Signature`, `X-Entrivo-Timestamp`, `X-Entrivo-Delivery`, and `X-Entrivo-Event` headers. Receivers can verify signatures with timing-safe comparison within a 300-second drift tolerance window.
+  - SSRF Guard (`src/lib/ssrf.ts`): Enforces HTTPS only, rejects URL credentials and non-443 ports, resolves DNS hostnames via `dns.promises.lookup` at connect time to block DNS rebinding, and rejects all IPv4 private (10/8, 172.16/12, 192.168/16), loopback (127/8), link-local/cloud metadata (169.254/16), carrier-grade NAT (100.64/10), and IPv6 loopback (::1), link-local (fe80::/10), and ULA (fc00::/7) addresses.
+  - Enforced `redirect: "manual"` and a strict 5-second `AbortSignal` timeout to prevent hanging connections or redirect-based SSRF.
+  - Auto-disables subscription endpoints after 5 consecutive delivery failures, persisting `disabledReason` and logging a `WEBHOOK_AUTO_DISABLED` audit event.
+  - Provides cryptographically secure secret rotation with `whsec_` prefix and immediate audit logging.
+- **API Keys & Scoped Authorization (`P8-02`)**:
+  - API keys use visible prefixes `ent_live_` and `ent_test_` followed by 32 random hex characters. Only SHA-256 hash is persisted in the database (`keyHash`), indexed for rapid O(1) lookup. Raw secret is displayed exactly once at creation time via modal with copy-to-clipboard UX.
+  - Granular REST scopes (`visitors:read`, `visitors:write`, `invitations:read`, `invitations:write`, `checkins:read`, `employees:read`, `webhooks:manage`, `*`) mapped to organization tenant boundaries.
+  - Bearer authentication engine `authenticateApiKey` enforces key validity, expiration, active status, and granular scope checks (returning HTTP 403 `INSUFFICIENT_SCOPE` on mismatch).
+  - Enforces per-key rate limiting (default 120 req/min) returning standard rate-limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`.
+- **Public REST API v1 & OpenAPI Specification (`P8-03`)**:
+  - Full CRUD and telemetry routes at `/api/v1/visitors`, `/api/v1/invitations` (with reschedule/cancel sub-routes), `/api/v1/checkins`, `/api/v1/employees`, and `/api/v1/webhooks`.
+  - Built-in support for REST-hook subscriptions accepting `target_url` for seamless Zapier and Make.com integrations.
+  - OpenAPI 3.0.3 specification available at `/api/v1/openapi.json`.
+  - Read-only developer documentation portal at `/developers` featuring authentication quickstarts, code recipes (cURL, Node.js, Python), Zapier/Make webhooks guides, and HMAC-SHA256 signature verification samples.
+- **Calendar Integrations & Universal RFC 5545 .ics Generation (`P8-04`)**:
+  - Implemented standard RFC 5545 iCalendar `.ics` generator (`src/lib/ics.ts`), universally attached to transactional invitation and approval emails to guarantee calendar invite delivery across all email clients.
+  - Per-host Google Calendar and Microsoft Outlook OAuth integration with encrypted token storage (`AES-256-GCM`), automatic token refresh, and simulated mock fallback mode for local development.
+  - Automated event lifecycle: creates calendar event upon invitation/approval, updates upon reschedule, and deletes upon cancellation.
+- **Slack & Microsoft Teams Deep Links & Management UI (`P8-05`)**:
+  - Connects to notification routing and webhook event catalog, delivering rich notifications with deep links ("Open in Entrivo") back to the dashboard.
+  - Integrations management console (`/integrations`) with multi-tab interface (`Apps & Services`, `Webhooks`, `API Keys`), real-time delivery logs table, manual redelivery trigger, test pinging simulator, and secret rotation.
+
 
 
 

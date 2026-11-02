@@ -48,6 +48,10 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `sessions.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `notifications.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `notifications.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `apikeys.read` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `apikeys.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `webhooks.read` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `webhooks.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ---
 

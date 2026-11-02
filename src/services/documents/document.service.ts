@@ -5,6 +5,7 @@ import { validateAndProcessUpload } from "@/services/storage/validation";
 import { antivirus } from "@/services/antivirus";
 import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
 export type DocumentType = "ID_PROOF" | "NDA" | "AGREEMENT" | "OTHER";
 export type DocumentStatus = "VALID" | "EXPIRING" | "EXPIRED";
@@ -303,6 +304,19 @@ export async function checkExpiringDocuments(testClock = new Date()) {
         daysRemaining: Math.max(0, diffDays),
         expiryDate: doc.expiryDate.toLocaleDateString(),
         entityId: `${doc.id}_exp_${diffDays}`,
+      }).catch(console.error);
+
+      dispatchWebhookEvent(doc.organizationId, "document.expiring", {
+        documentId: doc.id,
+        title: doc.title,
+        docType: doc.docType,
+        expiryDate: doc.expiryDate.toISOString(),
+        daysRemaining: Math.max(0, diffDays),
+        visitor: {
+          id: doc.visitor.id,
+          name: doc.visitor.name,
+          email: doc.visitor.email,
+        },
       }).catch(console.error);
     }
   }

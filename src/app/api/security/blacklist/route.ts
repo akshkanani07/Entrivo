@@ -5,6 +5,7 @@ import { requireOrg } from "@/lib/tenant";
 import { z } from "zod";
 
 import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
+import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
 const createBlacklistSchema = z.object({
   name: requiredString("Name is required"),
@@ -89,6 +90,14 @@ export async function POST(request: Request) {
         guardName: auth.user.name || "Security Officer",
       },
     });
+
+    dispatchWebhookEvent(organizationId, "security.alert", {
+      alertType: "BLACKLIST_ADDED",
+      severity: "HIGH",
+      flaggedName: name,
+      reason: reason.trim(),
+      flaggedBy: auth.user.name || "Security Officer",
+    }).catch(console.error);
 
     return NextResponse.json({ success: true, data: entry });
   } catch (error) {

@@ -64,6 +64,21 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 | `GET/POST/PUT/DELETE /api/notifications/templates` | `NotificationTemplate` | `where: { organizationId }` | Scoped to tenant; admin approval audited |
 | `POST /api/cron/reminders` | `Invitation` | Constant-time `Authorization: Bearer CRON_SECRET` | Evaluates visits strictly within each tenant |
 | `POST /api/cron/daily-report` | Aggregates | Constant-time `Authorization: Bearer CRON_SECRET` | Computes aggregates grouped per organization |
+| `GET/POST /api/integrations/webhooks` | `WebhookSubscription` | `where: { organizationId }` | Scoped to caller tenant; SSRF checks |
+| `GET/PATCH/DELETE /api/integrations/webhooks/[id]` | `WebhookSubscription` | `findFirst({ where: { id, organizationId } })` | Asserted before update/delete |
+| `POST /api/integrations/webhooks/[id]/rotate-secret` | `WebhookSubscription` | `findFirst({ where: { id, organizationId } })` | Rotates secret strictly for tenant endpoint |
+| `GET /api/integrations/webhooks/deliveries` | `WebhookDelivery` | `where: { organizationId }` | Filtered strictly to tenant delivery logs |
+| `GET/POST /api/integrations/api-keys` | `ApiKey` | `where: { organizationId }` | Key hash lookup; raw secret returned once |
+| `PATCH/DELETE /api/integrations/api-keys/[id]` | `ApiKey` | `findFirst({ where: { id, organizationId } })` | Tenant boundary asserted before update/revoke |
+| `GET/POST/DELETE /api/integrations/calendar/*` | `CalendarConnection` | `where: { userId, organizationId }` | User & tenant bounded calendar connections |
+| `GET/POST /api/v1/visitors` | `Visitor` | `authenticateApiKey`: `where: { organizationId }` | Scoped to API key's organization |
+| `GET /api/v1/visitors/[id]` | `Visitor` | `authenticateApiKey`: `findFirst({ where: { id, organizationId } })` | Enforces 404 on cross-tenant lookup |
+| `GET/POST /api/v1/invitations` | `Invitation` | `authenticateApiKey`: `where: { organizationId }` | Host & rooms verified within tenant |
+| `POST /api/v1/invitations/[id]/cancel` | `Invitation` | `authenticateApiKey`: `findFirst({ where: { id, organizationId } })` | Verified before cancellation |
+| `POST /api/v1/invitations/[id]/reschedule` | `Invitation` | `authenticateApiKey`: `findFirst({ where: { id, organizationId } })` | Verified before reschedule |
+| `GET /api/v1/checkins` | `CheckIn` | `authenticateApiKey`: `where: { visitor: { organizationId } }` | Filtered strictly to organization visits |
+| `GET /api/v1/employees` | `Employee` | `authenticateApiKey`: `where: { organizationId }` | Employees and users within tenant |
+| `GET/POST/DELETE /api/v1/webhooks` | `WebhookSubscription` | `authenticateApiKey`: `where: { organizationId }` | REST hooks scoped to API key's tenant |
 
 ---
 

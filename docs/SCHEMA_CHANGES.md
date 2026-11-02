@@ -194,5 +194,64 @@ No PostgreSQL database migrations were required for Phase 7.
 - **Client-Side Storage**: Offline queuing and cached expected visitor records reside in browser IndexedDB (`entrivo_offline_db`) using object stores `offline_queue` and `expected_visitors`.
 - **Idempotency State**: Replay-safety and deduplication caching for `Idempotency-Key` headers operate via high-performance in-memory LRU cache mirrored to Redis (`idemp:*`, 24-hour TTL) with zero relational schema overhead.
 
+---
+
+# Entrivo Schema Changes (Phase 8)
+
+## 1. ApiKey Model Enhancement
+Enhanced `ApiKey` to support granular REST permissions, configurable per-key rate limiting, active status toggling, and fast hash lookups:
+- `scopes: String @default("visitors:read,invitations:read")`: Comma-separated REST permission scopes.
+- `rateLimit: Int @default(120)`: Maximum allowed requests per minute.
+- `isActive: Boolean @default(true)`: Revocation/active state flag.
+- `createdById: String?`: User who generated the API key.
+- Index: `@@index([keyHash])` for O(1) Bearer token lookup.
+
+## 2. WebhookSubscription Model Enhancement
+Added failure tracking, circuit breaker auto-disable, and delivery relations:
+- `failureCount: Int @default(0)`: Number of consecutive delivery failures.
+- `lastFailureAt: DateTime?`: Timestamp of most recent failure.
+- `lastSuccessAt: DateTime?`: Timestamp of most recent successful delivery.
+- `disabledReason: String?`: Reason recorded when auto-disabled after 5 failures.
+- Relation: `deliveries WebhookDelivery[]`: History of outbound delivery attempts.
+
+## 3. WebhookDelivery Model (New)
+Persistent delivery log recording all outbound webhook attempts, HTTP telemetry, and retry status:
+- `id: String @id @default(cuid())`
+- `webhookSubscriptionId: String`: Relation to parent webhook subscription.
+- `organizationId: String`: Enforces tenant-isolated delivery auditing.
+- `event: String`: Event type (e.g., `visitor.invited`, `approval.decided`).
+- `payload: Json`: Delivery payload.
+- `status: String @default("PENDING")`: Delivery status (`SUCCESS`, `FAILED`, `PENDING`).
+- `statusCode: Int?`: Remote HTTP status code.
+- `responseBody: String?`: Truncated response body (up to 2000 chars) for debugging.
+- `errorMessage: String?`: Network error or timeout description.
+- `attempts: Int @default(1)`: Delivery attempt count.
+- `durationMs: Int?`: Round-trip request latency in milliseconds.
+- `deliveredAt: DateTime?`: Successful delivery timestamp.
+- Indexes:
+  - `@@index([webhookSubscriptionId, createdAt])`
+  - `@@index([organizationId, createdAt])`
+  - `@@index([organizationId, status])`
+
+## 4. CalendarConnection Model (New)
+Host-level OAuth calendar credentials with encrypted tokens:
+- `id: String @id @default(cuid())`
+- `userId: String`: Employee user ID.
+- `organizationId: String`: Tenant isolation.
+- `provider: String`: OAuth provider (`GOOGLE`, `OUTLOOK`).
+- `accountEmail: String?`: Connected calendar account email.
+- `encryptedAccessToken: String`: AES-256-GCM encrypted access token.
+- `encryptedRefreshToken: String?`: AES-256-GCM encrypted refresh token.
+- `expiresAt: DateTime?`: Access token expiry.
+- `calendarId: String? @default("primary")`: Target calendar identifier.
+- `isActive: Boolean @default(true)`: Connection status flag.
+- Constraint: `@@unique([userId, provider])`
+- Index: `@@index([organizationId])`
+
+## 5. Invitation Model Enhancement
+Linked external calendar events for automated synchronize/cancel/reschedule actions:
+- `calendarEventId: String?`: Remote Google / Outlook event identifier.
+- `calendarProvider: String?`: Provider tag (`GOOGLE` or `OUTLOOK`).
+
 
 

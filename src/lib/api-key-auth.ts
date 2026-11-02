@@ -166,12 +166,16 @@ export async function authenticateApiKey(
   // Rate Limiting (per-key)
   const rateLimitKey = `apikey:${apiKeyRecord.id}`;
   const maxRequests = apiKeyRecord.rateLimit || 120;
-  const rateLimitResult = await checkRateLimit(rateLimitKey, maxRequests, 60);
+  const rateLimitResult = checkRateLimit(rateLimitKey, {
+    maxRequests,
+    windowMs: 60 * 1000,
+  });
 
+  const resetSeconds = Math.max(1, Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000));
   const rateLimitHeaders: Record<string, string> = {
     "X-RateLimit-Limit": String(maxRequests),
     "X-RateLimit-Remaining": String(rateLimitResult.remaining),
-    "X-RateLimit-Reset": String(rateLimitResult.resetInSeconds),
+    "X-RateLimit-Reset": String(resetSeconds),
   };
 
   if (!rateLimitResult.allowed) {

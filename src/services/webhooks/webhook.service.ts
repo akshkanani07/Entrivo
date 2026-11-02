@@ -147,7 +147,7 @@ export async function deliverWebhook(deliveryId: string): Promise<{
   const startTime = Date.now();
   let statusCode: number | undefined;
   let responseBody: string | undefined;
-  let deliveryError: string | undefined;
+  let deliveryError: string = "";
 
   try {
     const response = await safeFetch(sub.url, {
