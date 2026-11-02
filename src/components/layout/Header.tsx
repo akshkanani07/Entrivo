@@ -2,14 +2,19 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { UserPlus, QrCode, Clock, Search, ExternalLink } from "lucide-react";
+import { UserPlus, QrCode, Clock, Search, ExternalLink, Menu } from "lucide-react";
 import { CurrentUser } from "@/types";
 import { QRScannerModal } from "@/components/visitor/QRScannerModal";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { CommandPalette } from "@/components/search/CommandPalette";
 import { useRouter } from "next/navigation";
 
-export function Header({ currentUser }: { currentUser?: CurrentUser | null }) {
+interface HeaderProps {
+  currentUser?: CurrentUser | null;
+  onToggleMobileMenu?: () => void;
+}
+
+export function Header({ currentUser, onToggleMobileMenu }: HeaderProps) {
   const router = useRouter();
   const [time, setTime] = useState<string>("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -52,25 +57,45 @@ export function Header({ currentUser }: { currentUser?: CurrentUser | null }) {
 
   return (
     <>
-      <header className="h-16 border-b border-indigo-950/50 bg-[#0a0f1d]/90 backdrop-blur-md sticky top-0 z-20 px-6 flex items-center justify-between gap-4">
-        {/* Left: Global Search Pill (Ctrl+K trigger) */}
-        <div className="relative w-full max-w-sm hidden sm:block">
+      <header className="h-16 border-b border-indigo-950/50 bg-[#0a0f1d]/90 backdrop-blur-md sticky top-0 z-20 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Left: Hamburger menu on mobile + Global Search */}
+        <div className="flex items-center gap-2 flex-1 max-w-sm">
+          <button
+            onClick={onToggleMobileMenu}
+            type="button"
+            aria-label="Open mobile navigation menu"
+            className="md:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60 transition-colors flex-shrink-0"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Desktop Search Bar */}
           <button
             onClick={() => setIsCommandPaletteOpen(true)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-left text-slate-400 hover:text-slate-300 hover:border-indigo-500/60 transition-colors flex items-center justify-between group"
+            className="hidden sm:flex w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-left text-slate-400 hover:text-slate-300 hover:border-indigo-500/60 transition-colors items-center justify-between group relative"
           >
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-              <span>Global search visitor, phone, host, badge...</span>
+              <Search className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors absolute left-3.5" />
+              <span>Global search visitor, phone, host...</span>
             </div>
             <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-900 border border-slate-700/60 text-slate-400">
               Ctrl+K
             </kbd>
           </button>
+
+          {/* Mobile Search Icon Button */}
+          <button
+            onClick={() => setIsCommandPaletteOpen(true)}
+            type="button"
+            aria-label="Search"
+            className="sm:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Right: Actions, Live Clock, Scanner */}
-        <div className="flex items-center gap-3 ml-auto">
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           {/* Notification Bell */}
           <NotificationBell />
 
@@ -83,19 +108,20 @@ export function Header({ currentUser }: { currentUser?: CurrentUser | null }) {
           {/* Quick Scanner */}
           <button
             onClick={() => setIsScannerOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors"
+            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors"
           >
             <QrCode className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Scan Pass</span>
+            <span className="hidden xs:inline">Scan</span>
           </button>
 
           {/* Quick Walk-in Button */}
           <Link
             href="/visitors/new"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-glow-sm transition-all"
+            className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-glow-sm transition-all"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            <span>+ New Walk-in</span>
+            <span className="hidden sm:inline">+ New Walk-in</span>
+            <span className="sm:hidden">+ Walk-in</span>
           </Link>
 
           {/* Open Kiosk Screen */}
@@ -103,7 +129,7 @@ export function Header({ currentUser }: { currentUser?: CurrentUser | null }) {
             href="/kiosk"
             target="_blank"
             title="Launch Self-Check-in Kiosk Mode"
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 text-xs font-medium transition-colors"
+            className="hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 text-xs font-medium transition-colors"
           >
             <span>Kiosk Mode</span>
             <ExternalLink className="w-3 h-3 text-slate-400" />

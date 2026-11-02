@@ -185,4 +185,14 @@ Expanded `NotificationTemplate` to support multi-language templates, versioning,
 - `User.quietHoursEnd: String? @default("07:00")`: Quiet hours end time (HH:mm format).
 - `Employee.backupApproverId: String?`: Designated backup host/approver for out-of-office delegation.
 
+---
+
+# Entrivo Schema Changes (Phase 7)
+
+## PWA and Offline Storage Architecture
+No PostgreSQL database migrations were required for Phase 7.
+- **Client-Side Storage**: Offline queuing and cached expected visitor records reside in browser IndexedDB (`entrivo_offline_db`) using object stores `offline_queue` and `expected_visitors`.
+- **Idempotency State**: Replay-safety and deduplication caching for `Idempotency-Key` headers operate via high-performance in-memory LRU cache mirrored to Redis (`idemp:*`, 24-hour TTL) with zero relational schema overhead.
+
+
 

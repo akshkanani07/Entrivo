@@ -28,6 +28,9 @@ import confetti from "canvas-confetti";
 import { formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { OrgPolicy } from "@/lib/settings-schema";
+import { addToOfflineQueue, findExpectedVisitorByQr } from "@/lib/offline-db";
+import { notifyQueueChanged, syncOfflineQueue } from "@/lib/offline-sync";
+import { Wifi, WifiOff } from "lucide-react";
 
 interface EmployeeOption {
   id: string;
@@ -73,6 +76,24 @@ export function KioskClientView({
   const [submitting, setSubmitting] = useState(false);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
 
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const onOnline = () => {
+      setIsOnline(true);
+      syncOfflineQueue();
+    };
+    const onOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
   // Auto-reset timer when on success screen
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -103,6 +124,48 @@ export function KioskClientView({
 
     setQrLoading(true);
     setQrError(null);
+
+    // If offline, check local IndexedDB expected visitors directory
+    if (!navigator.onLine) {
+      try {
+        const localVisitor = await findExpectedVisitorByQr(token);
+        if (localVisitor) {
+          await addToOfflineQueue({
+            type: "KIOSK_CHECKIN",
+            endpoint: "/api/kiosk/checkin",
+            payload: {
+              invitationId: localVisitor.id,
+              consentGiven: true,
+              consentVersion: policy?.privacyPolicyNoticeVersion || "v1.0",
+            },
+          });
+          notifyQueueChanged();
+
+          setIssuedBadge({
+            badgeNumber: "PASS-OFFLINE",
+            visitorName: localVisitor.visitorName,
+            visitorCompany: localVisitor.company || "Guest",
+            visitorTypeName: "Visitor",
+            badgeColor: "#6366f1",
+            hostName: localVisitor.hostName,
+            issueDate: formatDateTime(new Date()),
+            token: localVisitor.qrToken,
+          });
+
+          setStep("SUCCESS");
+          toast.info("Offline check-in queued. Badge issued and will sync once reconnected.");
+          return;
+        } else {
+          setQrError("Pass token not found in offline directory. Please check network connection or see reception.");
+          return;
+        }
+      } catch (err: any) {
+        setQrError(err?.message || "Offline verification failed.");
+        return;
+      } finally {
+        setQrLoading(false);
+      }
+    }
 
     try {
       // 1. Verify token via kiosk-scoped endpoint
@@ -168,6 +231,34 @@ export function KioskClientView({
 
       setStep("SUCCESS");
     } catch (err: any) {
+      if (!navigator.onLine || err.message?.includes("fetch")) {
+        const localVisitor = await findExpectedVisitorByQr(token);
+        if (localVisitor) {
+          await addToOfflineQueue({
+            type: "KIOSK_CHECKIN",
+            endpoint: "/api/kiosk/checkin",
+            payload: {
+              invitationId: localVisitor.id,
+              consentGiven: true,
+              consentVersion: policy?.privacyPolicyNoticeVersion || "v1.0",
+            },
+          });
+          notifyQueueChanged();
+          setIssuedBadge({
+            badgeNumber: "PASS-OFFLINE",
+            visitorName: localVisitor.visitorName,
+            visitorCompany: localVisitor.company || "Guest",
+            visitorTypeName: "Visitor",
+            badgeColor: "#6366f1",
+            hostName: localVisitor.hostName,
+            issueDate: formatDateTime(new Date()),
+            token: localVisitor.qrToken,
+          });
+          setStep("SUCCESS");
+          toast.info("Network dropped: Check-in saved offline. Will sync once reconnected.");
+          return;
+        }
+      }
       setQrError(err.message || "Failed to verify or check in pass");
     } finally {
       setQrLoading(false);
@@ -181,16 +272,66 @@ export function KioskClientView({
     }
 
     setSubmitting(true);
+
+    if (!navigator.onLine) {
+      try {
+        await addToOfflineQueue({
+          type: "KIOSK_WALKIN",
+          endpoint: "/api/kiosk/walkin",
+          payload: {
+            name: name.trim(),
+            phone: phone.trim(),
+            company: company.trim() || undefined,
+            hostEmployeeId: hostId,
+            visitorTypeId: typeId || null,
+            photoUrl,
+            signatureUrl,
+            consentGiven: true,
+            consentVersion: policy?.privacyPolicyNoticeVersion || "v1.0",
+            purpose: "Self-Checkin Workplace Visit",
+          },
+        });
+        notifyQueueChanged();
+
+        try {
+          confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
+        } catch {}
+
+        const selectedHost = employees.find((e) => e.id === hostId);
+        setIssuedBadge({
+          badgeNumber: "WALKIN-OFFLINE",
+          visitorName: name.trim(),
+          visitorCompany: company.trim() || "Guest",
+          visitorTypeName: "Visitor",
+          badgeColor: "#6366f1",
+          hostName: selectedHost?.user?.name || "Host",
+          hostOffice: selectedHost?.office?.name || "Main Reception",
+          photoUrl: photoUrl || null,
+          issueDate: formatDateTime(new Date()),
+          token: "WALKIN-OFFLINE",
+        });
+
+        setStep("SUCCESS");
+        toast.info("Offline walk-in registration queued. Badge issued and will sync once reconnected.");
+        return;
+      } catch (err: any) {
+        toast.error(err.message || "Failed to save offline walk-in");
+        return;
+      } finally {
+        setSubmitting(false);
+      }
+    }
+
     try {
       const res = await fetch("/api/kiosk/walkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          phone,
-          company,
-          visitorTypeId: typeId,
+          name: name.trim(),
+          phone: phone.trim(),
+          company: company.trim() || undefined,
           hostEmployeeId: hostId,
+          visitorTypeId: typeId || null,
           photoUrl,
           signatureUrl,
           consentGiven: true,
@@ -233,6 +374,41 @@ export function KioskClientView({
 
       setStep("SUCCESS");
     } catch (err: any) {
+      if (!navigator.onLine || err.message?.includes("fetch")) {
+        await addToOfflineQueue({
+          type: "KIOSK_WALKIN",
+          endpoint: "/api/kiosk/walkin",
+          payload: {
+            name: name.trim(),
+            phone: phone.trim(),
+            company: company.trim() || undefined,
+            hostEmployeeId: hostId,
+            visitorTypeId: typeId || null,
+            photoUrl,
+            signatureUrl,
+            consentGiven: true,
+            consentVersion: policy?.privacyPolicyNoticeVersion || "v1.0",
+            purpose: "Self-Checkin Workplace Visit",
+          },
+        });
+        notifyQueueChanged();
+        const selectedHost = employees.find((e) => e.id === hostId);
+        setIssuedBadge({
+          badgeNumber: "WALKIN-OFFLINE",
+          visitorName: name.trim(),
+          visitorCompany: company.trim() || "Guest",
+          visitorTypeName: "Visitor",
+          badgeColor: "#6366f1",
+          hostName: selectedHost?.user?.name || "Host",
+          hostOffice: selectedHost?.office?.name || "Main Reception",
+          photoUrl: photoUrl || null,
+          issueDate: formatDateTime(new Date()),
+          token: "WALKIN-OFFLINE",
+        });
+        setStep("SUCCESS");
+        toast.info("Network dropped: Walk-in saved offline and will sync once reconnected.");
+        return;
+      }
       toast.error(err.message || "Check-in failed");
     } finally {
       setSubmitting(false);
@@ -261,6 +437,18 @@ export function KioskClientView({
         </div>
 
         <div className="flex items-center gap-2">
+          {!isOnline ? (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>OFFLINE STANDALONE</span>
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-[11px]">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE CONNECTED</span>
+            </div>
+          )}
+
           {step !== "WELCOME" && (
             <button
               onClick={resetKiosk}

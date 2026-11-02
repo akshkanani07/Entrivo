@@ -5,10 +5,11 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { audit } from "@/services/audit/audit.service";
 import { z } from "zod";
+import { requiredString, optionalString } from "@/lib/zod-helpers";
 
 const eraseRequestSchema = z.object({
-  visitorId: z.string().min(1, "visitorId is required"),
-  reason: z.string().optional().default("Data Principal Right to Erasure / DPDP request"),
+  visitorId: requiredString("visitorId is required"),
+  reason: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
       after: anonymizedVisitor,
       details: {
         summary: `Data Principal erasure executed for visitor ID ${visitorId}`,
-        reason,
+        reason: reason || "Data Principal Right to Erasure / DPDP request",
         executedBy: `${user.name} (${user.email})`,
       },
     }).catch(console.error);
@@ -121,3 +122,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

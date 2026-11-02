@@ -7,6 +7,7 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { optionalString } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
+import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 
 const checkoutSchema = z.object({
   checkInId: optionalString(),
@@ -24,6 +25,14 @@ export async function POST(request: Request) {
 
     const orgId = orgCheck.organizationId;
     const user = auth.user;
+
+    const idempotencyKey = request.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const cached = await getIdempotencyResult(idempotencyKey);
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+    }
 
     const body = await request.json().catch(() => null);
     const parsed = checkoutSchema.safeParse(body);
@@ -148,7 +157,7 @@ export async function POST(request: Request) {
       }).catch(console.error);
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       message: "Visitor successfully checked out",
       data: {
@@ -159,7 +168,13 @@ export async function POST(request: Request) {
         visitorName: checkIn.visitor?.name || "Guest",
         badgeNumber: checkIn.badgeNumber,
       },
-    });
+    };
+
+    if (idempotencyKey) {
+      await saveIdempotencyResult(idempotencyKey, responsePayload);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
     console.error("Checkout API error:", error);
     return NextResponse.json(

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { clearOfflineStorage } from "@/lib/offline-db";
 
 interface IdleSessionGuardProps {
   /** Inactivity threshold before warning in ms (default: 28 min) */
@@ -44,6 +45,7 @@ export function IdleSessionGuard({
 
   const handleLogoutNow = async () => {
     try {
+      await clearOfflineStorage();
       await fetch("/api/auth/logout", { method: "POST" });
     } catch {
       // ignore

@@ -249,3 +249,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: false, error: error.message || "Failed to generate privacy export" }, { status: 500 });
   }
 }
+

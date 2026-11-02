@@ -109,6 +109,28 @@
   - Strict append-only enforcement: `/api/audit` returns HTTP 405 Method Not Allowed for `POST`, `PUT`, `PATCH`, and `DELETE` requests.
   - UI at `/audit-logs` provides real-time search, filters (action, entity, date range), pagination, structured diff viewer drawer, and injection-protected CSV export.
 
+## Decision 17: PWA, Service Worker v2, and Offline Check-in Capabilities (Phase 7)
+- **PWA Manifest & Install Prompts (`P7-01`)**:
+  - Configured standard PWA web manifest (`/manifest.json`) with `standalone` display mode, theme `#4f46e5`, background `#080c14`, maskable icons (192x192, 512x512), screenshots (desktop wide 1280x720 and mobile narrow 750x1334), and quick shortcuts (`/checkin`, `/invitations/new`, `/security`).
+  - Implemented `PwaInstallPrompt` with native `beforeinstallprompt` support, 7-day dismissal suppression in `localStorage`, and an interactive 3-step iOS Safari "Add to Home Screen" modal guidance flow.
+- **Service Worker v2 & Strict PII Isolation (`P7-02`)**:
+  - Versioned static cache (`entrivo-static-v3`) precaches immutable app shell assets (`/offline.html`, `/manifest.json`, static icons).
+  - **Strict PII Protection**: Never caches `/api/*` endpoints, non-GET HTTP methods, or dynamic server HTML containing visitor PII.
+  - Offline navigations gracefully fall back to the self-contained `/offline.html` page.
+  - Supports `SKIP_WAITING` for live updates and background sync for `sync-offline-checkins`.
+- **Offline Check-in Queue & IndexedDB Storage (`P7-03`)**:
+  - Created `src/lib/offline-db.ts` managing `entrivo_offline_db` with `offline_queue` and `expected_visitors`.
+  - **Zero PII Constraint**: Cached expected visitor directory stores strictly minimal operational fields (`visitorName`, `company`, `hostName`, `scheduledDate`, `startTime`, `qrToken`, `status`) and never stores phone numbers, email addresses, or government ID numbers.
+  - Complete wipe via `clearOfflineStorage()` called on user logout, idle session timeout, and kiosk hardware revocation.
+- **Idempotency Engine & Server Wins Conflict Resolution (`P7-03`)**:
+  - Implemented `src/lib/idempotency.ts` with in-memory LRU and Redis mirroring (`idemp:*`, 24-hour TTL).
+  - Server endpoints (`/api/visitors/checkin`, `/api/visitors/checkout`, `/api/visitors/walkin`, `/api/kiosk/checkin`, `/api/kiosk/walkin`) check `Idempotency-Key` headers to ensure safe retries.
+  - Replayed synchronization requests encountering `HTTP 409 Conflict` or state collision cleanly drop from the local queue under the "Server Wins" strategy.
+- **Responsive Mobile Navigation & Camera UX (`P7-04`)**:
+  - Created `DashboardShell.tsx` with mobile drawer navigation, hamburger menu trigger, and touch backdrop.
+  - Main container enforces `overflow-x-hidden min-w-0` to prevent horizontal blowouts on viewports down to 360px.
+  - `QRScannerModal` provides live camera scanning with Chromium `BarcodeDetector` support, explicit camera permission error handling (`NotAllowedError`, `NotFoundError`), and seamless manual token fallbacks.
+
 
 
 

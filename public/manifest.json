@@ -3,9 +3,13 @@
   "short_name": "Entrivo",
   "description": "Production-ready enterprise visitor management, QR passes and security workplace check-in.",
   "start_url": "/",
+  "id": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#080c14",
   "theme_color": "#4f46e5",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icons/icon-192x192.png",
@@ -20,9 +24,72 @@
       "purpose": "any maskable"
     },
     {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icons/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Check-In Desk",
+      "short_name": "Check In",
+      "description": "Quickly verify and check in arriving visitors",
+      "url": "/checkin",
+      "icons": [
+        {
+          "src": "/icons/shortcut-checkin.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "New Invitation",
+      "short_name": "New Invite",
+      "description": "Schedule a new guest visitor pass",
+      "url": "/invitations/new",
+      "icons": [
+        {
+          "src": "/icons/shortcut-invite.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Scan QR Pass",
+      "short_name": "Scan QR",
+      "description": "Validate visitor QR token at security gate",
+      "url": "/security",
+      "icons": [
+        {
+          "src": "/icons/shortcut-scan.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Entrivo Desktop Workplace Dashboard"
+    },
+    {
+      "src": "/icons/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Entrivo Self-Service Kiosk Terminal"
     }
   ]
 }

@@ -23,12 +23,17 @@ import {
   Video,
   Activity,
   Webhook,
+  X,
 } from "lucide-react";
 import { CurrentUser } from "@/types";
 import { can, Permission } from "@/lib/rbac-base";
 
+import { clearOfflineStorage } from "@/lib/offline-db";
+
 interface SidebarProps {
   currentUser?: CurrentUser | null;
+  isOpenMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
 interface NavItem {
@@ -40,7 +45,7 @@ interface NavItem {
   targetBlank?: boolean;
 }
 
-export function Sidebar({ currentUser }: SidebarProps) {
+export function Sidebar({ currentUser, isOpenMobile = false, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -48,6 +53,7 @@ export function Sidebar({ currentUser }: SidebarProps) {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
+      await clearOfflineStorage();
       await fetch("/api/auth/logout", { method: "POST" });
       router.push("/login");
       router.refresh();
@@ -82,10 +88,18 @@ export function Sidebar({ currentUser }: SidebarProps) {
   });
 
   return (
-    <aside className="w-64 bg-[#0a0f1d] border-r border-indigo-950/60 flex flex-col h-screen fixed left-0 top-0 z-30 select-none">
+    <aside
+      className={`w-64 bg-[#0a0f1d] border-r border-indigo-950/60 flex flex-col h-screen fixed left-0 top-0 z-40 select-none transition-transform duration-200 ease-in-out md:translate-x-0 ${
+        isOpenMobile ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+      }`}
+    >
       {/* Brand Header */}
       <div className="h-16 px-5 border-b border-indigo-950/50 flex items-center justify-between flex-shrink-0">
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link
+          href="/"
+          onClick={() => onCloseMobile?.()}
+          className="flex items-center gap-2.5"
+        >
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-700 to-indigo-500 flex items-center justify-center shadow-glow-sm">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
@@ -101,6 +115,16 @@ export function Sidebar({ currentUser }: SidebarProps) {
             </p>
           </div>
         </Link>
+
+        {/* Mobile Close Button */}
+        <button
+          onClick={onCloseMobile}
+          type="button"
+          aria-label="Close menu"
+          className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       {/* Nav List with custom scrollbar */}
@@ -117,6 +141,7 @@ export function Sidebar({ currentUser }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => onCloseMobile?.()}
               target={item.targetBlank ? "_blank" : undefined}
               className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                 isActive

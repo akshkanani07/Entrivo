@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { performCheckin } from "@/services/visitors/checkin.service";
 import { requiredString, optionalString } from "@/lib/zod-helpers";
+import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 
 const checkinSchema = z.object({
   invitationId: requiredString("Invitation ID is required"),
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
 
     const orgId = orgCheck.organizationId;
     const user = auth.user;
+
+    const idempotencyKey = request.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const cached = await getIdempotencyResult(idempotencyKey);
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+    }
 
     const body = await request.json().catch(() => null);
     const parsed = checkinSchema.safeParse(body);
@@ -51,12 +60,18 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       data: result.checkIn,
       checkIn: result.checkIn,
       message: `Visitor ${result.checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn?.badgeNumber || ""}`,
-    });
+    };
+
+    if (idempotencyKey) {
+      await saveIdempotencyResult(idempotencyKey, responsePayload);
+    }
+
+    return NextResponse.json(responsePayload);
   } catch (error: any) {
     console.error("Check-in error:", error);
     return NextResponse.json(

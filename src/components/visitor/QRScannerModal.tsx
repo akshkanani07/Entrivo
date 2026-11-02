@@ -1,7 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
-import { QrCode, Search, CheckCircle2, AlertTriangle, X, ShieldAlert, ArrowRight, Loader2 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  QrCode,
+  Search,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  ShieldAlert,
+  ArrowRight,
+  Loader2,
+  Camera,
+  CameraOff,
+  RefreshCw,
+} from "lucide-react";
 
 interface QRScannerModalProps {
   isOpen: boolean;
@@ -14,6 +26,124 @@ export function QRScannerModal({ isOpen, onClose, onVerified }: QRScannerModalPr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verifiedData, setVerifiedData] = useState<any | null>(null);
+
+  // Camera scanner state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [hasBarcodeSupport, setHasBarcodeSupport] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "BarcodeDetector" in window) {
+      setHasBarcodeSupport(true);
+    }
+  }, []);
+
+  // Cleanup camera stream when modal closes or unmounts
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+    setCameraLoading(false);
+  };
+
+  const startCamera = async () => {
+    setCameraLoading(true);
+    setCameraError(null);
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera API is not supported in this browser environment.");
+      }
+
+      // Stop existing stream if any
+      stopCamera();
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+      setIsCameraActive(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      // If BarcodeDetector is available, initiate barcode scanning loop
+      if ("BarcodeDetector" in window) {
+        try {
+          const barcodeDetector = new (window as any).BarcodeDetector({
+            formats: ["qr_code", "code_128", "code_39", "ean_13"],
+          });
+
+          scanIntervalRef.current = setInterval(async () => {
+            if (!videoRef.current || videoRef.current.readyState < 2) return;
+            try {
+              const barcodes = await barcodeDetector.detect(videoRef.current);
+              if (barcodes && barcodes.length > 0) {
+                const rawValue = barcodes[0].rawValue;
+                if (rawValue) {
+                  // Vibrate if supported
+                  if ("vibrate" in navigator) {
+                    try {
+                      navigator.vibrate(100);
+                    } catch {}
+                  }
+                  stopCamera();
+                  setTokenInput(rawValue);
+                  handleVerify(rawValue);
+                }
+              }
+            } catch {
+              // Ignore per-frame detection hiccups
+            }
+          }, 350);
+        } catch {
+          // Barcode detector failed to initialize; camera will stay visible for manual capture
+        }
+      }
+    } catch (err: any) {
+      let msg = "Unable to access camera.";
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        msg = "Camera permission was denied. Please allow camera permissions in your browser address bar to scan passes directly.";
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        msg = "No camera was detected on this device. You can type or paste the visitor token below.";
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        msg = "The camera is currently in use by another application. Please close other video apps and retry.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setCameraError(msg);
+      stopCamera();
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    stopCamera();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -76,7 +206,7 @@ export function QRScannerModal({ isOpen, onClose, onVerified }: QRScannerModalPr
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleModalClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -85,16 +215,77 @@ export function QRScannerModal({ isOpen, onClose, onVerified }: QRScannerModalPr
 
         {/* Content */}
         <div className="p-6 space-y-5">
-          {/* Scanner Simulation Viewfinder */}
-          <div className="relative w-full h-44 rounded-xl bg-slate-950 border border-indigo-500/40 flex flex-col items-center justify-center overflow-hidden group">
-            <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-indigo-500 shadow-[0_0_12px_#6366f1] animate-pulse"></div>
-            <div className="w-32 h-32 border-2 border-dashed border-indigo-400/50 rounded-xl flex items-center justify-center">
-              <QrCode className="w-12 h-12 text-indigo-400/60" />
-            </div>
-            <span className="mt-3 text-xs text-slate-400 font-mono tracking-wide">
-              ALIGN BARCODE OR QR IN VIEWFINDER
-            </span>
+          {/* Scanner Viewfinder / Camera Feed */}
+          <div className="relative w-full h-52 rounded-xl bg-slate-950 border border-indigo-500/40 flex flex-col items-center justify-center overflow-hidden group">
+            {isCameraActive ? (
+              <>
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-indigo-500 shadow-[0_0_12px_#6366f1] animate-pulse"></div>
+                <div className="absolute w-36 h-36 border-2 border-indigo-400/80 rounded-xl pointer-events-none flex items-center justify-center">
+                  <div className="w-full h-full border border-dashed border-white/40 rounded-lg animate-pulse" />
+                </div>
+                <div className="absolute bottom-3 inset-x-4 flex items-center justify-between">
+                  <span className="text-[11px] bg-slate-900/80 backdrop-blur px-2 py-0.5 rounded text-emerald-400 border border-emerald-500/30 font-mono">
+                    Camera Scanning...
+                  </span>
+                  <button
+                    onClick={stopCamera}
+                    type="button"
+                    className="text-xs bg-slate-900/90 text-rose-300 hover:text-white hover:bg-rose-600 px-2.5 py-1 rounded-lg border border-rose-500/40 flex items-center gap-1 transition-colors"
+                  >
+                    <CameraOff className="w-3.5 h-3.5" /> Stop
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-24 h-24 border-2 border-dashed border-indigo-400/40 rounded-xl flex items-center justify-center">
+                  <QrCode className="w-10 h-10 text-indigo-400/60" />
+                </div>
+                <span className="mt-3 text-xs text-slate-400 font-mono tracking-wide">
+                  ALIGN BARCODE OR QR IN VIEWFINDER
+                </span>
+                <button
+                  onClick={startCamera}
+                  disabled={cameraLoading}
+                  type="button"
+                  className="mt-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {cameraLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
+                  {cameraLoading ? "Activating Camera..." : "Scan with Device Camera"}
+                </button>
+              </>
+            )}
           </div>
+
+          {/* Camera Permission Error Notice */}
+          {cameraError && (
+            <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-800/80 text-amber-200 text-xs flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-400 mt-0.5" />
+                <div>
+                  <strong className="block font-semibold">Camera Access Notice:</strong>
+                  <span>{cameraError}</span>
+                </div>
+              </div>
+              <button
+                onClick={startCamera}
+                type="button"
+                className="text-[11px] underline font-semibold flex items-center gap-1 flex-shrink-0 hover:text-white"
+              >
+                <RefreshCw className="w-3 h-3" /> Retry
+              </button>
+            </div>
+          )}
 
           {/* Quick Test Token Chips */}
           <div>

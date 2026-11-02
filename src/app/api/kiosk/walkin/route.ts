@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
 import { performWalkIn } from "@/services/visitors/walkin.service";
 import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
+import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 
 const kioskWalkinSchema = z.object({
   name: requiredString("Name is required"),
@@ -33,6 +34,15 @@ export async function POST(request: Request) {
     const kioskAuth = await requireKiosk(request);
     if (kioskAuth.response) return kioskAuth.response;
     const { organizationId, name: kioskName } = kioskAuth.kiosk;
+
+    const idempotencyKey = request.headers.get("idempotency-key");
+    if (idempotencyKey) {
+      const cached = await getIdempotencyResult(idempotencyKey);
+      if (cached) {
+        const cachedRes = NextResponse.json(cached);
+        return renewKioskCookie(cachedRes, kioskAuth.rawToken);
+      }
+    }
 
     const body = await request.json().catch(() => null);
     const parsed = kioskWalkinSchema.safeParse(body);
@@ -73,7 +83,7 @@ export async function POST(request: Request) {
     }
 
     const { checkIn } = result;
-    const response = NextResponse.json({
+    const responsePayload = {
       success: true,
       data: {
         id: checkIn?.id,
@@ -85,7 +95,13 @@ export async function POST(request: Request) {
         hostName: checkIn?.hostEmployee?.user?.name || "Host",
       },
       message: `Walk-in visitor ${checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn?.badgeNumber || ""}`,
-    });
+    };
+
+    if (idempotencyKey) {
+      await saveIdempotencyResult(idempotencyKey, responsePayload);
+    }
+
+    const response = NextResponse.json(responsePayload);
 
     // Rolling renewal: refresh kiosk_token cookie
     return renewKioskCookie(response, kioskAuth.rawToken);

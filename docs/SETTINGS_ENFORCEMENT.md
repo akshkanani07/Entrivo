@@ -110,3 +110,4 @@ These settings dynamically control form rendering on staff dashboards and self-s
 | **Data Subject Export (PDF)** | `GET /api/privacy/export?visitorId=...&format=pdf` | `visitors.read` | Generates official branded vector PDF document via `pdfkit` for regulatory compliance submissions. Logs `DATA_SUBJECT_EXPORT` audit event. |
 | **Data Subject Erasure (PII Anonymization)** | `POST /api/privacy/erase` | `visitors.delete` | Atomically anonymizes visitor name (`Erasure Request - [ID]`), redacts phone/email, nullifies photo/signature/document links. Retains `CheckIn` and `CheckOut` rows so aggregate security reporting stays 100% accurate. Logs `DATA_SUBJECT_ERASURE` audit event. |
 | **Consent Records View** | `GET /api/privacy/consents` | `visitors.read` | Paginated immutable record of consents captured with version and timestamp. |
+

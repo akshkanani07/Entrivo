@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ShieldCheck, FileText, CheckCircle2, Lock, ArrowRight, LogOut } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { clearOfflineStorage } from "@/lib/offline-db";
 
 export function AcceptTermsClient({
   userName,
@@ -42,6 +43,7 @@ export function AcceptTermsClient({
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
+      await clearOfflineStorage();
       await fetch("/api/auth/logout", { method: "POST" });
       router.push("/login");
       router.refresh();

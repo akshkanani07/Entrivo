@@ -39,6 +39,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { KioskManager } from "./KioskManager";
 import { IntegrationsManager } from "@/components/integrations/IntegrationsManager";
 import { OrgPolicy } from "@/lib/settings-schema";
+import { clearOfflineStorage } from "@/lib/offline-db";
 
 interface SessionItem {
   id: string;
@@ -344,6 +345,7 @@ export function SettingsClientView({
       variant: "danger",
       onConfirm: async () => {
         try {
+          await clearOfflineStorage();
           await fetch("/api/auth/logout-all-devices", { method: "POST" });
           toast.info("All sessions terminated. Redirecting to login...");
           setTimeout(() => {

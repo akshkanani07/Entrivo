@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { clearOfflineStorage } from "@/lib/offline-db";
 
 interface KioskItem {
   id: string;
@@ -132,6 +133,7 @@ export function KioskManager() {
 
   const handleRevoke = async () => {
     try {
+      await clearOfflineStorage();
       const res = await fetch(`/api/kiosk/${revokeDialog.id}`, {
         method: "DELETE",
       });
