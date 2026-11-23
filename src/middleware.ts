@@ -1,24 +1,18 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { jwtVerify } from "jose";
 
-// Helper to check if JWT token is expired without external node dependencies
-function isJwtExpired(token: string): boolean {
+// Edge-compatible JWT signature and expiration verification using jose
+async function isSessionTokenValid(token: string): Promise<boolean> {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return false;
   try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return true;
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    const payload = JSON.parse(jsonPayload);
+    const key = new TextEncoder().encode(secret);
+    const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
     if (!payload.exp) return false;
-    return Date.now() >= payload.exp * 1000;
+    return Date.now() < payload.exp * 1000;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -66,6 +60,8 @@ const PUBLIC_ROUTES = [
   "/api/auth/verify-email",
   "/api/auth/resend-verification",
   "/api/auth/2fa/verify",
+  // Signed URL file download:
+  "/api/files/download",
   // Cron endpoints (manage their own Bearer CRON_SECRET auth):
   "/api/cron",
   // Kiosk endpoints authenticate via x-kiosk-key header (no staff session):
@@ -74,13 +70,12 @@ const PUBLIC_ROUTES = [
   "/accept-terms",
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionToken = request.cookies.get("entrivo_session_token")?.value;
 
   const isPublic = PUBLIC_ROUTES.some((route) => matchesRouteSegment(pathname, route));
-  const isTokenExpired = sessionToken ? isJwtExpired(sessionToken) : true;
-  const hasValidToken = Boolean(sessionToken && !isTokenExpired);
+  const hasValidToken = sessionToken ? await isSessionTokenValid(sessionToken) : false;
 
   // If user is accessing a protected route without a valid token
   if (!hasValidToken && !isPublic) {
@@ -106,8 +101,8 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // If token is expired on any request, clear it
-  if (sessionToken && isTokenExpired) {
+  // If token is invalid on any request, clear it
+  if (sessionToken && !hasValidToken) {
     const response = NextResponse.next();
     response.cookies.delete("entrivo_session_token");
     return response;

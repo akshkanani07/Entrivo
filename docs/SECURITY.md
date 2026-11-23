@@ -71,6 +71,23 @@ Outbound integrations (Slack, Teams, custom Webhooks) are guarded by a defense-i
 - **Sharp Image Re-encoding**: Uploaded photos are stripped of EXIF metadata and re-encoded into optimized WebP/JPEG formats before persistence.
 - **Private Storage**: Stored assets are not publicly accessible; access is granted exclusively through short-lived signed URLs (`/api/files/[id]`).
 
+### 2.6 Intentionally Public Routes & Authentication Matrix
+Not all routes require a standard staff web session. The following routes are intentionally accessible without an `entrivo_session_token` cookie and enforce their own authentication and authorization controls:
+
+| Route Path / Pattern | Purpose | Authentication & Verification Mechanism |
+| :--- | :--- | :--- |
+| `/api/files/download` | Secure asset downloads | **Cryptographic Signature**: Validates HMAC-SHA256 signature (`sig`) over file key and unix timestamp (`exp`). Expired or tampered signatures return 403. |
+| `/api/v1/*` | External developer & automation API | **API Key**: Requires `Authorization: Bearer <key>` header, validated via SHA-256 hash against active tenant `ApiKey` records with scoped permissions. |
+| `/api/cron/*` | Scheduled maintenance jobs | **Cron Secret**: Requires `Authorization: Bearer <CRON_SECRET>` timing-safe matching against server environment. |
+| `/api/kiosk/*` (`checkin`, `walkin`, `verify-qr`, etc.) | Front-desk tablet kiosk operations | **Kiosk Device Auth**: Authenticated via `x-kiosk-key` header mapped to an authorized paired `Kiosk` entity scoped to a branch and organization. Pairing uses an ephemeral 8-character pairing code. |
+| `/api/auth/verify-email` | Email address verification | **One-Time Token**: Validates single-use, time-bound verification token hashed at rest (`VerificationToken`). |
+| `/api/auth/reset-password` | Password recovery | **One-Time Token**: Validates single-use, expiring reset token hashed with SHA-256. |
+| `/api/auth/magic-link/consume` | Passwordless login | **One-Time Token**: Validates single-use, 15-minute magic link token with nonce hash. |
+| `/api/auth/2fa/verify` | Second factor completion | **Challenge Token**: Validates short-lived, signed JWT (`type: "2fa_challenge"`) issued after primary password verification. |
+| `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/resend-verification`, `/api/auth/google` | Account entry points | **Rate-Limited Public**: Open for onboarding/login, protected by per-IP and per-email sliding-window rate limiters, bcrypt timing defense, and anti-enumeration uniform responses. |
+| `/api/health`, `/api/v1/openapi.json` | Monitoring & API specs | **Public Read-Only**: System availability probe and public OpenAPI 3.0 specification. |
+
+
 ---
 
 ## 3. Compliance & Data Privacy (DPDP Act 2023)
