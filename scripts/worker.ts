@@ -7,7 +7,6 @@
 require("./mock-server-only.cjs");
 
 import { getRedisConnection, runAutoCheckoutWorker } from "../src/lib/queue";
-import { processEmailJob } from "../src/services/jobs/email.job";
 import { processNotificationJob } from "../src/services/jobs/notification.job";
 import { processReportJob } from "../src/services/jobs/report.job";
 import { processWebhookJob } from "../src/services/jobs/webhook.job";
@@ -25,19 +24,7 @@ async function startWorker() {
   if (connection) {
     logger.info("Redis detected. Starting BullMQ queue workers...");
 
-    // 1. Email Jobs Worker
-    workers.push(
-      new Worker(
-        "email-jobs",
-        async (job) => {
-          logger.info({ jobId: job.id, name: job.name }, "[Worker:Email] Executing job");
-          await processEmailJob(job.data);
-        },
-        { connection, concurrency: 5 }
-      )
-    );
-
-    // 2. Notification Jobs Worker
+    // 1. Notification Jobs Worker
     workers.push(
       new Worker(
         "notification-jobs",

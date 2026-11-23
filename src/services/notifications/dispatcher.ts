@@ -1,5 +1,6 @@
 import "server-only";
-import { NotificationEvent, NotificationPayload } from "./events";
+import { NotificationEvent } from "./events";
+import { NotificationPayload } from "./types";
 import { sendEmailNotification } from "./channels/email";
 import { sendInAppNotification } from "./channels/inapp";
 import { sendWebPushNotification } from "./channels/webpush";

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { NotificationEvent } from "@/services/notifications/events";
-import { NotificationPayload, isChannelAllowedForUser } from "@/services/notifications/dispatcher";
+import { NotificationPayload } from "@/services/notifications/types";
+import { isChannelAllowedForUser } from "@/services/notifications/dispatcher";
 import { renderNotificationContent } from "@/services/notifications/template-engine";
 import { sendInAppNotification } from "@/services/notifications/channels/inapp";
 import { sendWebPushNotification } from "@/services/notifications/channels/webpush";
