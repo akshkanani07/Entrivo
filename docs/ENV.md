@@ -19,8 +19,9 @@ This document provides a comprehensive specification of every environment variab
 | `JWT_SECRET` | String | **Yes** | None (Min 32 chars) | HMAC-SHA256 secret key used for signing session tokens and stateless authentication cookies. |
 | `QR_SIGNING_SECRET` | String | **Yes** | None (Min 32 chars) | Dedicated cryptographic secret used by `src/lib/qr.ts` for signing and validating QR visitor passes (`ENTQ1.*`). |
 | `CRON_SECRET` | String | **Yes** | None (Min 32 chars) | Bearer secret required in the `Authorization: Bearer <CRON_SECRET>` header for scheduled automation and maintenance endpoints. |
+| `STORAGE_SIGNING_SECRET` | String | **Yes** | None (Min 32 chars) | Dedicated cryptographic secret used for signing and verifying temporary upload and download URLs for stored documents and assets. |
 | `SEED_ADMIN_PASSWORD` | String | Optional | Auto-generated | Password assigned to default seed users during `pnpm prisma:seed`. When omitted, a cryptographically random password is generated and printed. |
-| `APP_ENCRYPTION_KEY` | String | **Yes** | 32-byte Base64 key | AES-256-GCM master key used to encrypt OAuth tokens, TOTP secrets, and integration credentials at rest. |
+| `APP_ENCRYPTION_KEY` | String | **Yes** | 64-hex char key | AES-256-GCM master 64-character hexadecimal key (32 bytes) used to encrypt OAuth tokens, TOTP secrets, and integration credentials at rest. |
 
 ---
 

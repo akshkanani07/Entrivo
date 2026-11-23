@@ -6,6 +6,20 @@
 // Allow server-only imports to resolve cleanly outside Next.js
 require("./mock-server-only.cjs");
 
+import fs from "fs";
+import { validateEnv } from "../src/lib/env";
+
+validateEnv();
+
+const HEARTBEAT_FILE = process.env.WORKER_HEARTBEAT_PATH || "/tmp/worker-heartbeat";
+function updateHeartbeat() {
+  try {
+    fs.writeFileSync(HEARTBEAT_FILE, Date.now().toString());
+  } catch {}
+}
+updateHeartbeat();
+const heartbeatInterval = setInterval(updateHeartbeat, 15000);
+
 import { getRedisConnection, runAutoCheckoutWorker } from "../src/lib/queue";
 import { processNotificationJob } from "../src/services/jobs/notification.job";
 import { processReportJob } from "../src/services/jobs/report.job";
@@ -117,6 +131,12 @@ async function gracefulShutdown(signal: string) {
   if (autoCheckoutInterval) {
     clearInterval(autoCheckoutInterval);
   }
+  clearInterval(heartbeatInterval);
+  try {
+    if (fs.existsSync(HEARTBEAT_FILE)) {
+      fs.unlinkSync(HEARTBEAT_FILE);
+    }
+  } catch {}
 
   await Promise.allSettled(workers.map((w) => w.close()));
   logger.info("All BullMQ workers stopped cleanly.");
