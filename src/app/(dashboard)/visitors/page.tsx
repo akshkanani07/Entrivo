@@ -1,10 +1,11 @@
 import React from "react";
 import prisma from "@/lib/db";
-import { requirePagePermission } from "@/lib/rbac";
+import { can, requirePagePermission } from "@/lib/rbac";
 import Link from "next/link";
 import { UserPlus, Search, Filter, ShieldCheck, ShieldAlert, ArrowRight, Clock, CheckCircle2, QrCode } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { VisitorsClientList } from "./VisitorsClientList";
+import { maskIdNumber } from "@/lib/preregistration";
 
 export const dynamic = "force-dynamic";
 
@@ -58,8 +59,15 @@ export default async function VisitorsPage({
       company: v.company || "Guest",
       avatarUrl: v.avatarUrl,
       idProofType: v.idProofType,
-      idProofNumber: v.idProofNumber,
+      idProofNumber:
+        v.idProofNumberMasked ||
+        (v.idProofNumber
+          ? v.idProofNumber.includes(":")
+            ? "Stored securely"
+            : maskIdNumber(v.idProofNumber)
+          : null),
       isBlacklisted: v.isBlacklisted,
+      isRegularVendor: v.isRegularVendor,
       blacklistReason: v.blacklistReason,
       typeName: v.visitorType?.name || "General",
       typeColor: v.visitorType?.badgeColor || "#6366f1",
@@ -106,6 +114,7 @@ export default async function VisitorsPage({
       <VisitorsClientList
         initialVisitors={formattedVisitors}
         visitorTypes={visitorTypes}
+        canManageVisitors={can(user, "visitors.write")}
       />
     </div>
   );

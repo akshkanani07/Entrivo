@@ -24,19 +24,44 @@ export default async function PublicPassPage({
   const { token } = await params;
 
   // Strict lookup by qrToken ONLY (no raw ID fallback)
-  const invitation = await prisma.invitation.findFirst({
+  const membership = await prisma.invitationVisitor.findFirst({
     where: { qrToken: token },
     include: {
       visitor: { include: { visitorType: true } },
-      hostEmployee: { include: { user: true, office: { include: { branch: true } } } },
-      meetingRoom: true,
-      organization: true,
+      invitation: {
+        include: {
+          hostEmployee: { include: { user: true, office: { include: { branch: true } } } },
+          meetingRoom: true,
+          organization: true,
+        },
+      },
     },
   });
+  const invitation = membership?.invitation || null;
+  const parkingAssignment = membership && invitation
+    ? await prisma.parkingAssignment.findFirst({
+        where: {
+          organizationId: invitation.organizationId,
+          invitationId: invitation.id,
+          vehicle: { visitorId: membership.visitorId },
+          status: { in: ["RESERVED", "OCCUPIED", "OVERSTAY"] },
+        },
+        include: { slot: { include: { lot: true } } },
+      })
+    : null;
 
   const isInvalid = !invitation;
-  const isExpired = invitation ? invitation.status === "EXPIRED" || invitation.status === "COMPLETED" : false;
-  const isCancelled = invitation ? invitation.status === "CANCELLED" || invitation.status === "REJECTED" : false;
+  const isExpired = invitation
+    ? invitation.status === "EXPIRED" ||
+      invitation.status === "COMPLETED" ||
+      membership?.status === "CHECKED_IN" ||
+      membership?.status === "NO_SHOW"
+    : false;
+  const isCancelled = invitation
+    ? invitation.status === "CANCELLED" ||
+      invitation.status === "REJECTED" ||
+      membership?.status === "CANCELLED"
+    : false;
 
   if (isInvalid || isExpired || isCancelled) {
     return (
@@ -75,7 +100,7 @@ export default async function PublicPassPage({
     );
   }
 
-  const qrDataUrl = await generateQRCodeDataUrl(invitation.qrToken);
+  const qrDataUrl = await generateQRCodeDataUrl(token);
 
   return (
     <div className="min-h-screen bg-[#080c14] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
@@ -102,14 +127,14 @@ export default async function PublicPassPage({
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
                 Visitor Pass
               </span>
-              <h2 className="text-base font-bold text-white">{invitation.visitor.name}</h2>
-              <p className="text-xs text-indigo-300">{invitation.visitor.company}</p>
+              <h2 className="text-base font-bold text-white">{membership!.visitor.name}</h2>
+              <p className="text-xs text-indigo-300">{membership!.visitor.company}</p>
             </div>
             <span
               className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white uppercase tracking-wider"
-              style={{ backgroundColor: invitation.visitor.visitorType?.badgeColor || "#6366f1" }}
+              style={{ backgroundColor: membership!.visitor.visitorType?.badgeColor || "#6366f1" }}
             >
-              {invitation.visitor.visitorType?.name || "GUEST"}
+              {membership!.visitor.visitorType?.name || "GUEST"}
             </span>
           </div>
 
@@ -117,7 +142,7 @@ export default async function PublicPassPage({
           <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner">
             <img src={qrDataUrl} alt="Visitor QR Pass" className="w-56 h-56 object-contain" />
             <span className="mt-2 text-xs font-mono font-bold text-black tracking-widest">
-              {invitation.qrToken}
+              {token}
             </span>
           </div>
 
@@ -161,6 +186,14 @@ export default async function PublicPassPage({
                 {invitation.organization.address || "Main Tech Campus"}
               </span>
             </div>
+            {parkingAssignment && (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Parking</span>
+                <span className="font-semibold text-cyan-300">
+                  {parkingAssignment.slot.lot.name} / {parkingAssignment.slot.code}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="text-[11px] text-center text-slate-400 space-y-1">

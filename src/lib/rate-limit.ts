@@ -168,6 +168,9 @@ export const forgotPasswordRateLimiter = (ip: string, email: string): RateLimitR
 export const registerRateLimiter = (ip: string): RateLimitResult =>
   checkRateLimit(`register:${ip}`, { maxRequests: 10, windowMs: 60 * 60 * 1000 });
 
+export const googleAuthRateLimiter = (ip: string): RateLimitResult =>
+  checkRateLimit(`google-auth:${ip}`, { maxRequests: 10, windowMs: 15 * 60 * 1000 });
+
 // 3 resend attempts per 15 min per email, 5 per IP
 export const resendVerificationRateLimiter = (email: string, ip: string): RateLimitResult => {
   const ipCheck = checkRateLimit(`resend-verif:ip:${ip}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
@@ -182,3 +185,9 @@ export const resendVerificationRateLimiter = (email: string, ip: string): RateLi
 export const twoFactorRateLimiter = (identifier: string): RateLimitResult => {
   return checkRateLimit(`2fa:${identifier}`, { maxRequests: 5, windowMs: 15 * 60 * 1000 });
 };
+
+export const testEmailRateLimiter = (identifier: string): RateLimitResult =>
+  checkRateLimit(`test-email:${identifier}`, { maxRequests: 5, windowMs: 60 * 60 * 1000 });
+
+export const mailjetWebhookRateLimiter = (identifier: string): RateLimitResult =>
+  checkRateLimit(`mailjet-webhook:${identifier}`, { maxRequests: 120, windowMs: 60 * 1000 });

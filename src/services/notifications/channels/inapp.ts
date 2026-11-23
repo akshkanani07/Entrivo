@@ -27,8 +27,11 @@ export async function sendInAppNotification(params: {
     });
     return { success: true, id: notification.id };
   } catch (error) {
-    console.error("[InApp Channel] Error creating notification:", error);
-    return { success: false, error };
+    console.error(
+      "[InApp Channel] Error creating notification:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
+    return { success: false, error: "In-app notification creation failed" };
   }
 }
 

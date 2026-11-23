@@ -16,9 +16,22 @@ import { persistBase64Image } from "@/services/storage/persist-image";
 import { audit } from "@/services/audit/audit.service";
 import { getVisitorValidNda, signNda } from "@/services/documents/nda.service";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
+import {
+  getCheckinPreRegistrationPolicyResult,
+  getPreRegistrationVisitTime,
+  maskIdNumber,
+} from "@/lib/preregistration";
+import { resolveCheckInLocation } from "@/services/muster/muster-core";
+import { maskPlateNumber, normalizePlateNumber, preferredParkingSlotType } from "@/lib/parking";
+import {
+  computeContractorComplianceStatus,
+  evaluateContractorPolicy,
+  isPermitValidAt,
+} from "@/services/contractors/compliance";
 
 export interface CheckInInput {
   invitationId: string;
+  visitorId?: string;
   organizationId: string;
   actorName: string; // receptionist / kiosk name shown in logs
   photoUrl?: string | null;
@@ -26,10 +39,16 @@ export interface CheckInInput {
   receptionistName?: string | null;
   consentGiven?: boolean | null;
   consentVersion?: string | null;
+  parkingSlotId?: string;
+  complianceOverride?: boolean;
+  complianceOverrideReason?: string;
+  complianceOverrideAuthorized?: boolean;
+  complianceOverrideActorId?: string;
 }
 
 export interface CheckInResult {
   success: true;
+  warnings?: string[];
   checkIn: {
     id: string;
     badgeNumber: string | null;
@@ -51,6 +70,7 @@ export interface CheckInResult {
       id: string;
       user: { name: string; email: string };
     };
+    parkingSlot?: { code: string; lotName: string };
   };
 }
 
@@ -84,17 +104,53 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   const timezone = (org as { timezone?: string } | null)?.timezone ?? "Asia/Kolkata";
 
   // Load invitation strictly scoped by org
-  const invitation = await prisma.invitation.findFirst({
+  const invitationRecord = await prisma.invitation.findFirst({
     where: { id: invitationId, organizationId: orgId },
     include: {
       visitor: { include: { visitorType: true } },
-      hostEmployee: { include: { user: true, office: true } },
-      meetingRoom: true,
+      visitors: { include: { visitor: { include: { visitorType: true } } } },
+      hostEmployee: {
+        include: {
+          user: true,
+          office: {
+            include: {
+              floors: true,
+              branch: { select: { organizationId: true } },
+            },
+          },
+        },
+      },
+      meetingRoom: {
+        include: {
+          floorRef: true,
+          zoneRef: { include: { floor: { select: { officeId: true } } } },
+          office: { include: { branch: { select: { organizationId: true } } } },
+        },
+      },
     },
   });
 
-  if (!invitation) {
+  if (!invitationRecord) {
     return { success: false, error: "Invitation not found in organization.", status: 404 };
+  }
+  const membership = invitationRecord.visitors.find(
+    (item) => item.visitorId === (input.visitorId || invitationRecord.visitorId)
+  );
+  if (!membership || membership.status === "CANCELLED" || membership.status === "NO_SHOW") {
+    return { success: false, error: "Visitor is not an active member of this invitation.", status: 404 };
+  }
+  if (membership.status === "CHECKED_IN") {
+    return { success: false, error: "This visitor has already checked in for this invitation.", status: 400 };
+  }
+  const selectedVisitorId = membership.visitorId;
+  const invitation = { ...invitationRecord, visitor: membership.visitor };
+  if (
+    invitation.visitor.organizationId !== orgId ||
+    invitation.hostEmployee.organizationId !== orgId ||
+    (invitation.hostEmployee.office &&
+      invitation.hostEmployee.office.branch.organizationId !== orgId)
+  ) {
+    return { success: false, error: "Invitation references records outside the organization.", status: 404 };
   }
 
   if (invitation.status !== "APPROVED") {
@@ -115,6 +171,58 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       error: scheduleCheck.reason || "Check-in is currently blocked by workplace schedule policy.",
       status: 403,
     };
+  }
+
+  const { policy } = await getOrgPolicy(orgId);
+  let vehicleBlacklistWarning: string | undefined;
+  const visitorVehicles = await prisma.vehicle.findMany({
+    where: { organizationId: orgId, visitorId: selectedVisitorId },
+    select: { plateNumber: true },
+  });
+  if (input.parkingSlotId && visitorVehicles.length === 0) {
+    return { success: false, error: "A registered vehicle is required for a parking assignment.", status: 400 };
+  }
+  if (visitorVehicles.length) {
+    const blacklistedVehicle = await prisma.blacklistVisitor.findFirst({
+      where: {
+        organizationId: orgId,
+        vehiclePlateNumber: {
+          in: visitorVehicles.map((vehicle) => normalizePlateNumber(vehicle.plateNumber)),
+        },
+      },
+      select: { vehiclePlateNumber: true },
+    });
+    if (blacklistedVehicle?.vehiclePlateNumber) {
+      const maskedPlate = maskPlateNumber(blacklistedVehicle.vehiclePlateNumber);
+      await prisma.securityLog.create({
+        data: {
+          organizationId: orgId,
+          logType: "BLACKLIST_MATCH",
+          description: `Visitor vehicle matched parking blacklist (plate ${maskedPlate}).`,
+          severity: "CRITICAL",
+          guardName: input.actorName,
+        },
+      });
+      await notify(NotificationEvent.SECURITY_ALERT, {
+        organizationId: orgId,
+        visitorName: invitation.visitor.name,
+        visitorCompany: invitation.visitor.company || undefined,
+        hostName: invitation.hostEmployee.user.name,
+        hostEmail: invitation.hostEmployee.user.email,
+        hostUserId: invitation.hostEmployee.userId,
+        severity: "CRITICAL",
+        reason: "A visitor vehicle matched the organization parking blacklist.",
+        entityId: `parking-blacklist-checkin-${invitation.id}-${selectedVisitorId}`,
+      });
+      if (policy.parkingBlacklistEnforcement === "BLOCK") {
+        return {
+          success: false,
+          error: "Access denied: vehicle is listed on the parking blacklist.",
+          status: 403,
+        };
+      }
+      vehicleBlacklistWarning = "A vehicle associated with this visitor matched the parking blacklist.";
+    }
   }
 
   // Blacklist check — both the Visitor flag AND the BlacklistVisitor table
@@ -180,22 +288,158 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   }
 
   // NDA Policy Enforcement Check (P3-02)
-  const { policy } = await getOrgPolicy(orgId);
   const requiresNda = (invitation.visitor.visitorType?.requiresNDA ?? false) || policy.requireNda;
+  const preRegistration = await prisma.preRegistration.findFirst({
+    where: {
+      invitationId: invitation.id,
+      visitorId: selectedVisitorId,
+      organizationId: orgId,
+      tokenExpiresAt: { gt: new Date() },
+      status: { in: ["SUBMITTED", "APPROVED"] },
+    },
+    select: { id: true, status: true },
+  });
+
+  const preRegistrationPolicy = getCheckinPreRegistrationPolicyResult(
+    policy.preRegistrationRequired,
+    preRegistration?.status ?? null
+  );
+  if (!preRegistrationPolicy.allowed) {
+    return {
+      success: false,
+      error: "An approved visitor pre-registration is required before check-in.",
+      status: 400,
+    };
+  }
+  let contractorWarning: string | undefined;
+  const contractorWorker = await prisma.contractorWorker.findFirst({
+    where: {
+      organizationId: orgId,
+      visitorId: selectedVisitorId,
+      deletedAt: null,
+    },
+    include: {
+      company: true,
+      documents: { where: { deletedAt: null } },
+    },
+  });
+
+  if (contractorWorker) {
+    const requirements = await prisma.complianceRequirement.findMany({
+      where: { organizationId: orgId, deletedAt: null, isActive: true },
+      select: { docType: true, mandatoryForAccess: true, isActive: true },
+    });
+    const complianceStatus = computeContractorComplianceStatus(
+      requirements,
+      contractorWorker.documents.map((document) => ({
+        docType: document.docType,
+        expiryDate: document.expiryDate,
+        deletedAt: document.deletedAt,
+        status: document.status,
+      })),
+      new Date()
+    );
+    const permitValid = !contractorWorker.permitValidFrom && !contractorWorker.permitValidUntil
+      ? true
+      : isPermitValidAt({
+          validFrom: contractorWorker.permitValidFrom,
+          validUntil: contractorWorker.permitValidUntil,
+          shiftStart: contractorWorker.permitShiftStart,
+          shiftEnd: contractorWorker.permitShiftEnd,
+          site: contractorWorker.permitSite,
+        }, new Date(), invitation.hostEmployee.office?.name);
+    const inductionValid = !contractorWorker.inductionRequired ||
+      Boolean(
+        contractorWorker.inductionValidUntil &&
+        contractorWorker.inductionValidUntil >= new Date()
+      );
+    const evaluated = evaluateContractorPolicy(
+      policy.contractorComplianceEnforcement,
+      complianceStatus,
+      contractorWorker.company.status !== "ACTIVE" || contractorWorker.status !== "ACTIVE",
+      permitValid,
+      inductionValid
+    );
+
+    if (!evaluated.allowed) {
+      if (
+        input.complianceOverride &&
+        input.complianceOverrideReason?.trim() &&
+        input.complianceOverrideAuthorized
+      ) {
+        await audit({
+          organizationId: orgId,
+          userId: input.complianceOverrideActorId || null,
+          action: "COMPLIANCE_OVERRIDE",
+          entity: "CONTRACTOR_WORKER",
+          entityId: contractorWorker.id,
+          details: { reason: input.complianceOverrideReason.trim(), blockedReason: evaluated.reason },
+        });
+      } else {
+        return {
+          success: false,
+          error: `Contractor access denied: ${evaluated.reason}`,
+          status: 403,
+        };
+      }
+    } else if (evaluated.warning) {
+      contractorWarning = evaluated.warning;
+    }
+  }
+
+  const warnings = [
+    ...(preRegistrationPolicy.warning ? [preRegistrationPolicy.warning] : []),
+    ...(vehicleBlacklistWarning ? [vehicleBlacklistWarning] : []),
+    ...(contractorWarning ? [contractorWarning] : []),
+  ];
+
+  if (policy.requireIdProof && !invitation.visitor.idProofType) {
+    return {
+      success: false,
+      error: "A government ID proof type is required before check-in.",
+      status: 400,
+    };
+  }
+  if (
+    policy.requireIdNumber &&
+    !invitation.visitor.idProofNumber &&
+    !invitation.visitor.idProofNumberMasked
+  ) {
+    return {
+      success: false,
+      error: "A government ID proof number is required before check-in.",
+      status: 400,
+    };
+  }
+  if (
+    policy.requirePhoto &&
+    !input.photoUrl &&
+    !invitation.visitor.avatarUrl
+  ) {
+    return {
+      success: false,
+      error: "A visitor verification photo is required before check-in.",
+      status: 400,
+    };
+  }
 
   let ndaSigned = false;
   let existingNda = null;
 
   if (requiresNda) {
-    if (policy.ndaReuseEnabled !== false) {
-      existingNda = await getVisitorValidNda(invitation.visitorId, orgId);
+    if (preRegistration) {
+      ndaSigned = true;
+    } else if (policy.ndaReuseEnabled !== false) {
+      existingNda = await getVisitorValidNda(selectedVisitorId, orgId);
+    } else {
+      existingNda = null;
     }
 
     if (existingNda) {
       ndaSigned = true;
     } else if (input.signatureUrl) {
       ndaSigned = true;
-    } else {
+    } else if (!preRegistration) {
       return {
         success: false,
         error: "A signed Non-Disclosure Agreement (NDA) is required before check-in can be completed.",
@@ -207,9 +451,33 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   // Persist base64 photo and signature into storage (P3-03)
   const storedPhotoUrl = await persistBase64Image(input.photoUrl, orgId, "VISITOR_PHOTO");
   const storedSignatureUrl = await persistBase64Image(input.signatureUrl, orgId, "SIGNATURE");
+  const room = invitation.meetingRoom;
+  const roomLocationIsInOrganization =
+    room?.office.branch.organizationId === orgId &&
+    (!room.floorRef || room.floorRef.officeId === room.officeId) &&
+    (!room.zoneRef || room.zoneRef.floor.officeId === room.officeId) &&
+    (!room.floorId || !room.zoneId || room.floorId === room.zoneRef?.floorId);
+  const checkInLocation = resolveCheckInLocation({
+    meetingRoom: roomLocationIsInOrganization && room
+      ? {
+          floorId: room.floorId,
+          zoneId: room.zoneId,
+          zoneFloorId: room.zoneRef?.floorId,
+        }
+      : null,
+    office: invitation.hostEmployee.office,
+  });
 
   // Generate badge number BEFORE the transaction
   const badgeNumber = await generateUniqueBadgeNumber(orgId);
+  const checkInTime = new Date();
+  const scheduledCheckout = getPreRegistrationVisitTime(
+    invitation.scheduledDate,
+    invitation.endTime,
+    timezone
+  );
+  const expectedCheckout =
+    scheduledCheckout > checkInTime ? scheduledCheckout : new Date(checkInTime.getTime() + 30 * 60_000);
 
   // Ensure partial unique index on PostgreSQL (db push safe)
   try {
@@ -232,8 +500,10 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
           // Re-check inside the transaction (serializable isolation prevents races)
           const existing = await tx.checkIn.findFirst({
             where: {
-              visitorId: invitation.visitorId,
+              visitorId: selectedVisitorId,
               status: "CHECKED_IN",
+              checkInTime,
+              expectedCheckout,
               visitor: { organizationId: orgId },
             },
           });
@@ -247,12 +517,14 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
 
           const created = await tx.checkIn.create({
             data: {
-              visitorId: invitation.visitorId,
+              visitorId: selectedVisitorId,
               invitationId: invitation.id,
               hostEmployeeId: invitation.hostEmployeeId,
               badgeNumber,
               badgeIssued: true,
               status: "CHECKED_IN",
+              floorId: checkInLocation.floorId,
+              zoneId: checkInLocation.zoneId,
               ndaSigned,
               consentGiven: input.consentGiven ?? true,
               consentVersion: input.consentVersion ?? "v1.0",
@@ -268,24 +540,108 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
           });
 
           await tx.visitor.update({
-            where: { id: invitation.visitorId },
+            where: { id: selectedVisitorId },
             data: { consentGiven: true, consentVersion: input.consentVersion ?? "v1.0" },
           });
 
           await tx.badge.create({
             data: {
               badgeNumber,
-              visitorId: invitation.visitorId,
+              visitorId: selectedVisitorId,
               checkInId: created.id,
               printCount: 1,
               status: "ACTIVE",
             },
           });
 
-          await tx.invitation.update({
-            where: { id: invitation.id },
-            data: { status: "COMPLETED" },
+          let parkingSlot: { code: string; lotName: string } | undefined;
+          if (input.parkingSlotId) {
+            const vehicle = await tx.vehicle.findFirst({
+              where: { organizationId: orgId, visitorId: selectedVisitorId },
+              orderBy: { createdAt: "desc" },
+              select: { id: true, type: true },
+            });
+            if (!vehicle) throw new Error("PARKING_VEHICLE_REQUIRED");
+            await tx.$queryRaw<Array<{ id: string }>>`
+              SELECT "id" FROM "Vehicle"
+              WHERE "id" = ${vehicle.id} AND "organizationId" = ${orgId}
+              FOR UPDATE
+            `;
+            const vehicleConflict = await tx.parkingAssignment.findFirst({
+              where: {
+                organizationId: orgId,
+                vehicleId: vehicle.id,
+                status: { in: ["RESERVED", "OCCUPIED", "OVERSTAY"] },
+                reservedFrom: { lt: expectedCheckout },
+                reservedUntil: { gt: checkInTime },
+              },
+              select: { id: true },
+            });
+            if (vehicleConflict) throw new Error("PARKING_VEHICLE_UNAVAILABLE");
+            const slot = await tx.parkingSlot.findFirst({
+              where: {
+                id: input.parkingSlotId,
+                isActive: true,
+                lot: { organizationId: orgId, isActive: true },
+              },
+              include: { lot: { select: { name: true } } },
+            });
+            if (!slot) throw new Error("PARKING_SLOT_UNAVAILABLE");
+            const compatibleType = preferredParkingSlotType(vehicle.type);
+            if (slot.type !== compatibleType && slot.type !== "RESERVED" && slot.type !== "VIP") {
+              throw new Error("PARKING_SLOT_TYPE_MISMATCH");
+            }
+            await tx.$queryRaw<Array<{ id: string }>>`
+              SELECT slot."id" FROM "ParkingSlot" slot
+              JOIN "ParkingLot" lot ON lot."id" = slot."lotId"
+              WHERE slot."id" = ${slot.id} AND lot."organizationId" = ${orgId}
+              FOR UPDATE OF slot
+            `;
+            const conflict = await tx.parkingAssignment.findFirst({
+              where: {
+                organizationId: orgId,
+                slotId: slot.id,
+                status: { in: ["RESERVED", "OCCUPIED", "OVERSTAY"] },
+                reservedFrom: { lt: expectedCheckout },
+                reservedUntil: { gt: checkInTime },
+              },
+              select: { id: true },
+            });
+            if (conflict) throw new Error("PARKING_SLOT_UNAVAILABLE");
+            await tx.parkingAssignment.create({
+              data: {
+                organizationId: orgId,
+                slotId: slot.id,
+                vehicleId: vehicle.id,
+                checkInId: created.id,
+                invitationId: invitation.id,
+                status: "RESERVED",
+                reservedFrom: checkInTime,
+                reservedUntil: expectedCheckout,
+              },
+            });
+            parkingSlot = { code: slot.code, lotName: slot.lot.name };
+          }
+
+          await tx.invitationVisitor.update({
+            where: {
+              invitationId_visitorId: {
+                invitationId: invitation.id,
+                visitorId: selectedVisitorId,
+              },
+            },
+            data: { status: "CHECKED_IN" },
           });
+          const members = await tx.invitationVisitor.findMany({
+            where: { invitationId: invitation.id },
+            select: { status: true },
+          });
+          if (members.every((item) => ["CHECKED_IN", "NO_SHOW", "CANCELLED"].includes(item.status))) {
+            await tx.invitation.update({
+              where: { id: invitation.id },
+              data: { status: "COMPLETED" },
+            });
+          }
 
           await tx.securityLog.create({
             data: {
@@ -297,12 +653,24 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
             },
           });
 
-          return created;
+          return { ...created, parkingSlot };
         },
         { isolationLevel: "Serializable" }
       );
       break;
     } catch (err: any) {
+      if (err.message === "PARKING_VEHICLE_REQUIRED") {
+        return { success: false, error: "A registered vehicle is required for a parking assignment.", status: 400 };
+      }
+      if (err.message === "PARKING_VEHICLE_UNAVAILABLE") {
+        return { success: false, error: "The vehicle already has an active parking assignment.", status: 409 };
+      }
+      if (err.message === "PARKING_SLOT_UNAVAILABLE") {
+        return { success: false, error: "The selected parking slot is no longer available.", status: 409 };
+      }
+      if (err.message === "PARKING_SLOT_TYPE_MISMATCH") {
+        return { success: false, error: "The selected parking slot is not compatible with this vehicle.", status: 400 };
+      }
       if (err.message === "ALREADY_CHECKED_IN") {
         return {
           success: false,
@@ -332,15 +700,21 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   // Generate and store Signed NDA Document if newly signed (P3-02)
   if (requiresNda && !existingNda && input.signatureUrl) {
     try {
+      const idProofNumberMasked =
+        invitation.visitor.idProofNumberMasked ||
+        (invitation.visitor.idProofNumber &&
+        !invitation.visitor.idProofNumber.includes(":")
+          ? maskIdNumber(invitation.visitor.idProofNumber)
+          : null);
       await signNda({
         organizationId: orgId,
-        visitorId: invitation.visitorId,
+        visitorId: selectedVisitorId,
         visitorName: invitation.visitor.name,
         visitorEmail: invitation.visitor.email,
         visitorPhone: invitation.visitor.phone,
         visitorCompany: invitation.visitor.company,
         idProofType: invitation.visitor.idProofType,
-        idProofNumber: invitation.visitor.idProofNumber,
+        idProofNumber: idProofNumberMasked,
         hostName: invitation.hostEmployee?.user?.name,
         purpose: invitation.purpose,
         signatureDataUrl: input.signatureUrl,
@@ -360,6 +734,9 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   }).catch(console.error);
 
   // Notify host (fire-and-forget)
+  const parkingLocation = checkIn.parkingSlot
+    ? `Parking ${checkIn.parkingSlot.lotName} / ${checkIn.parkingSlot.code}`
+    : undefined;
   notify(NotificationEvent.VISITOR_ARRIVED, {
     organizationId: orgId,
     visitorName: invitation.visitor?.name || "Guest",
@@ -368,8 +745,9 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     hostEmail: invitation.hostEmployee?.user?.email || "",
     hostUserId: invitation.hostEmployee?.userId,
     badgeNumber,
-    location:
-      invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+    location: parkingLocation
+      ? `${invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception"}; ${parkingLocation}`
+      : invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
     entityId: invitation.id,
   }).catch(console.error);
 
@@ -381,7 +759,9 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     hostName: invitation.hostEmployee?.user?.name || "Host",
     hostEmail: invitation.hostEmployee?.user?.email || "",
     hostUserId: invitation.hostEmployee?.userId,
-    location: invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+    location: parkingLocation
+      ? `${invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception"}; ${parkingLocation}`
+      : invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
     entityId: `waiting-${checkIn.id}`,
   }).catch(console.error);
 
@@ -394,7 +774,9 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       visitorCompany: invitation.visitor.company ?? undefined,
       hostName: invitation.hostEmployee?.user?.name || "Host",
       badgeNumber,
-      location: invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
+      location: parkingLocation
+        ? `${invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception"}; ${parkingLocation}`
+        : invitation.meetingRoom?.name ?? invitation.hostEmployee?.office?.name ?? "Main Reception",
       time: new Date().toLocaleTimeString(),
       entityId: `conf-${checkIn.id}`,
     }).catch(console.error);
@@ -422,6 +804,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
 
   return {
     success: true,
+    ...(warnings.length ? { warnings } : {}),
     checkIn: {
       id: checkIn.id,
       badgeNumber: checkIn.badgeNumber,
@@ -446,6 +829,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
           email: checkIn.hostEmployee?.user?.email || "",
         },
       },
+      ...(checkIn.parkingSlot ? { parkingSlot: checkIn.parkingSlot } : {}),
     },
   };
 }

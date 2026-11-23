@@ -113,6 +113,21 @@ export const notificationQueue = new ResilientQueue("notification-jobs");
 export const reportQueue = new ResilientQueue("report-jobs");
 export const webhookQueue = new ResilientQueue("webhook-jobs");
 export const calendarQueue = new ResilientQueue("calendar-sync");
+export const feedbackQueue = new ResilientQueue<{
+  organizationId: string;
+  checkInId: string;
+  token: string;
+}>("feedback-jobs");
+feedbackQueue.process(async (data) => {
+  const { processFeedbackJob } = await import("@/services/feedback/feedback.service");
+  await processFeedbackJob(data);
+});
+export const invitationSeriesQueue = new ResilientQueue<{ seriesId: string; organizationId: string }>(
+  "invitation-series"
+);
+export const bulkImportQueue = new ResilientQueue<{ jobId: string; organizationId: string }>(
+  "bulk-import"
+);
 
 // Auto Checkout Background Worker
 export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number }> {
@@ -122,6 +137,11 @@ export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number
       where: {
         status: "CHECKED_IN",
         expectedCheckout: { lt: now },
+        visitor: {
+          organization: {
+            emergencyEvents: { none: { status: "ACTIVE" } },
+          },
+        },
       },
       include: {
         visitor: true,

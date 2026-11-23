@@ -16,12 +16,15 @@ import {
   generateDailyReportEmail,
   generateSecurityAlertEmail,
   renderBrandedEmailLayout,
+  escapeHtml,
+  formatEmailDateTime,
   EmailPayload,
 } from "@/services/email/email.templates";
 import { generateIcs } from "@/services/email/ics";
 import { getAppUrl } from "@/lib/app-url";
 import { renderNotificationContent } from "../template-engine";
 import { NotificationChannel } from "@prisma/client";
+import { prisma } from "@/lib/db";
 
 export async function sendEmailNotification(
   event: NotificationEvent,
@@ -30,6 +33,27 @@ export async function sendEmailNotification(
   try {
     const appUrl = getAppUrl();
     const orgName = payload.visitorCompany || "Entrivo Workplace";
+    const organization = await prisma.organization.findUnique({
+      where: { id: payload.organizationId },
+      select: { timezone: true },
+    });
+    const timeZone = organization?.timezone || "Asia/Kolkata";
+    const formattedDate = payload.date
+      ? formatEmailDateTime(payload.date, timeZone, "date")
+      : "";
+    const formattedTime = payload.time
+      ? formatEmailDateTime(payload.time, timeZone, "time")
+      : formatEmailDateTime(new Date(), timeZone, "time");
+    const absoluteUrl = (value: string | undefined, fallback: string) => {
+      try {
+        const candidate = new URL(value || fallback, `${appUrl}/`);
+        return candidate.protocol === "http:" || candidate.protocol === "https:"
+          ? candidate.toString()
+          : new URL(fallback, `${appUrl}/`).toString();
+      } catch {
+        return new URL(fallback, `${appUrl}/`).toString();
+      }
+    };
 
     // 1. Check if there is an active custom template for this event
     const rendered = await renderNotificationContent({
@@ -37,11 +61,31 @@ export async function sendEmailNotification(
       event,
       channel: NotificationChannel.EMAIL,
       payload,
+      locale: payload.locale,
       companyName: orgName,
     });
 
     switch (event) {
-      case NotificationEvent.VISITOR_INVITED: {
+      case NotificationEvent.GROUP_INVITE_CREATED: {
+        if (!payload.hostEmail) return { success: false, reason: "No host email" };
+        const email: EmailPayload = {
+          to: payload.hostEmail,
+          recipientName: payload.hostName,
+          subject: rendered.subject,
+          htmlContent: renderBrandedEmailLayout({
+            title: rendered.subject,
+            tag: "Group Invitation",
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
+            actionButton: { text: "View Invitations", url: absoluteUrl(payload.approvalUrl, "/invitations") },
+            organizationName: orgName,
+          }),
+          textContent: rendered.body,
+        };
+        return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
+      }
+
+      case NotificationEvent.VISITOR_INVITED:
+      case NotificationEvent.PREREG_REQUESTED: {
         if (!payload.visitorEmail) return { success: false, reason: "No visitor email" };
 
         // Parse scheduled dates or fallback to tomorrow
@@ -53,7 +97,7 @@ export async function sendEmailNotification(
           title: `Visit to ${orgName} - Host: ${payload.hostName}`,
           description: `Meeting Purpose: ${payload.purpose || "Business Meeting"}\\nPass: ${
             payload.qrPassUrl || `${appUrl}/pass/sample`
-          }`,
+          }${payload.preRegistrationUrl ? `\\nComplete pre-registration: ${payload.preRegistrationUrl}` : ""}`,
           location: payload.location || "Main Reception",
           startDate,
           endDate,
@@ -77,7 +121,11 @@ export async function sendEmailNotification(
             htmlContent: renderBrandedEmailLayout({
               title: rendered.subject,
               tag: "Workplace Invitation",
-              contentHtml: `<div style="white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #cbd5e1;">${rendered.body}</div>`,
+              contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}${
+                payload.preRegistrationUrl
+                  ? `<p>Complete pre-registration: <a href="${absoluteUrl(payload.preRegistrationUrl, "/preregister")}" rel="noreferrer">Open secure form</a></p>`
+                  : ""
+              }</div>`,
               actionButton: payload.qrPassUrl ? { text: "Access Digital Pass", url: payload.qrPassUrl } : undefined,
               organizationName: orgName,
             }),
@@ -92,13 +140,56 @@ export async function sendEmailNotification(
           visitorEmail: payload.visitorEmail,
           hostName: payload.hostName,
           companyName: orgName,
-          date: payload.date || "Scheduled Date",
-          time: payload.time || "Scheduled Time",
+          date: formattedDate || "Scheduled Date",
+          time: formattedTime || "Scheduled Time",
           location: payload.location || "Main Reception",
-          qrPassUrl: payload.qrPassUrl || `${appUrl}/pass/sample`,
+          qrPassUrl: absoluteUrl(payload.qrPassUrl, "/pass/sample"),
           purpose: payload.purpose || "Business Meeting",
+          preRegistrationUrl: payload.preRegistrationUrl
+            ? absoluteUrl(payload.preRegistrationUrl, "/preregister")
+            : undefined,
           icsAttachment,
         });
+        return await emailService.sendEmail(email, undefined, payload.organizationId, event);
+      }
+
+      case NotificationEvent.PREREG_REMINDER:
+      case NotificationEvent.PREREG_REJECTED: {
+        if (!payload.visitorEmail) return { success: false, reason: "No visitor email" };
+        if (!payload.preRegistrationUrl) return { success: false, reason: "No pre-registration link" };
+        const link = absoluteUrl(payload.preRegistrationUrl, "/preregister");
+        const email: EmailPayload = {
+          to: payload.visitorEmail,
+          recipientName: payload.visitorName,
+          subject: rendered.subject,
+          htmlContent: renderBrandedEmailLayout({
+            title: rendered.subject,
+            tag: event === NotificationEvent.PREREG_REJECTED ? "Update Required" : "Visit Reminder",
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
+            actionButton: { text: "Open secure pre-registration", url: link },
+            organizationName: orgName,
+          }),
+          textContent: rendered.body,
+        };
+        return await emailService.sendEmail(email, undefined, payload.organizationId, event);
+      }
+
+      case NotificationEvent.PREREG_SUBMITTED: {
+        if (!payload.hostEmail) return { success: false, reason: "No host email" };
+        const reviewUrl = absoluteUrl(payload.approvalUrl, "/preregistrations");
+        const email: EmailPayload = {
+          to: payload.hostEmail,
+          recipientName: payload.hostName,
+          subject: rendered.subject,
+          htmlContent: renderBrandedEmailLayout({
+            title: rendered.subject,
+            tag: "Review Required",
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
+            actionButton: { text: "Review pre-registration", url: reviewUrl },
+            organizationName: orgName,
+          }),
+          textContent: rendered.body,
+        };
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
       }
 
@@ -109,7 +200,7 @@ export async function sendEmailNotification(
           visitorEmail: payload.visitorEmail,
           hostName: payload.hostName,
           companyName: orgName,
-          date: payload.date || "Scheduled Date",
+          date: formattedDate || "Scheduled Date",
           reason: payload.reason || payload.cancellationReason,
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
@@ -147,10 +238,10 @@ export async function sendEmailNotification(
           visitorEmail: payload.visitorEmail,
           hostName: payload.hostName,
           companyName: orgName,
-          date: payload.date || "Updated Date",
-          time: payload.time || "Updated Time",
+          date: formattedDate || "Updated Date",
+          time: formattedTime || "Updated Time",
           location: payload.location || "Main Reception",
-          qrPassUrl: payload.qrPassUrl || `${appUrl}/pass/sample`,
+          qrPassUrl: absoluteUrl(payload.qrPassUrl, "/pass/sample"),
           icsAttachment,
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
@@ -177,7 +268,7 @@ export async function sendEmailNotification(
           visitorCompany: payload.visitorCompany || "Guest",
           badgeNumber: payload.badgeNumber || "BADGE-101",
           location: payload.location || "Front Desk",
-          time: payload.time || new Date().toLocaleTimeString(),
+          time: formattedTime,
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
       }
@@ -191,7 +282,7 @@ export async function sendEmailNotification(
           companyName: orgName,
           badgeNumber: payload.badgeNumber || "BADGE-101",
           location: payload.location || "Front Desk",
-          checkInTime: payload.time || new Date().toLocaleTimeString(),
+          checkInTime: formattedTime,
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
       }
@@ -204,7 +295,8 @@ export async function sendEmailNotification(
           visitorEmail: payload.visitorEmail,
           companyName: orgName,
           durationMinutes: 45,
-          checkOutTime: payload.time || new Date().toLocaleTimeString(),
+          checkOutTime: formattedTime,
+          feedbackUrl: payload.feedbackUrl,
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
       }
@@ -216,10 +308,10 @@ export async function sendEmailNotification(
           visitorEmail: payload.visitorEmail,
           hostName: payload.hostName,
           companyName: orgName,
-          date: payload.date || "Scheduled Date",
-          time: payload.time || "Scheduled Time",
+          date: formattedDate || "Scheduled Date",
+          time: formattedTime,
           location: payload.location || "Main Reception",
-          qrPassUrl: payload.qrPassUrl || `${appUrl}/pass/sample`,
+          qrPassUrl: absoluteUrl(payload.qrPassUrl, "/pass/sample"),
           reminderWindow: payload.reminderType === "1H" ? "1 hour" : "24 hours",
         });
         return await emailService.sendEmail(email, undefined, payload.organizationId, event);
@@ -232,10 +324,10 @@ export async function sendEmailNotification(
           hostEmail: payload.hostEmail,
           visitorName: payload.visitorName,
           visitorCompany: payload.visitorCompany || "Guest",
-          date: payload.date || "Today",
-          time: payload.time || "Scheduled Time",
+          date: formattedDate || "Today",
+          time: formattedTime,
           purpose: payload.purpose || "Executive Visit",
-          approvalUrl: payload.approvalUrl || `${appUrl}/approvals`,
+          approvalUrl: absoluteUrl(payload.approvalUrl, "/approvals"),
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
       }
@@ -248,7 +340,7 @@ export async function sendEmailNotification(
           adminName: payload.hostName || "Administrator",
           visitorName: payload.visitorName,
           hostName: payload.hostName,
-          actionUrl: payload.approvalUrl || `${appUrl}/approvals`,
+          actionUrl: absoluteUrl(payload.approvalUrl, "/approvals"),
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
       }
@@ -283,9 +375,11 @@ export async function sendEmailNotification(
             title: `Document Expiring: ${docTitle}`,
             tag: "Document Expiry Notice",
             tagColor: "#f59e0b",
-            contentHtml: `<p style="color: #cbd5e1; font-size: 14px;">The <strong>${
+            contentHtml: `<p style="color:#354256;font-size:14px;line-height:1.6;">The <strong>${escapeHtml(
               payload.documentType || "document"
-            }</strong> for visitor <strong>${visitorName}</strong> will expire in <strong>${days} days</strong> (${expiry}). Please submit a renewed document or verify records in the portal.</p>`,
+            )}</strong> for visitor <strong>${escapeHtml(visitorName)}</strong> will expire in <strong>${escapeHtml(
+              days
+            )} days</strong> (${escapeHtml(expiry)}). Please submit a renewed document or verify records in the portal.</p>`,
             actionButton: { text: "Review Documents", url: `${appUrl}/documents` },
             organizationName: orgName,
           }),
@@ -295,6 +389,9 @@ export async function sendEmailNotification(
       }
 
       case NotificationEvent.SECURITY_ALERT: {
+        if (payload.emergencyEventId && !emailService.isAvailable()) {
+          return { success: false, reason: "Email delivery is not configured" };
+        }
         const recipient = payload.hostEmail;
         if (!recipient) return { success: false, reason: "No recipient email" };
         const email = generateSecurityAlertEmail({
@@ -305,6 +402,8 @@ export async function sendEmailNotification(
           location: payload.location || "Security Gate",
           description: payload.reason || "Incident recorded at checkpoint",
           visitorName: payload.visitorName,
+          emergencyType: payload.emergencyType,
+          emergencyAction: payload.emergencyAction,
         });
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
       }
@@ -324,7 +423,7 @@ export async function sendEmailNotification(
           adminEmail: recipient,
           adminName: payload.hostName || "Administrator",
           companyName: orgName,
-          date: payload.date || new Date().toLocaleDateString(),
+          date: formattedDate || formatEmailDateTime(new Date(), timeZone, "date"),
           stats: {
             totalCheckIns: stats.totalCheckIns || 0,
             totalCheckOuts: stats.totalCheckOuts || 0,
@@ -338,6 +437,24 @@ export async function sendEmailNotification(
         return await emailService.sendEmail(email, payload.hostUserId, payload.organizationId, event);
       }
 
+      case NotificationEvent.DOCUMENT_EXPIRING: {
+        const recipients = Array.from(new Set([payload.hostEmail, payload.visitorEmail].filter((email): email is string => Boolean(email))));
+        if (recipients.length === 0) return { success: false, reason: "No document expiry recipient" };
+        const results = await Promise.all(recipients.map((recipient) => emailService.sendEmail({
+          to: recipient,
+          recipientName: payload.hostName || payload.visitorName || "Recipient",
+          subject: rendered.subject,
+          htmlContent: renderBrandedEmailLayout({
+            title: rendered.subject,
+            tag: "Document Expiry",
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
+            organizationName: orgName,
+          }),
+          textContent: rendered.body,
+        }, payload.hostUserId, payload.organizationId, event)));
+        return results[0] || { success: false, reason: "Document expiry email failed" };
+      }
+
       default: {
         const recipient = payload.hostEmail || payload.visitorEmail;
         if (!recipient) return { success: false, reason: "No recipient email" };
@@ -348,7 +465,7 @@ export async function sendEmailNotification(
           htmlContent: renderBrandedEmailLayout({
             title: rendered.subject,
             tag: "Workplace Notification",
-            contentHtml: `<div style="white-space: pre-wrap; font-size: 14px; color: #cbd5e1;">${rendered.body}</div>`,
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
             organizationName: orgName,
           }),
           textContent: rendered.body,
@@ -357,7 +474,15 @@ export async function sendEmailNotification(
       }
     }
   } catch (error: any) {
-    console.error("[Email Channel] Dispatch error:", error);
-    return { success: false, error: error?.message || "Email dispatch failed" };
+    console.error(
+      "[Email Channel] Dispatch error:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
+    return {
+      success: false,
+      error: payload.emergencyEventId
+        ? "Emergency email dispatch failed"
+        : error?.message || "Email dispatch failed",
+    };
   }
 }

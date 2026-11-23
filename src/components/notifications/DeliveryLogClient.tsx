@@ -24,7 +24,7 @@ interface NotificationItem {
   title: string;
   body: string;
   recipient: string | null;
-  status: "SENT" | "FAILED" | "PENDING";
+  status: "SENT" | "FAILED" | "PENDING" | "OPENED" | "BOUNCED" | "SPAM" | "BLOCKED";
   error: string | null;
   retryCount: number;
   lastAttemptAt: string | null;

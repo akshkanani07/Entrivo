@@ -69,9 +69,38 @@ export async function POST(request: Request) {
         },
       });
 
+      const vehicles = await tx.vehicle.findMany({
+        where: { organizationId, visitorId },
+        select: { id: true, plateNumber: true },
+      });
+      if (vehicles.length) {
+        await tx.blacklistVisitor.updateMany({
+          where: {
+            organizationId,
+            vehiclePlateNumber: { in: vehicles.map((vehicle) => vehicle.plateNumber) },
+          },
+          data: { vehiclePlateNumber: null },
+        });
+        for (const vehicle of vehicles) {
+          await tx.vehicle.update({
+            where: { id: vehicle.id, organizationId },
+            data: {
+              plateNumber: `ERASED-${vehicle.id}`,
+              plateDisplay: "REDACTED",
+              make: null,
+              color: null,
+            },
+          });
+        }
+        await tx.contractorPermit.updateMany({
+          where: { organizationId, vehicleId: { in: vehicles.map((vehicle) => vehicle.id) } },
+          data: { visitorId: null },
+        });
+      }
+
       // Purge biometrics in all check-in records for this visitor
       await tx.checkIn.updateMany({
-        where: { visitorId },
+        where: { visitorId, visitor: { organizationId } },
         data: {
           photoUrl: null,
           signatureUrl: null,
@@ -80,7 +109,7 @@ export async function POST(request: Request) {
 
       // Soft delete all document records for this visitor
       await tx.document.updateMany({
-        where: { visitorId },
+        where: { visitorId, organizationId },
         data: {
           deletedAt: now,
         },

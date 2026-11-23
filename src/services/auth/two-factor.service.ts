@@ -4,6 +4,8 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/encryption";
+import { emailService } from "@/services/email/mailjet.service";
+import { generateTwoFactorStatusEmail } from "@/services/email/email.templates";
 
 export interface TwoFactorEnrolResult {
   secret: string;
@@ -61,7 +63,14 @@ export class TwoFactorService {
   async confirmEnrolment(userId: string, code: string): Promise<{ success: boolean; error?: string }> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, twoFactorSecret: true, organizationId: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        twoFactorSecret: true,
+        organizationId: true,
+        organization: { select: { name: true, timezone: true } },
+      },
     });
 
     if (!user || !user.twoFactorSecret) {
@@ -97,6 +106,20 @@ export class TwoFactorService {
         },
       });
     }
+
+    await emailService.sendEmail(
+      generateTwoFactorStatusEmail({
+        email: user.email,
+        name: user.name,
+        organizationName: user.organization?.name,
+        timeZone: user.organization?.timezone,
+        enabled: true,
+        changedAt: new Date(),
+      }),
+      user.id,
+      user.organizationId || undefined,
+      "TWO_FACTOR_ENABLED"
+    );
 
     return { success: true };
   }
@@ -172,9 +195,12 @@ export class TwoFactorService {
       where: { id: userId },
       select: {
         id: true,
+        email: true,
+        name: true,
         twoFactorSecret: true,
         twoFactorBackupCodes: true,
         organizationId: true,
+        organization: { select: { name: true, timezone: true } },
       },
     });
 
@@ -210,6 +236,20 @@ export class TwoFactorService {
         },
       });
     }
+
+    await emailService.sendEmail(
+      generateTwoFactorStatusEmail({
+        email: user.email,
+        name: user.name,
+        organizationName: user.organization?.name,
+        timeZone: user.organization?.timezone,
+        enabled: false,
+        changedAt: new Date(),
+      }),
+      user.id,
+      user.organizationId || undefined,
+      "TWO_FACTOR_DISABLED"
+    );
 
     return { success: true };
   }

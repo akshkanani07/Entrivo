@@ -62,9 +62,10 @@ export async function sendSlackNotification(
           NotificationEvent.VISITOR_WAITING,
           NotificationEvent.SECURITY_ALERT,
           NotificationEvent.VISITOR_OVERSTAYED,
+          NotificationEvent.FEEDBACK_DETRACTOR,
         ];
 
-    if (!activeEvents.includes(event)) {
+    if (!payload.emergencyEventId && !activeEvents.includes(event)) {
       return { success: false, reason: `Event ${event} not routed to Slack` };
     }
 
@@ -86,6 +87,9 @@ export async function sendSlackNotification(
 
     // Mock mode support
     if (rawWebhook.startsWith("mock_") || rawWebhook.includes("mock-slack")) {
+      if (payload.emergencyEventId) {
+        return { success: false, reason: "Slack is configured in simulation mode" };
+      }
       const masked = "https://hooks.slack.com/services/MOCK";
       await prisma.notification.create({
         data: {
@@ -166,8 +170,7 @@ export async function sendSlackNotification(
     const maskedUrl = maskSlackUrl(rawWebhook);
 
     if (!response.ok && response.type !== "opaqueredirect") {
-      const errText = await response.text().catch(() => "(unreadable)");
-      console.error("[Slack] HTTP error:", response.status, errText.slice(0, 200));
+      console.error("[Slack] HTTP error:", response.status);
 
       await prisma.notification.create({
         data: {
@@ -178,7 +181,7 @@ export async function sendSlackNotification(
           body: content.body,
           recipient: maskedUrl,
           status: "FAILED",
-          error: `HTTP ${response.status}: ${errText.slice(0, 200)}`,
+          error: `HTTP ${response.status}`,
           lastAttemptAt: new Date(),
           retryCount: 0,
         },
@@ -230,7 +233,10 @@ export async function sendSlackNotification(
     return { success: true };
   } catch (error: any) {
     const errorMsg = error instanceof Error && error.name === "TimeoutError" ? "Webhook timeout after 5s" : "Dispatch error";
-    console.error("[Slack] Dispatch error:", error);
+    console.error(
+      "[Slack] Dispatch error:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
 
     await prisma.notification.create({
       data: {

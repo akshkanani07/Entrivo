@@ -6,12 +6,17 @@ import { z } from "zod";
 
 import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { audit } from "@/services/audit/audit.service";
+import { isValidForeignPlateNumber, isValidIndianPlateNumber, normalizePlateNumber } from "@/lib/parking";
 
 const createBlacklistSchema = z.object({
   name: requiredString("Name is required"),
   phone: optionalString(),
   email: optionalEmail("Valid email is required"),
   idProofNumber: optionalString(),
+  vehiclePlateNumber: z.string().trim().max(24).optional().default(""),
+  foreignPlate: z.boolean().optional().default(false),
   reason: requiredString("Reason is required"),
 });
 
@@ -44,14 +49,25 @@ export async function POST(request: Request) {
     const org = requireOrg(auth.user);
     if (org.response) return org.response;
     const organizationId = org.organizationId;
+    const limit = checkRateLimit(`blacklist-add:${auth.user.id}`, {
+      maxRequests: 30,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!limit.allowed) return NextResponse.json({ success: false, error: "Too many blacklist changes." }, { status: 429 });
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
     const parsed = createBlacklistSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ success: false, error: parsed.error.issues[0]?.message || "Invalid input" }, { status: 400 });
     }
 
-    const { name, phone, email, idProofNumber, reason } = parsed.data;
+    const { name, phone, email, idProofNumber, vehiclePlateNumber, foreignPlate, reason } = parsed.data;
+    const normalizedPlate = normalizePlateNumber(vehiclePlateNumber);
+    if (normalizedPlate && !(foreignPlate
+      ? isValidForeignPlateNumber(vehiclePlateNumber)
+      : isValidIndianPlateNumber(vehiclePlateNumber))) {
+      return NextResponse.json({ success: false, error: "Vehicle plate number is invalid." }, { status: 400 });
+    }
 
     const entry = await prisma.blacklistVisitor.create({
       data: {
@@ -59,6 +75,7 @@ export async function POST(request: Request) {
         phone: phone || null,
         email: email ? email.toLowerCase().trim() : null,
         idProofNumber: idProofNumber || null,
+        vehiclePlateNumber: normalizedPlate || null,
         reason: reason.trim(),
         organizationId,
       },
@@ -85,9 +102,22 @@ export async function POST(request: Request) {
       data: {
         organizationId,
         logType: "BLACKLIST_ADDED",
-        description: `Visitor ${name} flagged on security blacklist. Reason: ${reason}`,
+        description: normalizedPlate
+          ? `Vehicle plate ***${normalizedPlate.slice(-2)} added to security blacklist.`
+          : `Visitor ${name} flagged on security blacklist. Reason: ${reason}`,
         severity: "HIGH",
         guardName: auth.user.name || "Security Officer",
+      },
+    });
+    await audit({
+      organizationId,
+      userId: auth.user.id,
+      action: "BLACKLIST_ADDED",
+      entity: "BLACKLIST",
+      entityId: entry.id,
+      details: {
+        summary: "Security blacklist entry created.",
+        maskedPlate: normalizedPlate ? `***${normalizedPlate.slice(-2)}` : undefined,
       },
     });
 
@@ -95,7 +125,7 @@ export async function POST(request: Request) {
       alertType: "BLACKLIST_ADDED",
       severity: "HIGH",
       flaggedName: name,
-      reason: reason.trim(),
+      reason: normalizedPlate ? "Vehicle added to the organization security blacklist." : reason.trim(),
       flaggedBy: auth.user.name || "Security Officer",
     }).catch(console.error);
 
@@ -114,6 +144,11 @@ export async function DELETE(request: Request) {
     const org = requireOrg(auth.user);
     if (org.response) return org.response;
     const organizationId = org.organizationId;
+    const limit = checkRateLimit(`blacklist-remove:${auth.user.id}`, {
+      maxRequests: 30,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!limit.allowed) return NextResponse.json({ success: false, error: "Too many blacklist changes." }, { status: 429 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -142,6 +177,14 @@ export async function DELETE(request: Request) {
         severity: "MEDIUM",
         guardName: auth.user.name || "Security Officer",
       },
+    });
+    await audit({
+      organizationId,
+      userId: auth.user.id,
+      action: "BLACKLIST_REMOVED",
+      entity: "BLACKLIST",
+      entityId: existing.id,
+      details: { summary: "Security blacklist entry removed." },
     });
 
     return NextResponse.json({ success: true, message: "Blacklist entry removed" });

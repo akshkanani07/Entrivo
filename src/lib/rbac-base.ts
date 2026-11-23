@@ -6,8 +6,12 @@ export type Permission =
   | "visitors.write"
   | "visitors.delete"
   | "invitations.create"
+  | "invitations.bulk"
+  | "invitations.series.manage"
   | "invitations.read.all"
   | "invitations.read.own"
+  | "preregistration.read"
+  | "preregistration.manage"
   | "walkin.create"
   | "checkin.perform"
   | "checkout.perform"
@@ -39,7 +43,24 @@ export type Permission =
   | "apikeys.read"
   | "apikeys.manage"
   | "webhooks.read"
-  | "webhooks.manage";
+  | "webhooks.manage"
+  | "muster.view"
+  | "muster.broadcast"
+  | "muster.manage"
+  | "muster.account"
+  | "parking.read"
+  | "parking.assign"
+  | "parking.manage"
+  | "deliveries.log"
+  | "deliveries.read.own"
+  | "deliveries.read.all"
+  | "contractors.read"
+  | "contractors.manage"
+  | "compliance.override"
+  | "feedback.read"
+  | "feedback.manage"
+  | "analytics.view"
+  | "analytics.export";
 
 export const ALL_PERMISSIONS: Permission[] = [
   "dashboard.view",
@@ -47,8 +68,12 @@ export const ALL_PERMISSIONS: Permission[] = [
   "visitors.write",
   "visitors.delete",
   "invitations.create",
+  "invitations.bulk",
+  "invitations.series.manage",
   "invitations.read.all",
   "invitations.read.own",
+  "preregistration.read",
+  "preregistration.manage",
   "walkin.create",
   "checkin.perform",
   "checkout.perform",
@@ -81,6 +106,28 @@ export const ALL_PERMISSIONS: Permission[] = [
   "apikeys.manage",
   "webhooks.read",
   "webhooks.manage",
+  "muster.view",
+  "muster.broadcast",
+  "muster.manage",
+  "muster.account",
+  "parking.read",
+  "parking.assign",
+  "parking.manage",
+  "contractors.read",
+  "feedback.read",
+  "feedback.manage",
+  "analytics.view",
+  "analytics.export",
+  "contractors.manage",
+  "compliance.override",
+  "feedback.read",
+  "feedback.manage",
+  "analytics.view",
+  "analytics.export",
+  "deliveries.log",
+  "deliveries.read.own",
+  "deliveries.read.all",
+  "contractors.read",
 ];
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
@@ -91,8 +138,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "visitors.write",
     "visitors.delete",
     "invitations.create",
+    "invitations.bulk",
+    "invitations.series.manage",
     "invitations.read.all",
     "invitations.read.own",
+    "preregistration.read",
+    "preregistration.manage",
     "walkin.create",
     "checkin.perform",
     "checkout.perform",
@@ -125,13 +176,33 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "apikeys.manage",
     "webhooks.read",
     "webhooks.manage",
+    "muster.view",
+    "muster.broadcast",
+    "muster.manage",
+    "muster.account",
+    "parking.read",
+    "parking.assign",
+    "feedback.read",
+    "feedback.manage",
+    "analytics.view",
+    "deliveries.log",
+    "deliveries.read.own",
+    "deliveries.read.all",
+    "parking.manage",
+    "contractors.read",
+    "contractors.manage",
+    "compliance.override",
   ],
   RECEPTIONIST: [
     "dashboard.view",
     "visitors.read",
     "visitors.write",
     "invitations.create",
+    "invitations.bulk",
+    "invitations.series.manage",
     "invitations.read.all",
+    "preregistration.read",
+    "preregistration.manage",
     "walkin.create",
     "checkin.perform",
     "checkout.perform",
@@ -146,6 +217,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "files.write",
     "sessions.self",
     "notifications.self",
+    "muster.view",
+    "parking.read",
+    "parking.assign",
+    "deliveries.log",
+    "deliveries.read.own",
+    "deliveries.read.all",
   ],
   SECURITY_GUARD: [
     "dashboard.view",
@@ -166,17 +243,30 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "files.write",
     "sessions.self",
     "notifications.self",
+    "deliveries.read.own",
+    "deliveries.read.all",
+    "muster.view",
+    "muster.broadcast",
+    "muster.account",
+    "parking.read",
+    "parking.assign",
   ],
   EMPLOYEE: [
     "dashboard.view",
     "invitations.create",
+    "invitations.series.manage",
     "invitations.read.own",
+    "preregistration.read",
+    "preregistration.manage",
     "approvals.act",
     "employees.read",
     "meetingRooms.read",
     "files.read",
     "sessions.self",
     "notifications.self",
+    "deliveries.read.own",
+    "analytics.view",
+    "feedback.read",
   ],
 };
 

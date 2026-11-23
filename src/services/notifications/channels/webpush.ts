@@ -13,7 +13,10 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && !VAPID_PUBLIC_KEY.startsWith("mock_
     webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
     vapidConfigured = true;
   } catch (err) {
-    console.warn("[WebPush Channel] Invalid VAPID configuration:", err);
+    console.warn(
+      "[WebPush Channel] Invalid VAPID configuration:",
+      err instanceof Error ? err.name : "UnknownError"
+    );
   }
 }
 
@@ -24,6 +27,9 @@ export async function sendWebPushNotification(
   content: { title: string; body: string; url?: string }
 ): Promise<{ success: boolean; count?: number; error?: any; reason?: string }> {
   if (!vapidConfigured) {
+    if (payload.emergencyEventId) {
+      return { success: false, reason: "Web Push is not configured" };
+    }
     console.log(`[WebPush Channel - Mock/Unconfigured] User: ${userId}, Event: ${event}, Title: ${content.title}`);
     if (payload.organizationId) {
       await prisma.notification.create({
@@ -112,7 +118,10 @@ export async function sendWebPushNotification(
 
     return { success: successful > 0, count: successful };
   } catch (error: any) {
-    console.error("[WebPush Channel] Error sending push notification:", error);
+    console.error(
+      "[WebPush Channel] Error sending push notification:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
     await prisma.notification.create({
       data: {
         organizationId: payload.organizationId,
@@ -123,11 +132,11 @@ export async function sendWebPushNotification(
         body: content.body,
         recipient: `user:${userId}`,
         status: "FAILED",
-        error: error?.message || "WebPush dispatch error",
+        error: "WebPush dispatch error",
         lastAttemptAt: new Date(),
         retryCount: 0,
       },
     }).catch(() => null);
-    return { success: false, error };
+    return { success: false, error: "WebPush dispatch error" };
   }
 }

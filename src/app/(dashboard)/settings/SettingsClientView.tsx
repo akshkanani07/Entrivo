@@ -123,6 +123,14 @@ export function SettingsClientView({
     advanceBookingDays: initialPolicy?.advanceBookingDays ?? 30,
     maxVisitDurationHours: initialPolicy?.maxVisitDurationHours ?? 8,
     maxVisitorsPerHostPerDay: initialPolicy?.maxVisitorsPerHostPerDay ?? 20,
+    maxGroupInvitationSize: initialPolicy?.maxGroupInvitationSize ?? 50,
+    bulkImportMaxRows: initialPolicy?.bulkImportMaxRows ?? 1000,
+    bulkImportMaxSizeMb: initialPolicy?.bulkImportMaxSizeMb ?? 5,
+    invitationSeriesHorizonDays: initialPolicy?.invitationSeriesHorizonDays ?? 30,
+    preApproveRecurringSeries: initialPolicy?.preApproveRecurringSeries ?? false,
+    parkingOverstayGraceMinutes: initialPolicy?.parkingOverstayGraceMinutes ?? 30,
+    parkingNoShowGraceMinutes: initialPolicy?.parkingNoShowGraceMinutes ?? 30,
+    parkingBlacklistEnforcement: initialPolicy?.parkingBlacklistEnforcement ?? "BLOCK",
     blockedVisitorTypes: initialPolicy?.blockedVisitorTypes ?? [],
 
     // 2. Verification & NDA Policies
@@ -139,6 +147,8 @@ export function SettingsClientView({
     requirePurpose: initialPolicy?.requirePurpose ?? true,
     requireIdNumber: initialPolicy?.requireIdNumber ?? false,
     requireHost: initialPolicy?.requireHost ?? true,
+    preRegistrationRequired: initialPolicy?.preRegistrationRequired ?? "WARN",
+    preRegistrationTokenTtlHours: initialPolicy?.preRegistrationTokenTtlHours ?? 24,
 
     // 4. Approval Rules
     autoApprovalEnabled: initialPolicy?.autoApprovalEnabled ?? false,
@@ -180,12 +190,23 @@ export function SettingsClientView({
     quietHoursStart: initialPolicy?.quietHoursStart ?? "21:00",
     quietHoursEnd: initialPolicy?.quietHoursEnd ?? "07:00",
 
-    // 9. Data Retention & DPDP Tooling
+    // 9. Delivery / Courier Operations
+    deliveryPersonEntryPolicy: initialPolicy?.deliveryPersonEntryPolicy ?? "ENABLED",
+    contractorComplianceEnforcement: initialPolicy?.contractorComplianceEnforcement ?? "BLOCK",
+
+    // 10. Data Retention & DPDP Tooling
     retentionPhotosDays: initialPolicy?.retentionPhotosDays ?? 90,
     retentionSignaturesDays: initialPolicy?.retentionSignaturesDays ?? 180,
     retentionIdProofsDays: initialPolicy?.retentionIdProofsDays ?? 90,
     retentionVisitorRecordsDays: initialPolicy?.retentionVisitorRecordsDays ?? 365,
     privacyPolicyNoticeVersion: initialPolicy?.privacyPolicyNoticeVersion ?? "v1.0",
+    feedbackRequestDelayMinutes: initialPolicy?.feedbackRequestDelayMinutes ?? 30,
+    feedbackTokenTtlHours: initialPolicy?.feedbackTokenTtlHours ?? 168,
+    feedbackDetractorThreshold: initialPolicy?.feedbackDetractorThreshold ?? 6,
+    feedbackRetentionDays: initialPolicy?.feedbackRetentionDays ?? 365,
+    feedbackCommentMaxLength: initialPolicy?.feedbackCommentMaxLength ?? 1000,
+    feedbackHostLoadThreshold: initialPolicy?.feedbackHostLoadThreshold ?? 5,
+    feedbackAnalyticsCacheSeconds: initialPolicy?.feedbackAnalyticsCacheSeconds ?? 300,
   });
   const [savingPolicy, setSavingPolicy] = useState(false);
 
@@ -838,6 +859,47 @@ export function SettingsClientView({
             </div>
           </div>
 
+          <div className="space-y-3 pt-2 border-t border-slate-800">
+            <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+              Visitor Pre-registration
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <label className="flex flex-col gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="font-semibold text-white">Check-in requirement</span>
+                <select
+                  value={policyData.preRegistrationRequired}
+                  onChange={(e) =>
+                    setPolicyData({
+                      ...policyData,
+                      preRegistrationRequired: e.target.value as OrgPolicy["preRegistrationRequired"],
+                    })
+                  }
+                  className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-200"
+                >
+                  <option value="OFF">Off</option>
+                  <option value="WARN">Warn but allow check-in</option>
+                  <option value="BLOCK">Require an approved pre-registration</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="font-semibold text-white">Link expiry after visit ends (hours)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={720}
+                  value={policyData.preRegistrationTokenTtlHours}
+                  onChange={(e) =>
+                    setPolicyData({
+                      ...policyData,
+                      preRegistrationTokenTtlHours: Math.min(720, Math.max(1, Number(e.target.value) || 24)),
+                    })
+                  }
+                  className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-200"
+                />
+              </label>
+            </div>
+          </div>
+
           {/* Section B: Verification & NDA */}
           <div className="space-y-3 pt-2 border-t border-slate-800">
             <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
@@ -1048,6 +1110,48 @@ export function SettingsClientView({
                 <option value="ALLOW">ALLOW (No check / Permit anytime)</option>
                 <option value="WARN">WARN (Allow but log warning alert)</option>
                 <option value="BLOCK">BLOCK (Strict: reject visits outside operating hours)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-slate-400 block mb-1 font-medium">Parking Overstay Grace (Minutes)</label>
+              <input
+                type="number"
+                min={0}
+                max={1440}
+                value={policyData.parkingOverstayGraceMinutes}
+                onChange={(e) =>
+                  setPolicyData({ ...policyData, parkingOverstayGraceMinutes: parseInt(e.target.value) || 0 })
+                }
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-slate-400 block mb-1 font-medium">Unarrived Parking Reservation Grace (Minutes)</label>
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                value={policyData.parkingNoShowGraceMinutes}
+                onChange={(e) =>
+                  setPolicyData({ ...policyData, parkingNoShowGraceMinutes: parseInt(e.target.value) || 30 })
+                }
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-slate-400 block mb-1 font-medium">Blacklisted Vehicle Enforcement</label>
+              <select
+                value={policyData.parkingBlacklistEnforcement}
+                onChange={(e) =>
+                  setPolicyData({ ...policyData, parkingBlacklistEnforcement: e.target.value as "WARN" | "BLOCK" })
+                }
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500"
+              >
+                <option value="BLOCK">BLOCK check-in and parking</option>
+                <option value="WARN">WARN and allow with security alert</option>
               </select>
             </div>
           </div>

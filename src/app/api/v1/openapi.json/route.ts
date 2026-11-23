@@ -10,7 +10,7 @@ export async function GET() {
       title: "Entrivo Public REST API",
       version: "1.0.0",
       description:
-        "Enterprise visitor management platform public REST API. Enables third-party platforms, automation workflows (Zapier, Make.com), and custom systems to query visitors, manage invitations, review check-in telemetry, and subscribe to real-time webhook events.",
+        "Enterprise visitor management platform public REST API. Enables third-party platforms, automation workflows (Zapier, Make.com), and custom systems to query visitors, manage invitations, review check-in telemetry, and subscribe to real-time webhook events. Version note (P10-D): invitation responses may include an additive visitors[] array with per-visitor status and pass token; all existing single-visitor fields and meanings remain unchanged.",
       contact: {
         name: "Entrivo Developer Support",
         email: "developers@entrivo.com",
@@ -67,6 +67,18 @@ export async function GET() {
             qrToken: { type: "string", example: "INV-89AF12BC" },
             passUrl: { type: "string", example: `${appUrl}/pass/INV-89AF12BC` },
             visitor: { $ref: "#/components/schemas/Visitor" },
+            visitors: {
+              type: "array",
+              description: "P10-D additive group visit detail; the legacy visitor object remains the primary visitor.",
+              items: {
+                type: "object",
+                properties: {
+                  status: { type: "string", enum: ["INVITED", "PREREGISTERED", "CHECKED_IN", "NO_SHOW", "CANCELLED"] },
+                  qrToken: { type: "string" },
+                  visitor: { $ref: "#/components/schemas/Visitor" },
+                },
+              },
+            },
             createdAt: { type: "string", format: "date-time" },
           },
         },

@@ -97,3 +97,99 @@ export async function generateQRCodeDataUrl(text: string): Promise<string> {
     throw new Error("Failed to generate QR code");
   }
 }
+
+export function createSignedFeedbackVisitPayload(payload: {
+    organizationId: string;
+    checkInId: string;
+    expiresInHours?: number;
+  }): string {
+    const secret = getQrSigningSecret();
+    const expiresAt = Date.now() + (payload.expiresInHours || 168) * 60 * 60 * 1000;
+    const nonce = crypto.randomBytes(8).toString("hex");
+    const rawData = JSON.stringify({
+      oId: payload.organizationId,
+      cId: payload.checkInId,
+      exp: expiresAt,
+      nonce,
+    });
+    const hmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
+    return `ENTFB1.${Buffer.from(rawData).toString("base64url")}.${hmac}`;
+  }
+
+export function verifySignedFeedbackVisitPayload(token: string): {
+    valid: boolean;
+    payload?: { oId: string; cId: string; exp: number; nonce: string };
+    error?: string;
+  } {
+    try {
+      if (!token.startsWith("ENTFB1.")) {
+        return { valid: false, error: "Invalid feedback QR format." };
+      }
+      const [, base64Data, signature] = token.split(".");
+      if (!base64Data || !signature) {
+        return { valid: false, error: "Malformed feedback QR token." };
+      }
+      const secret = getQrSigningSecret();
+      const rawData = Buffer.from(base64Data, "base64url").toString("utf-8");
+      const expectedHmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedHmac))) {
+        return { valid: false, error: "Invalid feedback QR signature." };
+      }
+      const parsed = JSON.parse(rawData) as { oId: string; cId: string; exp: number; nonce: string };
+      if (!parsed.oId || !parsed.cId || parsed.exp < Date.now()) {
+        return { valid: false, error: "Feedback QR has expired." };
+      }
+      return { valid: true, payload: parsed };
+    } catch {
+      return { valid: false, error: "Failed to parse feedback QR token." };
+    }
+  }
+
+export function createSignedGenericFeedbackPayload(payload: {
+    organizationId: string;
+    officeId?: string | null;
+    branchId?: string | null;
+    expiresInHours?: number;
+  }): string {
+    const secret = getQrSigningSecret();
+    const expiresAt = Date.now() + (payload.expiresInHours || 720) * 60 * 60 * 1000;
+    const nonce = crypto.randomBytes(8).toString("hex");
+    const rawData = JSON.stringify({
+      oId: payload.organizationId,
+      bId: payload.branchId || null,
+      fId: payload.officeId || null,
+      exp: expiresAt,
+      nonce,
+    });
+    const hmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
+    return `ENTFO1.${Buffer.from(rawData).toString("base64url")}.${hmac}`;
+}
+
+export function verifySignedGenericFeedbackPayload(token: string): {
+    valid: boolean;
+    payload?: { oId: string; bId: string | null; fId: string | null; exp: number; nonce: string };
+    error?: string;
+} {
+    try {
+      if (!token.startsWith("ENTFO1.")) {
+        return { valid: false, error: "Invalid feedback QR format." };
+      }
+      const [, base64Data, signature] = token.split(".");
+      if (!base64Data || !signature) {
+        return { valid: false, error: "Malformed feedback QR token." };
+      }
+      const secret = getQrSigningSecret();
+      const rawData = Buffer.from(base64Data, "base64url").toString("utf-8");
+      const expectedHmac = crypto.createHmac("sha256", secret).update(rawData).digest("hex").slice(0, 16);
+      if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedHmac))) {
+        return { valid: false, error: "Invalid feedback QR signature." };
+      }
+      const parsed = JSON.parse(rawData) as { oId: string; bId: string | null; fId: string | null; exp: number; nonce: string };
+      if (!parsed.oId || parsed.exp < Date.now()) {
+        return { valid: false, error: "Feedback QR has expired." };
+      }
+      return { valid: true, payload: parsed };
+    } catch {
+      return { valid: false, error: "Failed to parse feedback QR token." };
+    }
+}

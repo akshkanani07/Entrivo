@@ -31,6 +31,10 @@ export default async function ApprovalsPage() {
       invitation: {
         include: {
           visitor: { include: { visitorType: true } },
+          visitors: {
+            include: { visitor: { select: { name: true } } },
+            orderBy: { createdAt: "asc" },
+          },
           hostEmployee: { include: { user: true } },
           meetingRoom: true,
         },
@@ -45,6 +49,7 @@ export default async function ApprovalsPage() {
     status: app.status,
     step: app.step,
     visitorName: app.invitation.visitor.name,
+    visitorNames: app.invitation.visitors.map((member) => member.visitor.name),
     visitorCompany: app.invitation.visitor.company,
     visitorType: app.invitation.visitor.visitorType?.name || "Guest",
     typeColor: app.invitation.visitor.visitorType?.badgeColor || "#6366f1",

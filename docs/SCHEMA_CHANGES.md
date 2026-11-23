@@ -1,5 +1,20 @@
 ---
 
+# Entrivo Schema Changes (P10-G Feedback Foundation)
+
+## P10-G.1 Visitor Feedback and Analytics Foundation
+
+- Added `Visitor.preferredLocale: String @default("en-IN")`.
+- Added `CheckIn.hostNotifiedAt` and `CheckIn.meetingStartedAt` for wait-time measurement.
+- Added `Employee.managerId` with a self-relation for host-manager detractor routing.
+- Added `FeedbackRequest` with organization and unique check-in scope, SHA-256 token storage, expiry, send metadata, and supporting indexes.
+- Added `FeedbackResponse` with organization scope, optional check-in/host/branch/office attribution, NPS/CSAT scores, categories, sanitized comment storage, source, abuse metadata, review state, internal note, and analytics indexes.
+- Added `FeedbackCategory`, `FeedbackChannel`, and `FeedbackSource` enums.
+- Added supporting invitation, check-out, and host/check-in indexes for no-show, duration, and wait-time aggregates.
+- Migration: `prisma/migrations/20261123202500_p10_g_feedback_foundation/migration.sql`.
+
+---
+
 # Entrivo Schema Changes (Phase 5)
 
 ## 1. AuditLog Model Indexes
@@ -253,5 +268,37 @@ Linked external calendar events for automated synchronize/cancel/reschedule acti
 - `calendarEventId: String?`: Remote Google / Outlook event identifier.
 - `calendarProvider: String?`: Provider tag (`GOOGLE` or `OUTLOOK`).
 
+## 6. Visitor Pre-Registration (P10-A)
+- `PreRegistration`: one record per invitation with organization and visitor relations, unique invitation/token-hash constraints, expiry, workflow status, completeness, review metadata, locale, consent version/time, and resumable JSON draft. Indexes cover organization, status, and token expiry.
+- `Visitor.idProofNumberMasked`: masked display value; pre-registration encrypts non-Aadhaar ID numbers using the shared application encryption helper and minimizes Aadhaar-like values to their last four digits.
+- `Vehicle`: tenant-scoped optional visitor association, normalized plate number and display plate, type, and creation time. Unique constraint covers organization, normalized plate, and visitor.
+- Migration: `prisma/migrations/20261123153500_p10_a_preregistration/migration.sql`.
 
+## 7. Recurring and Group Visits (P10-D)
+- `InvitationVisitor` stores each visitor membership, status, and unique per-person QR token. The migration backfills one membership from every existing invitation's legacy `visitorId` and `qrToken`; those fields remain on `Invitation` for single-visitor compatibility.
+- `Invitation` now has nullable `seriesId` and `occurrenceDate`, an `isException` flag, and a unique `(seriesId, occurrenceDate)` key to make occurrence materialization idempotent.
+- `InvitationSeries` stores the tenant, host, either an existing visitor or JSON group definition, recurrence rule, local visit times/timezone, end-date or occurrence-count constraint, holiday preference, approval metadata, and rolling materialization cursor.
+- `BulkImportJob` records tenant, creator, re-verified host, upload file, row counts, workflow status, and generated error-report file.
+- `PreRegistration.invitationId` is no longer unique because a group invitation has a distinct visitor-specific pre-registration; uniqueness is `(invitationId, visitorId)`. Existing records remain valid.
+- `Visitor.isRegularVendor` enables vendor quick re-invites.
+- Migration: `prisma/migrations/20261123174400_p10_d_recurring_group_visits/migration.sql`. Apply after the prior P10-A/P10-B migrations; the backfill must run before dropping the legacy single pre-registration uniqueness constraint.
+
+## 8. Parking and Vehicle Management (P10-E)
+- `ParkingLot` belongs to an organization and office; `ParkingSlot` stores a unique code and slot type within each lot.
+- `Vehicle` gains optional make/color fields; `BlacklistVisitor` gains an optional normalized vehicle plate match.
+- `ParkingAssignment` stores organization-scoped vehicle/slot reservations, optional invitation/check-in links, status transitions, reservation/entry/exit timestamps, and `overstayedAt` for historical utilization reports.
+- `ParkingEvent` records vehicle entry/exit gate activity, actor, source, and event time. `ContractorPermit` stores a vehicle's permit validity window.
+- Active slot conflicts are prevented by serializable assignment transactions and row-level `SELECT ... FOR UPDATE` locking. The database migration does not install a partial unique index for active assignments.
+- Migration: `prisma/migrations/20261124100000_p10_e_parking/migration.sql`. It adds the parking tables/enums, vehicle attributes, blacklist plate field/index, and historical overstay timestamp. Apply through the normal migration deployment process; do not use `prisma db push` in production.
+
+## 9. Delivery / Courier Management (P10-F1)
+- `Delivery` stores organization-scoped package receipt and pickup lifecycle state (`RECEIVED`, `NOTIFIED`, `COLLECTED`, `RETURNED`, `UNCLAIMED`), recipient/receiver employee relations, courier/AWB details, storage location, optional photo/signature file IDs, and pickup reminder timestamps.
+- Pickup codes are never stored in plaintext; only a SHA-256 hash is persisted, and collection is re-verified using constant-time comparison.
+- `DeliveryPersonLog` provides a lightweight, policy-controlled courier-person entry without creating a normal visitor check-in.
+- Migration: `prisma/migrations/20261123194500_p10_f1_delivery/migration.sql`.
+
+## 10. Contractor Management and Compliance (P10-F2)
+- `ContractorCompany` stores company status, contract window, contact details, GSTIN, and sponsor employee. `ContractorWorker` links an organization worker to a visitor identity and adds trade, induction, and work-permit fields.
+- `ComplianceRequirement` defines organization-level mandatory document types and validity rules. `Document.visitorId` becomes nullable and is supplemented by nullable `contractorCompanyId` and `contractorWorkerId`, preserving all P3 visitor document flows.
+- Sensitive contractor documents reuse `Document`, `File`, storage adapters, antivirus/magic-byte validation, signed URLs, soft delete, and `DOCUMENT_VIEW/DOWNLOAD` plus `COMPLIANCE_DOC_UPLOAD` auditing.
 

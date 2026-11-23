@@ -15,6 +15,7 @@ export interface BadgeData {
   photoUrl?: string | null;
   issueDate: string;
   token?: string;
+  parkingSlot?: string;
 }
 
 export function BadgeCard({ data }: { data: BadgeData }) {
@@ -100,6 +101,12 @@ export function BadgeCard({ data }: { data: BadgeData }) {
             </span>
             <span className="text-slate-300 print:text-slate-800 font-mono text-[11px]">{data?.issueDate || "Today"}</span>
           </div>
+          {data?.parkingSlot && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 print:text-slate-600 text-[11px]">Parking slot</span>
+              <span className="font-semibold text-cyan-300 print:text-cyan-800">{data.parkingSlot}</span>
+            </div>
+          )}
         </div>
 
         {/* Bottom: QR Code Verification */}

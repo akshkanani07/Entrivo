@@ -26,6 +26,10 @@ export const envSchema = z.object({
   CRON_SECRET: secretSchema,
   STORAGE_SIGNING_SECRET: secretSchema,
   APP_ENCRYPTION_KEY: appEncryptionKeySchema,
+  PREREG_TOKEN_TTL_HOURS: z
+    .string()
+    .regex(/^(?:[1-9]\d?|[1-6]\d{2}|7(?:0\d|1\d|20))$/, "must be an integer from 1 to 720")
+    .optional(),
 });
 
 export type ValidatedEnv = z.infer<typeof envSchema>;

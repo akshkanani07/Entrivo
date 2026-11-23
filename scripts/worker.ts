@@ -20,16 +20,33 @@ function updateHeartbeat() {
 updateHeartbeat();
 const heartbeatInterval = setInterval(updateHeartbeat, 15000);
 
-import { getRedisConnection, runAutoCheckoutWorker } from "../src/lib/queue";
+import {
+  getRedisConnection,
+  runAutoCheckoutWorker,
+  invitationSeriesQueue,
+  bulkImportQueue,
+} from "../src/lib/queue";
 import { processNotificationJob } from "../src/services/jobs/notification.job";
 import { processReportJob } from "../src/services/jobs/report.job";
 import { processWebhookJob } from "../src/services/jobs/webhook.job";
 import { processCalendarJob } from "../src/services/jobs/calendar.job";
+import { processEmailJob } from "../src/services/jobs/email.job";
 import { logger } from "../src/lib/logger";
 import { Worker } from "bullmq";
+import {
+  materializeActiveInvitationSeries,
+  processInvitationSeriesJob,
+} from "../src/services/invitations/invitation-series.service";
+import { processBulkImportJob } from "../src/services/invitations/bulk-import.service";
+import { markPastInvitationMembersNoShow } from "../src/services/invitations/no-show.service";
+import { runParkingSweep } from "../src/services/parking/parking.service";
+import { processFeedbackJob } from "../src/services/feedback/feedback.service";
 
 const workers: Worker[] = [];
 let autoCheckoutInterval: NodeJS.Timeout | null = null;
+let invitationSeriesInterval: NodeJS.Timeout | null = null;
+let invitationNoShowInterval: NodeJS.Timeout | null = null;
+let parkingSweepInterval: NodeJS.Timeout | null = null;
 
 async function startWorker() {
   logger.info("Starting Entrivo Background Worker Daemon...");
@@ -43,6 +60,14 @@ async function startWorker() {
       new Worker(
         "notification-jobs",
         (job) => processNotificationJob(job.data),
+        { connection, concurrency: 5 }
+      )
+    );
+
+    workers.push(
+      new Worker(
+        "email-jobs",
+        (job) => processEmailJob(job.data),
         { connection, concurrency: 5 }
       )
     );
@@ -80,6 +105,28 @@ async function startWorker() {
           await processCalendarJob(job.data);
         },
         { connection, concurrency: 3 }
+      )
+    );
+
+    workers.push(
+      new Worker(
+        "invitation-series",
+        (job) => processInvitationSeriesJob(job.data),
+        { connection, concurrency: 2 }
+      )
+    );
+    workers.push(
+      new Worker(
+        "bulk-import",
+        (job) => processBulkImportJob(job.data),
+        { connection, concurrency: 2 }
+      )
+    );
+    workers.push(
+      new Worker(
+        "feedback-jobs",
+        (job) => processFeedbackJob(job.data),
+        { connection, concurrency: 5 }
       )
     );
 
@@ -122,6 +169,46 @@ async function startWorker() {
     }
   }, 5 * 60 * 1000);
 
+  invitationSeriesInterval = setInterval(async () => {
+    try {
+      const result = await materializeActiveInvitationSeries();
+      if (result.created || result.skippedDates) {
+        logger.info(result, "[Worker] Invitation series materialized");
+      }
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        "[Worker] Invitation series materialization failed"
+      );
+    }
+  }, 30 * 60 * 1000);
+
+  invitationNoShowInterval = setInterval(async () => {
+    try {
+      const count = await markPastInvitationMembersNoShow();
+      if (count > 0) logger.info({ count }, "[Worker] Invitation members marked no-show");
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        "[Worker] No-show sweep failed"
+      );
+    }
+  }, 30 * 60 * 1000);
+
+  parkingSweepInterval = setInterval(async () => {
+    try {
+      const result = await runParkingSweep();
+      if (result.noShowCount || result.overstayCount) {
+        logger.info(result, "[Worker] Parking assignments swept");
+      }
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        "[Worker] Parking sweep failed"
+      );
+    }
+  }, 5 * 60 * 1000);
+
   logger.info("Entrivo Background Worker is listening for jobs.");
 }
 
@@ -130,6 +217,15 @@ async function gracefulShutdown(signal: string) {
   logger.info({ signal }, "Shutdown signal received. Closing worker threads...");
   if (autoCheckoutInterval) {
     clearInterval(autoCheckoutInterval);
+  }
+  if (invitationSeriesInterval) {
+    clearInterval(invitationSeriesInterval);
+  }
+  if (invitationNoShowInterval) {
+    clearInterval(invitationNoShowInterval);
+  }
+  if (parkingSweepInterval) {
+    clearInterval(parkingSweepInterval);
   }
   clearInterval(heartbeatInterval);
   try {

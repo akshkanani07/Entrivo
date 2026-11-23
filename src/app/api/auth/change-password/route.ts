@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser, verifyPassword, hashPassword, verifyToken } from "@/lib/auth";
 import { passwordPolicyService } from "@/services/auth/password-policy.service";
 import { requiredString } from "@/lib/zod-helpers";
+import { emailService } from "@/services/email/mailjet.service";
+import { generatePasswordChangedEmail } from "@/services/email/email.templates";
 
 const changePasswordSchema = z.object({
   currentPassword: requiredString("Current password is required"),
@@ -113,6 +115,28 @@ export async function POST(request: Request) {
         },
       });
     });
+
+    const organization = user.organizationId
+      ? await prisma.organization.findFirst({
+          where: { id: user.organizationId },
+          select: { name: true, timezone: true },
+        })
+      : null;
+    const emailResult = await emailService.sendEmail(
+      generatePasswordChangedEmail({
+        email: dbUser.email,
+        name: dbUser.name,
+        organizationName: organization?.name || user.organizationName || "Entrivo Workplace",
+        timeZone: organization?.timezone || "Asia/Kolkata",
+        changedAt: new Date(),
+      }),
+      user.id,
+      user.organizationId || undefined,
+      "PASSWORD_CHANGED"
+    );
+    if (!emailResult.success) {
+      console.error("[ChangePassword] Password changed but email notification failed:", emailResult.error);
+    }
 
     return NextResponse.json({
       success: true,

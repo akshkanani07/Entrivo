@@ -67,14 +67,25 @@ flowchart TD
 
 ## Key Features
 
-- **Multi-Tenant SaaS Foundation**: Strict logical partition on `organizationId` across all data queries and mutations, auto-discovered and verified across 108 API endpoints.
+- **Multi-Tenant SaaS Foundation**: Strict logical partition on `organizationId` across all data queries and mutations, auto-discovered and verified across API routes.
 - **Enterprise Authentication & 2FA**: HttpOnly session cookies, RFC 6238 TOTP two-factor authentication, 10 single-use bcrypt backup codes, absolute & idle session timeouts.
 - **Cryptographic Visitor Passes**: Dynamic QR passes signed via HMAC-SHA256 (`ENTQ1.*`), tamper-evident, and bound to 24-hour expiration windows.
 - **Touchless Kiosk & PWA**: Standalone installable PWA terminal, 8-character pairing codes, camera QR scanner, and offline IndexedDB check-in queue with server-wins conflict resolution.
 - **Digital NDA Execution**: Configurable rich-text templates, digital signature pad, SHA-256 content hashing, and on-the-fly PDF generation (`pdfkit`).
+- **Visitor Pre-Registration (P10-A)**: Invitation-linked, resumable mobile wizard for visitor details, ID, photo, vehicle, privacy consent, and NDA e-signature; hosts can review, approve, reject, or regenerate links before check-in.
+- **Recurring & Group Visits (P10-D)**: Tenant-scoped recurring series, per-visitor QR passes for group invitations, asynchronous CSV previews/imports, and regular-vendor quick re-invites. Existing single-visitor invitation fields remain available for compatibility.
+- **Parking & Vehicle Management (P10-E)**: Office parking lots and typed slots, serializable time-window assignments, check-in slot selection, gate entry/exit logs, occupancy and utilization reports, contractor permits, blacklist enforcement, and plate PII lifecycle controls.
+- **Delivery / Courier Management (P10-F1)**: Tenants can receive packages with camera proof, AWB/courier details, and employee recipients; recipients receive instant in-app, push, email, and routed chat notifications. Pickup uses a one-time hashed code, optional delegate name, and optional signature; reminders run at 24h/72h and unclaimed packages can be returned.
+- **Contractor Compliance (P10-F2)**: Contractor companies, workers, controlled compliance documents, expiry windows, safety induction, work permits, suspend/block controls, and BLOCK/WARN/OFF check-in enforcement reuse the existing document, storage, virus-scan, audit, and notification infrastructure.
 - **Granular RBAC**: Strict role permissions (`SUPER_ADMIN`, `ORG_ADMIN`, `BRANCH_MANAGER`, `SECURITY_OFFICER`, `RECEPTIONIST`, `EMPLOYEE`, `KIOSK`) with privilege escalation guards.
 - **Enterprise Integrations**: Outbound HMAC-signed webhooks with exponential retries, Google & Outlook two-way calendar sync, Slack/Teams event routing, and REST API v1 with scoped API keys.
 - **DPDP Act 2023 Compliance**: Data retention auto-purging, visitor consent tracking, and self-service data principal access and erasure tooling.
+
+Pre-registration links are bearer credentials: they contain 32-byte random tokens, store only SHA-256 token hashes, expire relative to the visit, and return a generic 404 when invalid or already used. Set `PREREG_TOKEN_TTL_HOURS` to choose the default expiry grace period. Organizations can set the check-in policy to `BLOCK`, `WARN`, or `OFF`. See [`docs/SECURITY.md`](file:///c:/Entrivo/docs/SECURITY.md) for the threat model and [`docs/ENV.md`](file:///c:/Entrivo/docs/ENV.md) for configuration. Run `pnpm test:p10a` for static acceptance checks; set `PREREG_ACCEPTANCE_URL` to run live checks against a disposable invitation, and optionally set `PREREG_EXPIRED_URL` to exercise expiry handling. Never use real visitor links in test logs or tickets.
+
+P10-D recurring and group-visit limits are organization policies (rather than environment variables): group size defaults to 50, CSV imports to 1,000 rows and 5 MB, and recurring materialization to a rolling 30-day horizon. Run `pnpm test:p10d` for static acceptance checks and `pnpm exec vitest run tests/unit/invitation-recurrence.test.ts tests/unit/invitation-bulk-csv.test.ts tests/unit/invitation-series-ics.test.ts` for focused unit tests.
+
+P10-E parking controls are organization policies: vehicle blacklist enforcement defaults to `BLOCK`, and reserved no-show and overstay grace periods default to 30 minutes. Parking assignments lock the slot row inside a serializable transaction and reject overlapping reservations. Run `pnpm test:p10e` for static acceptance checks and `pnpm exec vitest run tests/unit/parking.test.ts` for plate and concurrent last-slot tests.
 
 ---
 

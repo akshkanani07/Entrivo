@@ -88,6 +88,7 @@ export async function GET(request: Request) {
       upcomingNext3h,
       overstaying,
       checkedOutToday,
+      contractorDocumentsExpiring30d,
     ] = await Promise.all([
       // Card 1: Checked-in now
       prisma.checkIn.count({
@@ -167,6 +168,20 @@ export async function GET(request: Request) {
           ...employeeCheckInFilter,
           checkOut: {
             checkOutTime: { gte: startOfToday, lte: endOfToday },
+          },
+        },
+      }),
+      prisma.document.count({
+        where: {
+          organizationId,
+          deletedAt: null,
+          OR: [
+            { contractorCompanyId: { not: null } },
+            { contractorWorkerId: { not: null } },
+          ],
+          expiryDate: {
+            gte: now,
+            lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
           },
         },
       }),

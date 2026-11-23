@@ -134,6 +134,23 @@ Quality, Performance, Docs.
 | **P9-04** | Seed and docs: idempotent realistic demo seed (never default passwords); README (Windows setup, architecture diagram in mermaid); docs/ENV.md (every variable), docs/DEPLOYMENT.md (Vercel and Docker, worker and cron setup), docs/SECURITY.md (threat model + checklist), Dockerfile + docker-compose (postgres, redis, app, worker); complete .env.example. | [x] | 2026-11-02 | `ed8fa8c` |
 | **P9-05** | Final regression: tsc, build, lint, all tests, pnpm audit; remove dead code; PROGRESS.md 100%; final report with evidence and the human-needed list. | [x] | 2026-11-02 | `ed8fa8c` |
 
+---
+
+# Entrivo — Phase 10 Implementation Progress
+
+Visitor Pre-Registration Portal.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P10-A** | Invitation-linked public pre-registration with hashed expiring tokens, resumable mobile wizard, encrypted/minimized ID storage, validated photo and signature uploads, NDA reuse/signing, vehicle details, versioned consent, host review and link lifecycle, localized email/reminders, tenant-scoped RBAC, check-in BLOCK/WARN/OFF policy, and acceptance/security verification. | [x] | 2026-11-23 | — |
+| **P10-D** | Recurring invitation series and RRULE calendar export, group invitations with per-visitor passes and reception check-in, tenant-scoped CSV preview/import and error reports, visitor deduplication, vendor registry, migration backfill, RBAC/policy/docs, and focused recurrence/CSV/calendar tests. | [x] | 2026-11-23 | — |
+| **P10-E** | Parking lots and typed slots, serializable reservation locking, vehicle plate validation/blacklist, check-in/checkout and gate state transitions, permits, availability/utilization reports, plate PII export/erase/retention, RBAC, tenant audit, migration, docs, and acceptance tests. | [x] | 2026-11-24 | — |
+| **P10-F1** | Organization-scoped courier/delivery reception, hashed one-time pickup codes, collection/return/unclaimed lifecycle, 24h/72h reminders, lightweight delivery-person policy entry, notifications, CSV export, RBAC, audit, migration, docs, and acceptance tests. | [x] | 2026-11-23 | — |
+| **P10-F2** | Contractor company/worker profiles, reusable contractor documents, compliance requirements and status computation, expiry notifications, work-permit and induction enforcement, suspend/block controls, override audit, RBAC, migration, docs, and acceptance tests. | [x] | 2026-11-23 | — |
+| **P10-G1** | Visitor feedback and analytics foundation: feedback models/enums, visitor locale, host notification/meeting timestamps, manager relation, retention-ready response fields, supporting indexes, migration, typed settings, and RBAC permissions. | [x] | 2026-11-23 | — |
+| **P10-G2** | Checkout feedback scheduling: delayed BullMQ feedback queue, checkout-thanks event integration, SHA-256 feedback tokens, locale-aware payload routing, one-tap NPS email links, kiosk/staff signed visit and generic QR helpers, and worker support. | [x] | 2026-11-23 | — |
+| **P10-G3** | Public feedback submission: email/visit/generic QR pages, Zod and honeypot controls, comment sanitization and profanity flagging, IP/token limits, atomic one-use email consumption, visit-response uniqueness, privacy-hashed IP metadata, and detractor notification routing. | [x] | 2026-11-23 | — |
+| **P10-G4** | Feedback inbox: tenant-scoped cursor pagination, date/score/host/branch/review filters, EMPLOYEE own-host restriction, reviewed state, sanitized internal notes, and feedback view/manage audit events. | [x] | 2026-11-23 | — |
 
 
 

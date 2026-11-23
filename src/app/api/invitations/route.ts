@@ -13,6 +13,8 @@ import { requiredString, requiredEmail, optionalString } from "@/lib/zod-helpers
 import { audit } from "@/services/audit/audit.service";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 import { syncInvitationCalendar } from "@/services/calendar/calendar.service";
+import { createPreRegistrationCredential } from "@/services/preregistration/preregistration.service";
+import { preRegistrationTokenFingerprint } from "@/lib/preregistration";
 
 const createInvitationSchema = z.object({
   visitorName: requiredString("Visitor name is required"),
@@ -134,7 +136,7 @@ export async function POST(request: Request) {
     } = parsed.data;
 
     // Enforce dynamic policy rules (P6-01, P6-02)
-    const { policy } = await getOrgPolicy(orgId);
+    const { policy, timezone } = await getOrgPolicy(orgId);
 
     if (policy.advanceBookingDays) {
       const scheduled = new Date(scheduledDate);
@@ -269,8 +271,15 @@ export async function POST(request: Request) {
     const qrToken = generateVisitorToken("INV");
     const appUrl = getAppUrl();
     const passUrl = `${appUrl}/pass/${qrToken}`;
+    const preRegistrationCredential = createPreRegistrationCredential(
+      new Date(scheduledDate),
+      endTime || "11:00",
+      policy.preRegistrationTokenTtlHours,
+      timezone
+    );
+    const preRegistrationUrl = `${appUrl}/preregister/${preRegistrationCredential.token}`;
 
-    const { invitation } = await prisma.$transaction(async (tx) => {
+    const { invitation, preRegistration } = await prisma.$transaction(async (tx) => {
       const inv = await tx.invitation.create({
         data: {
           organizationId: orgId,
@@ -285,6 +294,13 @@ export async function POST(request: Request) {
           qrToken,
           passUrl,
           status: initialStatus,
+          visitors: {
+            create: {
+              visitorId: visitor.id,
+              status: "INVITED",
+              qrToken,
+            },
+          },
         },
         include: {
           visitor: true,
@@ -305,11 +321,31 @@ export async function POST(request: Request) {
         });
       }
 
-      return { invitation: inv };
+      const preRegistration = await tx.preRegistration.create({
+        data: {
+          organizationId: orgId,
+          invitationId: inv.id,
+          visitorId: visitor.id,
+          tokenHash: preRegistrationCredential.tokenHash,
+          tokenExpiresAt: preRegistrationCredential.tokenExpiresAt,
+          locale: "en",
+        },
+      });
+
+      return { invitation: inv, preRegistration };
     });
 
     const formattedDate = formatDate(invitation.scheduledDate);
     const location = invitation.meetingRoom?.name || invitation.hostEmployee.office?.name || invitation.organization.name;
+
+    await audit({
+      organizationId: orgId,
+      userId: user.id,
+      action: "PREREG_LINK_CREATED",
+      entity: "PREREGISTRATION",
+      entityId: preRegistration.id,
+      details: { tokenFingerprint: preRegistrationTokenFingerprint(preRegistrationCredential.token) },
+    });
 
     if (requiresApproval) {
       // Fire APPROVAL_REQUESTED notification to host
@@ -328,24 +364,24 @@ export async function POST(request: Request) {
         approvalUrl: `${appUrl}/approvals`,
         entityId: invitation.id,
       }).catch(console.error);
-    } else {
-      // Dispatch standard invitation email to visitor
-      await notify(NotificationEvent.VISITOR_INVITED, {
-        organizationId: orgId,
-        visitorName: visitor.name,
-        visitorEmail: visitor.email,
-        visitorCompany: visitor.company || undefined,
-        hostName: hostEmployee.user.name,
-        hostEmail: hostEmployee.user.email,
-        hostUserId: hostEmployee.userId,
-        date: formattedDate,
-        time: `${invitation.startTime} - ${invitation.endTime}`,
-        location,
-        qrPassUrl: passUrl,
-        purpose: invitation.purpose,
-        entityId: invitation.id,
-      }).catch(console.error);
     }
+
+    await notify(NotificationEvent.PREREG_REQUESTED, {
+      organizationId: orgId,
+      visitorName: visitor.name,
+      visitorEmail: visitor.email,
+      visitorCompany: visitor.company || undefined,
+      hostName: hostEmployee.user.name,
+      hostEmail: hostEmployee.user.email,
+      hostUserId: hostEmployee.userId,
+      date: formattedDate,
+      time: `${invitation.startTime} - ${invitation.endTime}`,
+      location,
+      qrPassUrl: passUrl,
+      preRegistrationUrl,
+      purpose: invitation.purpose,
+      entityId: invitation.id,
+    }).catch(console.error);
 
     // Outbound webhook notification
     dispatchWebhookEvent(

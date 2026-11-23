@@ -45,6 +45,10 @@ export async function GET() {
         invitation: {
           include: {
             visitor: { include: { visitorType: true } },
+            visitors: {
+              include: { visitor: { select: { id: true, name: true, email: true } } },
+              orderBy: { createdAt: "asc" },
+            },
             hostEmployee: { include: { user: true } },
             meetingRoom: true,
           },
@@ -91,6 +95,10 @@ export async function POST(request: Request) {
         invitation: {
           include: {
             visitor: true,
+            visitors: {
+              include: { visitor: { select: { id: true, name: true, email: true } } },
+              orderBy: { createdAt: "asc" },
+            },
             hostEmployee: { include: { user: true } },
           },
         },
@@ -227,6 +235,11 @@ export async function POST(request: Request) {
         name: approval.invitation?.visitor?.name,
         email: approval.invitation?.visitor?.email,
       },
+      visitors: approval.invitation?.visitors.map((member) => ({
+        id: member.visitor.id,
+        name: member.visitor.name,
+        email: member.visitor.email,
+      })),
     }).catch(console.error);
 
     if (action === "APPROVED" && approval.invitationId) {

@@ -23,6 +23,7 @@ interface BlacklistEntry {
   name: string;
   phone?: string | null;
   email?: string | null;
+  vehiclePlateNumber?: string | null;
   reason: string;
   createdAt: Date | string;
 }
@@ -55,6 +56,8 @@ export function SecurityGateClient({
   const [blackName, setBlackName] = useState("");
   const [blackPhone, setBlackPhone] = useState("");
   const [blackEmail, setBlackEmail] = useState("");
+  const [blackPlate, setBlackPlate] = useState("");
+  const [blackForeignPlate, setBlackForeignPlate] = useState(false);
   const [blackReason, setBlackReason] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -71,6 +74,8 @@ export function SecurityGateClient({
           name: blackName,
           phone: blackPhone,
           email: blackEmail,
+          vehiclePlateNumber: blackPlate,
+          foreignPlate: blackForeignPlate,
           reason: blackReason,
         }),
       });
@@ -81,6 +86,8 @@ export function SecurityGateClient({
         setBlackName("");
         setBlackPhone("");
         setBlackEmail("");
+        setBlackPlate("");
+        setBlackForeignPlate(false);
         setBlackReason("");
         setIsAddBlacklistOpen(false);
         router.refresh();
@@ -180,6 +187,7 @@ export function SecurityGateClient({
                       <span className="font-bold text-white text-xs">{b.name}</span>
                       {b.phone && <span className="text-[10px] text-slate-400 font-mono">{b.phone}</span>}
                     </div>
+                    {b.vehiclePlateNumber && <p className="text-[10px] font-mono text-amber-300">Plate: {b.vehiclePlateNumber}</p>}
                     <p className="text-xs text-rose-300 font-medium">{b.reason}</p>
                     <span className="text-[10px] text-slate-500 block font-mono">
                       Logged {formatDateTime(b.createdAt)}
@@ -285,6 +293,22 @@ export function SecurityGateClient({
                   onChange={(e) => setBlackEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Vehicle plate (optional)</label>
+                <input
+                  type="text"
+                  maxLength={24}
+                  autoComplete="off"
+                  value={blackPlate}
+                  onChange={(e) => setBlackPlate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                />
+                <label className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+                  <input type="checkbox" checked={blackForeignPlate} onChange={(e) => setBlackForeignPlate(e.target.checked)} />
+                  Other or foreign registration
+                </label>
               </div>
 
               <div>

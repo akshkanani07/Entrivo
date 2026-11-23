@@ -6,6 +6,7 @@ import { hashPassword, hashToken } from "@/lib/auth";
 import { requirePermission, canAssignRole, validateRoleChange } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { emailService } from "@/services/email/mailjet.service";
+import { generateEmployeeInviteEmail } from "@/services/email/email.templates";
 import { UserRole } from "@/types";
 import { getAppUrl } from "@/lib/app-url";
 import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
@@ -404,33 +405,15 @@ export async function POST(request: Request) {
 
     // Send invitation email with set-password link
     await emailService.sendEmail(
-      {
-        to: cleanEmail,
-        recipientName: name,
-        subject: `Welcome to Entrivo - Activate Your Workplace Account`,
-        htmlContent: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
-            <div style="margin-bottom: 24px; text-align: center;">
-              <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
-              <p style="font-size: 11px; color: #818cf8; margin-top: 4px; font-weight: 600; text-transform: uppercase;">Workplace Access & Concierge</p>
-            </div>
-            <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Welcome to Entrivo, ${name}!</h2>
-            <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-              You have been added as a workplace host at ${currentUser.organizationName || "your company"}. Please set your secure password to activate your account:
-            </p>
-            <div style="text-align: center; margin-bottom: 28px;">
-              <a href="${inviteUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">
-                Set Password & Activate &rarr;
-              </a>
-            </div>
-            <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px; margin: 0;">
-              This invitation link will expire in 48 hours.
-            </p>
-          </div>
-        `,
-        textContent: `Welcome to Entrivo. Activate your account and set your password: ${inviteUrl}\nThis link expires in 48 hours.`,
-      },
-      currentUser.id
+      generateEmployeeInviteEmail({
+        email: cleanEmail,
+        name,
+        inviteUrl,
+        organizationName: currentUser.organizationName || "your company",
+      }),
+      currentUser.id,
+      orgId,
+      "EMPLOYEE_INVITE"
     );
 
     return NextResponse.json({

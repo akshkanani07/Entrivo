@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { hashToken } from "@/lib/auth";
 import { emailService } from "@/services/email/mailjet.service";
-import { escapeHtml } from "@/services/email/email.templates";
+import { generateVerifyEmailEmail } from "@/services/email/email.templates";
 import { getAppUrl } from "@/lib/app-url";
 
 export class EmailVerificationService {
@@ -43,32 +43,11 @@ export class EmailVerificationService {
     // Fire and forget email dispatch
     emailService
       .sendEmail(
-        {
-          to: user.email,
-          recipientName: user.name,
-          subject: "Verify your Entrivo workplace account",
-          htmlContent: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
-            <div style="margin-bottom: 24px; text-align: center;">
-              <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
-              <p style="font-size: 11px; color: #818cf8; margin-top: 4px; font-weight: 600; text-transform: uppercase;">Workplace Access & Visitor Management</p>
-            </div>
-            <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Verify Your Email Address</h2>
-            <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-              Hello ${escapeHtml(user.name)}, please confirm your work email to activate all permissions and security features on your Entrivo terminal:
-            </p>
-            <div style="text-align: center; margin-bottom: 28px;">
-              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">
-                Verify Email Address &rarr;
-              </a>
-            </div>
-            <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px; margin: 0;">
-              This verification link expires in 24 hours. If you did not create this account, please ignore this email.
-            </p>
-          </div>
-        `,
-          textContent: `Verify your Entrivo account: ${verifyUrl}\nThis link expires in 24 hours.`,
-        },
+        generateVerifyEmailEmail({
+          email: user.email,
+          name: user.name,
+          verifyUrl,
+        }),
         user.id
       )
       .catch((err) => {

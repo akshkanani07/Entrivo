@@ -13,6 +13,8 @@ export interface VerifyQrResult {
   endTime: string;
   purpose: string;
   status: string;
+  isPreRegistered: boolean;
+  preRegistrationStatus: string | null;
   isBlacklisted: boolean;
   isCheckedIn: boolean;
   visitor: {
@@ -46,18 +48,33 @@ export async function verifyQrToken(
     cleanToken = cleanToken.split("/pass/")[1].split("?")[0];
   }
 
-  const invitation = await prisma.invitation.findFirst({
-    where: { qrToken: cleanToken, organizationId },
+  const membership = await prisma.invitationVisitor.findFirst({
+    where: { qrToken: cleanToken, invitation: { organizationId } },
     include: {
       visitor: { include: { visitorType: true } },
-      hostEmployee: { include: { user: true, office: true } },
-      checkIns: { orderBy: { checkInTime: "desc" }, take: 1 },
+      invitation: {
+        include: {
+          hostEmployee: { include: { user: true, office: true } },
+          checkIns: { orderBy: { checkInTime: "desc" } },
+          preRegistrations: { select: { visitorId: true, status: true, tokenExpiresAt: true } },
+        },
+      },
     },
   });
 
-  if (!invitation) return null;
+  if (!membership || ["CANCELLED", "NO_SHOW"].includes(membership.status)) return null;
+  const invitation = membership.invitation;
 
-  const isCheckedIn = invitation.checkIns.some((c) => c.status === "CHECKED_IN");
+  const isCheckedIn = invitation.checkIns.some(
+    (checkIn) => checkIn.visitorId === membership.visitorId && checkIn.status === "CHECKED_IN"
+  );
+  const preRegistration = invitation.preRegistrations.find(
+    (item) => item.visitorId === membership.visitorId
+  );
+  const isPreRegistered =
+    Boolean(preRegistration) &&
+    ["SUBMITTED", "APPROVED"].includes(preRegistration?.status || "") &&
+    (preRegistration?.tokenExpiresAt.getTime() ?? 0) > Date.now();
 
   return {
     invitationId: invitation.id,
@@ -66,16 +83,18 @@ export async function verifyQrToken(
     endTime: invitation.endTime,
     purpose: invitation.purpose,
     status: invitation.status,
-    isBlacklisted: invitation.visitor.isBlacklisted,
+    isPreRegistered,
+    preRegistrationStatus: preRegistration?.status ?? null,
+    isBlacklisted: membership.visitor.isBlacklisted,
     isCheckedIn,
     visitor: {
-      id: invitation.visitor.id,
-      name: invitation.visitor.name,
-      email: invitation.visitor.email,
-      phone: invitation.visitor.phone,
-      company: invitation.visitor.company,
-      avatarUrl: invitation.visitor.avatarUrl,
-      visitorTypeName: invitation.visitor.visitorType?.name,
+      id: membership.visitor.id,
+      name: membership.visitor.name,
+      email: membership.visitor.email,
+      phone: membership.visitor.phone,
+      company: membership.visitor.company,
+      avatarUrl: membership.visitor.avatarUrl,
+      visitorTypeName: membership.visitor.visitorType?.name,
     },
     hostEmployee: {
       name: invitation.hostEmployee.user.name,

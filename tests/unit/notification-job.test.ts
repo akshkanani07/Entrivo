@@ -103,6 +103,35 @@ describe("Notification Job & In-Process Fallback", () => {
     expect(mockSendTeams).toHaveBeenCalled();
   });
 
+  it("keeps visitor pre-registration bearer links out of non-email notifications", async () => {
+    const { processNotificationJob } = await import("@/services/jobs/notification.job");
+    const link = "https://entrivo.example/preregister/opaque-test-token";
+    const payload: NotificationPayload = {
+      organizationId: "org_acme_1",
+      visitorName: "Jane Doe",
+      visitorEmail: "jane@example.com",
+      hostName: "John Smith",
+      hostEmail: "john@acme.com",
+      hostUserId: "usr_host_1",
+      preRegistrationUrl: link,
+    };
+
+    await processNotificationJob({
+      event: NotificationEvent.VISITOR_INVITED,
+      payload,
+    });
+
+    expect(mockSendEmail).toHaveBeenCalledWith(NotificationEvent.VISITOR_INVITED, payload);
+    expect(mockSendInApp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ preRegistrationUrl: link }),
+      })
+    );
+    expect(mockSendWebPush.mock.calls.every((call) => call[2].preRegistrationUrl === undefined)).toBe(true);
+    expect(mockSendSlack.mock.calls.every((call) => call[1].preRegistrationUrl === undefined)).toBe(true);
+    expect(mockSendTeams.mock.calls.every((call) => call[1].preRegistrationUrl === undefined)).toBe(true);
+  });
+
   it("triggers processNotificationJob via in-process fallback when Redis is unavailable", async () => {
     vi.stubEnv("REDIS_AVAILABLE", "false");
     const { notify } = await import("@/services/notifications/dispatcher");

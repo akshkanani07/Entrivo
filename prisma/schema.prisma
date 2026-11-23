@@ -8,84 +8,106 @@ datasource db {
 }
 
 model Organization {
-  id                    String                 @id @default(cuid())
-  name                  String
-  slug                  String                 @unique
-  logo                  String?
-  domain                String?
-  address               String?
-  city                  String?
-  country               String?                @default("India")
-  contactEmail          String?
-  contactPhone          String?
-  checkInPolicy         String?
-  workingHours          String?                @default("08:30 - 19:30")
-  timezone              String                 @default("Asia/Kolkata")
-  brandColor            String?                @default("#4f46e5")
-  locale                String?                @default("en-IN")
-  deletedAt             DateTime?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  apiKeys               ApiKey[]
-  auditLogs             AuditLog[]
-  badgeTemplates        BadgeTemplate[]
-  blacklists            BlacklistVisitor[]
-  branches              Branch[]
-  calendarConnections   CalendarConnection[]
-  departments           Department[]
-  documents             Document[]
-  employees             Employee[]
-  files                 File[]
-  holidays              Holiday[]
-  invitations           Invitation[]
-  kiosks                Kiosk[]
-  ndaTemplates          NdaTemplate[]
-  notifications         Notification[]
-  notificationTemplates NotificationTemplate[]
-  pushSubscriptions     PushSubscription[]
-  reports               Report[]
-  securityLogs          SecurityLog[]
-  settings              Setting[]
-  users                 User[]
-  visitors              Visitor[]
-  visitorTypes          VisitorType[]
-  webhookDeliveries     WebhookDelivery[]
-  webhooks              WebhookSubscription[]
+  id                     String                  @id @default(cuid())
+  name                   String
+  slug                   String                  @unique
+  logo                   String?
+  domain                 String?
+  address                String?
+  city                   String?
+  country                String?                 @default("India")
+  contactEmail           String?
+  contactPhone           String?
+  checkInPolicy          String?
+  workingHours           String?                 @default("08:30 - 19:30")
+  timezone               String                  @default("Asia/Kolkata")
+  brandColor             String?                 @default("#4f46e5")
+  locale                 String?                 @default("en-IN")
+  deletedAt              DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  apiKeys                ApiKey[]
+  auditLogs              AuditLog[]
+  badgeTemplates         BadgeTemplate[]
+  blacklists             BlacklistVisitor[]
+  branches               Branch[]
+  calendarConnections    CalendarConnection[]
+  departments            Department[]
+  documents              Document[]
+  employees              Employee[]
+  files                  File[]
+  holidays               Holiday[]
+  invitations            Invitation[]
+  kiosks                 Kiosk[]
+  ndaTemplates           NdaTemplate[]
+  preRegistrations       PreRegistration[]
+  notifications          Notification[]
+  emailSuppressions      EmailSuppression[]
+  invitationSeries       InvitationSeries[]
+  notificationTemplates  NotificationTemplate[]
+  pushSubscriptions      PushSubscription[]
+  reports                Report[]
+  securityLogs           SecurityLog[]
+  settings               Setting[]
+  users                  User[]
+  visitors               Visitor[]
+  vehicles               Vehicle[]
+  parkingLots            ParkingLot[]
+  parkingAssignments     ParkingAssignment[]
+  parkingEvents          ParkingEvent[]
+  contractorPermits      ContractorPermit[]
+  visitorTypes           VisitorType[]
+  webhookDeliveries      WebhookDelivery[]
+  webhooks               WebhookSubscription[]
+  emergencyEvents        EmergencyEvent[]
+  musterPoints           MusterPoint[]
+  bulkImportJobs         BulkImportJob[]
+  deliveries             Delivery[]
+  deliveryPersonLogs     DeliveryPersonLog[]
+  contractorCompanies    ContractorCompany[]
+  contractorWorkers      ContractorWorker[]
+  complianceRequirements ComplianceRequirement[]
+  feedbackRequests       FeedbackRequest[]
+  feedbackResponses      FeedbackResponse[]
 
   @@index([slug])
 }
 
 model Branch {
-  id             String       @id @default(cuid())
-  name           String
-  code           String
-  address        String?
-  workingHours   Json?
-  organizationId String
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  holidays       Holiday[]
-  offices        Office[]
+  id              String           @id @default(cuid())
+  name            String
+  code            String
+  address         String?
+  workingHours    Json?
+  organizationId  String
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  holidays        Holiday[]
+  emergencyEvents EmergencyEvent[]
+  offices         Office[]
 
   @@index([organizationId])
 }
 
 model Office {
-  id           String        @id @default(cuid())
-  name         String
-  floor        String?
-  building     String?
-  workingHours Json?
-  branchId     String
-  deletedAt    DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  employees    Employee[]
-  floors       Floor[]
-  meetingRooms MeetingRoom[]
-  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  name            String
+  floor           String?
+  building        String?
+  workingHours    Json?
+  branchId        String
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  employees       Employee[]
+  emergencyEvents EmergencyEvent[]
+  floors          Floor[]
+  meetingRooms    MeetingRoom[]
+  musterPoints    MusterPoint[]
+  parkingLots     ParkingLot[]
+  branch          Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@index([branchId])
 }
@@ -105,40 +127,52 @@ model Department {
 }
 
 model User {
-  id                      String                   @id @default(cuid())
-  email                   String                   @unique
-  passwordHash            String
-  name                    String
-  avatar                  String?
-  phone                   String?
-  role                    UserRole                 @default(EMPLOYEE)
-  isTwoFactorEnabled      Boolean                  @default(false)
-  twoFactorSecret         String?
-  twoFactorBackupCodes    String?
-  twoFactorConfirmedAt    DateTime?
-  isEmailVerified         Boolean                  @default(false)
-  isActive                Boolean                  @default(true)
-  organizationId          String?
-  mustChangePassword      Boolean                  @default(false)
-  passwordChangedAt       DateTime?
-  quietHoursEnabled       Boolean                  @default(false)
-  quietHoursStart         String?                  @default("22:00")
-  quietHoursEnd           String?                  @default("07:00")
-  termsAcceptedAt         DateTime?
-  termsVersion            String?
-  deletedAt               DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-  auditLogs               AuditLog[]
-  calendarConnections     CalendarConnection[]
-  employee                Employee?
-  notifications           Notification[]
-  notificationPreferences NotificationPreference[]
-  approvedTemplates       NotificationTemplate[]   @relation("TemplateApprover")
-  passwordHistories       PasswordHistory[]
-  pushSubscriptions       PushSubscription[]
-  sessions                Session[]
-  organization            Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                       String                   @id @default(cuid())
+  email                    String                   @unique
+  googleId                 String?                  @unique
+  passwordHash             String
+  name                     String
+  avatar                   String?
+  avatarUrl                String?
+  phone                    String?
+  lastLoginProvider        LoginProvider            @default(PASSWORD)
+  role                     UserRole                 @default(EMPLOYEE)
+  isTwoFactorEnabled       Boolean                  @default(false)
+  twoFactorSecret          String?
+  twoFactorBackupCodes     String?
+  twoFactorConfirmedAt     DateTime?
+  isEmailVerified          Boolean                  @default(false)
+  isActive                 Boolean                  @default(true)
+  organizationId           String?
+  mustChangePassword       Boolean                  @default(false)
+  passwordChangedAt        DateTime?
+  quietHoursEnabled        Boolean                  @default(false)
+  quietHoursStart          String?                  @default("22:00")
+  quietHoursEnd            String?                  @default("07:00")
+  termsAcceptedAt          DateTime?
+  termsVersion             String?
+  deletedAt                DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  auditLogs                AuditLog[]
+  calendarConnections      CalendarConnection[]
+  employee                 Employee?
+  notifications            Notification[]
+  notificationPreferences  NotificationPreference[]
+  approvedTemplates        NotificationTemplate[]   @relation("TemplateApprover")
+  reviewedPreRegistrations PreRegistration[]        @relation("PreRegistrationReviewer")
+  passwordHistories        PasswordHistory[]
+  pushSubscriptions        PushSubscription[]
+  sessions                 Session[]
+  startedEmergencyEvents   EmergencyEvent[]         @relation("EmergencyStartedBy")
+  accountedMusterEntries   MusterAccountEntry[]     @relation("MusterAccountedBy")
+  musterAccountActions     MusterAccountAction[]    @relation("MusterAccountActionBy")
+  parkingEventsRecorded    ParkingEvent[]           @relation("ParkingEventRecorder")
+  emergencyDeliveries      EmergencyDelivery[]
+  createdInvitationSeries  InvitationSeries[]       @relation("InvitationSeriesCreator")
+  approvedInvitationSeries InvitationSeries[]       @relation("InvitationSeriesApprover")
+  createdBulkImportJobs    BulkImportJob[]          @relation("BulkImportJobCreator")
+  organization             Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([email])
   @@index([organizationId])
@@ -189,32 +223,42 @@ model PasswordResetToken {
 }
 
 model Employee {
-  id                  String       @id @default(cuid())
-  userId              String       @unique
-  organizationId      String
-  departmentId        String?
-  officeId            String?
-  employeeCode        String
-  designation         String?
-  phone               String?
-  status              String       @default("AVAILABLE")
-  autoApproveVisitors Boolean      @default(false)
-  backupApproverId    String?
-  deletedAt           DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  approvalsGiven      Approval[]
-  checkInsHosted      CheckIn[]
-  backupApprover      Employee?    @relation("BackupApprover", fields: [backupApproverId], references: [id])
-  backupFor           Employee[]   @relation("BackupApprover")
-  department          Department?  @relation(fields: [departmentId], references: [id])
-  office              Office?      @relation(fields: [officeId], references: [id])
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invitations         Invitation[]
+  id                   String              @id @default(cuid())
+  userId               String              @unique
+  organizationId       String
+  departmentId         String?
+  officeId             String?
+  managerId            String?
+  employeeCode         String
+  designation          String?
+  phone                String?
+  status               String              @default("AVAILABLE")
+  autoApproveVisitors  Boolean             @default(false)
+  backupApproverId     String?
+  deletedAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  approvalsGiven       Approval[]
+  checkInsHosted       CheckIn[]
+  backupApprover       Employee?           @relation("BackupApprover", fields: [backupApproverId], references: [id])
+  backupFor            Employee[]          @relation("BackupApprover")
+  manager              Employee?           @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports        Employee[]          @relation("EmployeeManager")
+  feedbackResponses    FeedbackResponse[]
+  department           Department?         @relation(fields: [departmentId], references: [id])
+  office               Office?             @relation(fields: [officeId], references: [id])
+  organization         Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitations          Invitation[]
+  invitationSeries     InvitationSeries[]
+  bulkImportJobs       BulkImportJob[]
+  deliveriesReceived   Delivery[]          @relation("DeliveryReceivedBy")
+  deliveriesRecipient  Delivery[]          @relation("DeliveryRecipient")
+  sponsoredContractors ContractorCompany[] @relation("ContractorSponsor")
 
   @@index([organizationId])
   @@index([departmentId])
+  @@index([managerId])
 }
 
 model VisitorType {
@@ -236,30 +280,39 @@ model VisitorType {
 }
 
 model Visitor {
-  id              String       @id @default(cuid())
-  name            String
-  email           String
-  phone           String
-  company         String?
-  avatarUrl       String?
-  idProofType     String?
-  idProofNumber   String?
-  idProofUrl      String?
-  isBlacklisted   Boolean      @default(false)
-  blacklistReason String?
-  consentGiven    Boolean      @default(true)
-  consentVersion  String?      @default("v1.0")
-  organizationId  String
-  visitorTypeId   String?
-  deletedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  badges          Badge[]
-  checkIns        CheckIn[]
-  documents       Document[]
-  invitations     Invitation[]
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  visitorType     VisitorType? @relation(fields: [visitorTypeId], references: [id])
+  id                  String              @id @default(cuid())
+  name                String
+  email               String
+  phone               String
+  preferredLocale     String              @default("en-IN")
+  company             String?
+  avatarUrl           String?
+  idProofType         String?
+  idProofNumber       String?
+  idProofNumberMasked String?
+  idProofUrl          String?
+  isBlacklisted       Boolean             @default(false)
+  isRegularVendor     Boolean             @default(false)
+  blacklistReason     String?
+  consentGiven        Boolean             @default(true)
+  consentVersion      String?             @default("v1.0")
+  organizationId      String
+  visitorTypeId       String?
+  deletedAt           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  badges              Badge[]
+  checkIns            CheckIn[]
+  documents           Document[]
+  invitations         Invitation[]
+  invitationVisitors  InvitationVisitor[]
+  invitationSeries    InvitationSeries[]
+  preRegistrations    PreRegistration[]
+  vehicles            Vehicle[]
+  contractorPermits   ContractorPermit[]
+  contractorWorkers   ContractorWorker[]
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitorType         VisitorType?        @relation(fields: [visitorTypeId], references: [id])
 
   @@index([email])
   @@index([phone])
@@ -267,82 +320,215 @@ model Visitor {
 }
 
 model Invitation {
-  id               String           @id @default(cuid())
-  organizationId   String
-  hostEmployeeId   String
-  visitorId        String
-  meetingRoomId    String?
-  scheduledDate    DateTime
-  startTime        String           @default("10:00")
-  endTime          String           @default("11:00")
-  purpose          String
-  notes            String?
-  status           InvitationStatus @default(PENDING)
-  qrToken          String           @unique
-  passUrl          String?
-  calendarEventId  String?
-  calendarProvider String?
-  deletedAt        DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  approvals        Approval[]
-  checkIns         CheckIn[]
-  hostEmployee     Employee         @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
-  meetingRoom      MeetingRoom?     @relation(fields: [meetingRoomId], references: [id])
-  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  visitor          Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  qrCodes          QRCode[]
+  id                 String              @id @default(cuid())
+  organizationId     String
+  hostEmployeeId     String
+  visitorId          String
+  meetingRoomId      String?
+  scheduledDate      DateTime
+  startTime          String              @default("10:00")
+  endTime            String              @default("11:00")
+  purpose            String
+  notes              String?
+  status             InvitationStatus    @default(PENDING)
+  qrToken            String              @unique
+  passUrl            String?
+  calendarEventId    String?
+  calendarProvider   String?
+  seriesId           String?
+  occurrenceDate     DateTime?
+  isException        Boolean             @default(false)
+  deletedAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  approvals          Approval[]
+  checkIns           CheckIn[]
+  hostEmployee       Employee            @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  meetingRoom        MeetingRoom?        @relation(fields: [meetingRoomId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor            Visitor             @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  qrCodes            QRCode[]
+  preRegistrations   PreRegistration[]
+  visitors           InvitationVisitor[]
+  series             InvitationSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  parkingAssignments ParkingAssignment[]
 
+  @@unique([seriesId, occurrenceDate])
   @@index([qrToken])
   @@index([organizationId])
   @@index([scheduledDate])
 }
 
+model InvitationVisitor {
+  id           String                  @id @default(cuid())
+  invitationId String
+  visitorId    String
+  status       InvitationVisitorStatus @default(INVITED)
+  qrToken      String                  @unique
+  createdAt    DateTime                @default(now())
+  invitation   Invitation              @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  visitor      Visitor                 @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@unique([invitationId, visitorId])
+  @@index([visitorId])
+  @@index([invitationId, status])
+}
+
+model InvitationSeries {
+  id              String                 @id @default(cuid())
+  organizationId  String
+  hostEmployeeId  String
+  visitorId       String?
+  groupDefinition Json?
+  rule            Json
+  purpose         String
+  startDate       DateTime
+  endDate         DateTime?
+  count           Int?
+  startTime       String
+  endTime         String
+  meetingRoomId   String?
+  timezone        String
+  skipHolidays    Boolean                @default(false)
+  status          InvitationSeriesStatus @default(ACTIVE)
+  generatedUntil  DateTime?
+  preApproved     Boolean                @default(false)
+  approvedById    String?
+  createdById     String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hostEmployee    Employee               @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  visitor         Visitor?               @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  meetingRoom     MeetingRoom?           @relation(fields: [meetingRoomId], references: [id], onDelete: SetNull)
+  createdBy       User                   @relation("InvitationSeriesCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  approvedBy      User?                  @relation("InvitationSeriesApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  invitations     Invitation[]
+
+  @@index([organizationId, status])
+  @@index([hostEmployeeId])
+}
+
 model CheckIn {
-  id                String        @id @default(cuid())
-  visitorId         String
-  invitationId      String?
-  hostEmployeeId    String
-  checkInTime       DateTime      @default(now())
-  expectedCheckout  DateTime?
-  photoUrl          String?
-  signatureUrl      String?
-  badgeNumber       String?
-  badgeIssued       Boolean       @default(false)
-  ndaSigned         Boolean       @default(false)
-  consentGiven      Boolean       @default(true)
-  consentVersion    String?       @default("v1.0")
-  status            CheckInStatus @default(CHECKED_IN)
-  receptionistName  String?
-  securityGuardName String?
-  deletedAt         DateTime?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  badges            Badge[]
-  hostEmployee      Employee      @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
-  invitation        Invitation?   @relation(fields: [invitationId], references: [id])
-  visitor           Visitor       @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  checkOut          CheckOut?
-  qrCodes           QRCode[]
+  id                 String               @id @default(cuid())
+  visitorId          String
+  invitationId       String?
+  hostEmployeeId     String
+  checkInTime        DateTime             @default(now())
+  hostNotifiedAt     DateTime?
+  meetingStartedAt   DateTime?
+  expectedCheckout   DateTime?
+  photoUrl           String?
+  signatureUrl       String?
+  badgeNumber        String?
+  badgeIssued        Boolean              @default(false)
+  ndaSigned          Boolean              @default(false)
+  consentGiven       Boolean              @default(true)
+  consentVersion     String?              @default("v1.0")
+  status             CheckInStatus        @default(CHECKED_IN)
+  floorId            String?
+  zoneId             String?
+  receptionistName   String?
+  securityGuardName  String?
+  deletedAt          DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  badges             Badge[]
+  hostEmployee       Employee             @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  invitation         Invitation?          @relation(fields: [invitationId], references: [id])
+  musterEntries      MusterAccountEntry[]
+  visitor            Visitor              @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  checkOut           CheckOut?
+  parkingAssignments ParkingAssignment[]
+  floor              Floor?               @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  qrCodes            QRCode[]
+  feedbackRequest    FeedbackRequest?
+  feedbackResponses  FeedbackResponse[]
+  zone               Zone?                @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 
   @@index([status])
+  @@index([status, floorId, zoneId])
   @@index([badgeNumber])
   @@index([checkInTime])
   @@index([visitorId])
   @@index([hostEmployeeId])
   @@index([checkInTime, status])
+  @@index([floorId])
+  @@index([zoneId])
+  @@index([hostEmployeeId, checkInTime])
+  @@index([hostNotifiedAt])
+  @@index([meetingStartedAt])
 }
 
 model CheckOut {
-  id              String   @id @default(cuid())
-  checkInId       String   @unique
-  checkOutTime    DateTime @default(now())
-  durationMinutes Int      @default(0)
-  checkoutMethod  String   @default("MANUAL")
-  exitNotes       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  id               String          @id @default(cuid())
+  checkInId        String          @unique
+  emergencyEventId String?
+  checkOutTime     DateTime        @default(now())
+  durationMinutes  Int             @default(0)
+  checkoutMethod   String          @default("MANUAL")
+  exitNotes        String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  checkIn          CheckIn         @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  emergencyEvent   EmergencyEvent? @relation(fields: [emergencyEventId], references: [id], onDelete: SetNull)
+
+  @@index([emergencyEventId])
+  @@index([checkOutTime])
+  @@index([durationMinutes])
+}
+
+model FeedbackRequest {
+  id             String           @id @default(cuid())
+  organizationId String
+  checkInId      String           @unique
+  tokenHash      String           @unique
+  expiresAt      DateTime
+  sentAt         DateTime?
+  channelSentVia FeedbackChannel?
+  consumedAt     DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checkIn        CheckIn          @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+  @@index([organizationId, sentAt])
+  @@index([checkInId])
+}
+
+model FeedbackResponse {
+  id               String             @id @default(cuid())
+  organizationId   String
+  checkInId        String?
+  hostEmployeeId   String?
+  branchId         String?
+  officeId         String?
+  npsScore         Int
+  csatScore        Int?
+  categories       FeedbackCategory[]
+  comment          String?            @db.Text
+  locale           String             @default("en-IN")
+  isAnonymous      Boolean            @default(false)
+  source           FeedbackSource     @default(EMAIL)
+  ipHash           String?
+  profanityFlagged Boolean            @default(false)
+  reviewedAt       DateTime?
+  reviewedById     String?
+  internalNote     String?            @db.Text
+  createdAt        DateTime           @default(now())
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checkIn          CheckIn?           @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+  hostEmployee     Employee?          @relation(fields: [hostEmployeeId], references: [id], onDelete: SetNull)
+
+  @@unique([checkInId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, npsScore, createdAt])
+  @@index([organizationId, hostEmployeeId, createdAt])
+  @@index([organizationId, branchId, createdAt])
+  @@index([checkInId])
+  @@index([hostEmployeeId])
+  @@index([reviewedAt])
 }
 
 model QRCode {
@@ -417,22 +603,23 @@ model Approval {
 }
 
 model MeetingRoom {
-  id          String       @id @default(cuid())
-  name        String
-  officeId    String
-  capacity    Int          @default(6)
-  floor       String?
-  floorId     String?
-  zoneId      String?
-  amenities   String?      @default("Display, Conference Phone, Whiteboard")
-  isAvailable Boolean      @default(true)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  invitations Invitation[]
-  floorRef    Floor?       @relation(fields: [floorId], references: [id])
-  office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
-  zoneRef     Zone?        @relation(fields: [zoneId], references: [id])
+  id               String             @id @default(cuid())
+  name             String
+  officeId         String
+  capacity         Int                @default(6)
+  floor            String?
+  floorId          String?
+  zoneId           String?
+  amenities        String?            @default("Display, Conference Phone, Whiteboard")
+  isAvailable      Boolean            @default(true)
+  deletedAt        DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  invitations      Invitation[]
+  invitationSeries InvitationSeries[]
+  floorRef         Floor?             @relation(fields: [floorId], references: [id])
+  office           Office             @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  zoneRef          Zone?              @relation(fields: [zoneId], references: [id])
 
   @@index([officeId])
   @@index([floorId])
@@ -440,33 +627,399 @@ model MeetingRoom {
 }
 
 model Document {
-  id             String       @id @default(cuid())
-  organizationId String
-  visitorId      String
-  title          String
-  docType        String       @default("ID_PROOF")
-  fileUrl        String?
-  fileId         String?
-  fileSize       Int?
-  mimeType       String?
-  sha256         String?
-  expiryDate     DateTime?
-  status         String       @default("VALID")
-  metadata       Json?
-  verified       Boolean      @default(true)
-  createdById    String?
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  file           File?        @relation(fields: [fileId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  visitor        Visitor      @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  id                  String             @id @default(cuid())
+  organizationId      String
+  visitorId           String?
+  contractorCompanyId String?
+  contractorWorkerId  String?
+  title               String
+  docType             String             @default("ID_PROOF")
+  fileUrl             String?
+  fileId              String?
+  fileSize            Int?
+  mimeType            String?
+  sha256              String?
+  expiryDate          DateTime?
+  status              String             @default("VALID")
+  metadata            Json?
+  verified            Boolean            @default(true)
+  createdById         String?
+  deletedAt           DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  file                File?              @relation(fields: [fileId], references: [id])
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor             Visitor?           @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  contractorCompany   ContractorCompany? @relation(fields: [contractorCompanyId], references: [id], onDelete: Cascade)
+  contractorWorker    ContractorWorker?  @relation(fields: [contractorWorkerId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([visitorId])
   @@index([docType])
   @@index([expiryDate])
   @@index([status])
+  @@index([contractorCompanyId])
+  @@index([contractorWorkerId])
+}
+
+enum ContractorCompanyStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum ContractorWorkerStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  BLOCKED
+}
+
+model ContractorCompany {
+  id                String                  @id @default(cuid())
+  organizationId    String
+  name              String
+  gstin             String?
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  status            ContractorCompanyStatus @default(ACTIVE)
+  contractStart     DateTime?
+  contractEnd       DateTime?
+  sponsorEmployeeId String
+  deletedAt         DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sponsorEmployee   Employee                @relation("ContractorSponsor", fields: [sponsorEmployeeId], references: [id], onDelete: Restrict)
+  workers           ContractorWorker[]
+  documents         Document[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([sponsorEmployeeId])
+  @@index([contractEnd])
+}
+
+model ComplianceRequirement {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  docType            String
+  title              String
+  mandatoryForAccess Boolean      @default(true)
+  validityRules      Json?
+  isActive           Boolean      @default(true)
+  deletedAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, docType])
+  @@index([organizationId, isActive, mandatoryForAccess])
+}
+
+model ContractorWorker {
+  id                  String                 @id @default(cuid())
+  organizationId      String
+  companyId           String
+  visitorId           String
+  trade               String?
+  status              ContractorWorkerStatus @default(ACTIVE)
+  inductionRequired   Boolean                @default(true)
+  inductionDate       DateTime?
+  inductionValidUntil DateTime?
+  inductionTrainer    String?
+  permitSite          String?
+  permitValidFrom     DateTime?
+  permitValidUntil    DateTime?
+  permitShiftStart    String?
+  permitShiftEnd      String?
+  deletedAt           DateTime?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company             ContractorCompany      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  visitor             Visitor                @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  documents           Document[]
+
+  @@unique([organizationId, visitorId])
+  @@index([organizationId, companyId, status])
+  @@index([permitValidFrom, permitValidUntil])
+}
+
+model PreRegistration {
+  id                String                @id @default(cuid())
+  organizationId    String
+  invitationId      String
+  visitorId         String
+  tokenHash         String                @unique
+  tokenExpiresAt    DateTime
+  reminder24hSentAt DateTime?
+  reminder2hSentAt  DateTime?
+  status            PreRegistrationStatus @default(NOT_STARTED)
+  completeness      Int                   @default(0)
+  submittedAt       DateTime?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  rejectionReason   String?
+  locale            String                @default("en")
+  consentVersion    String?
+  consentAt         DateTime?
+  draft             Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitation        Invitation            @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  visitor           Visitor               @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  reviewedBy        User?                 @relation("PreRegistrationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([invitationId, visitorId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([tokenExpiresAt])
+}
+
+model Vehicle {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  visitorId          String?
+  plateNumber        String
+  plateDisplay       String
+  type               VehicleType         @default(OTHER)
+  make               String?
+  color              String?
+  createdAt          DateTime            @default(now())
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor            Visitor?            @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  parkingAssignments ParkingAssignment[]
+  parkingEvents      ParkingEvent[]
+  contractorPermits  ContractorPermit[]
+
+  @@unique([organizationId, plateNumber, visitorId])
+  @@index([organizationId])
+  @@index([organizationId, plateNumber])
+  @@index([visitorId])
+}
+
+model ParkingLot {
+  id             String        @id @default(cuid())
+  organizationId String
+  officeId       String
+  name           String
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  office         Office        @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  slots          ParkingSlot[]
+
+  @@index([organizationId, officeId, isActive])
+}
+
+model ParkingSlot {
+  id          String              @id @default(cuid())
+  lotId       String
+  code        String
+  type        ParkingSlotType     @default(CAR)
+  isActive    Boolean             @default(true)
+  notes       String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  lot         ParkingLot          @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  assignments ParkingAssignment[]
+
+  @@unique([lotId, code])
+  @@index([lotId, type, isActive])
+}
+
+model ParkingAssignment {
+  id             String                  @id @default(cuid())
+  organizationId String
+  slotId         String
+  vehicleId      String
+  checkInId      String?                 @unique
+  invitationId   String?
+  status         ParkingAssignmentStatus @default(RESERVED)
+  reservedFrom   DateTime
+  reservedUntil  DateTime
+  enteredAt      DateTime?
+  exitedAt       DateTime?
+  overstayedAt   DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  slot           ParkingSlot             @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle                 @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  checkIn        CheckIn?                @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+  invitation     Invitation?             @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, reservedUntil])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, enteredAt])
+  @@index([organizationId, exitedAt])
+  @@index([organizationId, overstayedAt])
+  @@index([slotId, status, reservedFrom, reservedUntil])
+  @@index([vehicleId, status])
+  @@index([invitationId])
+}
+
+model ParkingEvent {
+  id             String             @id @default(cuid())
+  organizationId String
+  vehicleId      String?
+  type           ParkingEventType
+  gate           String?
+  recordedById   String?
+  at             DateTime           @default(now())
+  source         ParkingEventSource @default(MANUAL)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicle        Vehicle?           @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  recordedBy     User?              @relation("ParkingEventRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, at])
+  @@index([vehicleId, at])
+}
+
+model ContractorPermit {
+  id             String       @id @default(cuid())
+  organizationId String
+  vehicleId      String
+  visitorId      String?
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean      @default(true)
+  notes          String?
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  visitor        Visitor?     @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, isActive, validFrom, validUntil])
+  @@index([vehicleId])
+}
+
+model EmergencyEvent {
+  id             String                @id @default(cuid())
+  organizationId String
+  branchId       String?
+  officeId       String?
+  floorId        String?
+  zoneId         String?
+  type           EmergencyType
+  kind           EmergencyKind
+  status         EmergencyStatus       @default(ACTIVE)
+  startedById    String
+  startedAt      DateTime              @default(now())
+  endedAt        DateTime?
+  message        String
+  summary        Json?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  branch         Branch?               @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  floor          Floor?                @relation(fields: [floorId], references: [id], onDelete: SetNull)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  office         Office?               @relation(fields: [officeId], references: [id], onDelete: SetNull)
+  startedBy      User                  @relation("EmergencyStartedBy", fields: [startedById], references: [id], onDelete: Restrict)
+  zone           Zone?                 @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  actions        MusterAccountAction[]
+  deliveries     EmergencyDelivery[]
+  entries        MusterAccountEntry[]
+  checkOuts      CheckOut[]
+
+  @@index([organizationId, status, startedAt])
+  @@index([branchId, status])
+  @@index([officeId, status])
+}
+
+model MusterPoint {
+  id             String                @id @default(cuid())
+  organizationId String
+  officeId       String
+  name           String
+  location       String
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  entries        MusterAccountEntry[]
+  actions        MusterAccountAction[]
+  office         Office                @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, officeId, isActive])
+}
+
+model MusterAccountEntry {
+  id                  String                @id @default(cuid())
+  emergencyEventId    String
+  subjectType         MusterSubjectType
+  checkInId           String?
+  status              MusterAccountStatus   @default(UNACCOUNTED)
+  accountedById       String?
+  accountedAt         DateTime?
+  musterPointId       String?
+  note                String?
+  clientEventId       String?
+  snapshot            Json
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  accountedBy         User?                 @relation("MusterAccountedBy", fields: [accountedById], references: [id], onDelete: SetNull)
+  checkIn             CheckIn?              @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+  emergencyEvent      EmergencyEvent        @relation(fields: [emergencyEventId], references: [id], onDelete: Cascade)
+  musterPoint         MusterPoint?          @relation(fields: [musterPointId], references: [id], onDelete: SetNull)
+  actions             MusterAccountAction[]
+  emergencyDeliveries EmergencyDelivery[]
+
+  @@unique([emergencyEventId, checkInId])
+  @@unique([emergencyEventId, clientEventId])
+  @@index([emergencyEventId, status])
+  @@index([checkInId])
+}
+
+model MusterAccountAction {
+  id               String              @id @default(cuid())
+  emergencyEventId String
+  musterEntryId    String
+  clientEventId    String
+  status           MusterAccountStatus
+  accountedById    String?
+  accountedAt      DateTime            @default(now())
+  musterPointId    String?
+  note             String?
+  createdAt        DateTime            @default(now())
+  accountedBy      User?               @relation("MusterAccountActionBy", fields: [accountedById], references: [id], onDelete: SetNull)
+  emergencyEvent   EmergencyEvent      @relation(fields: [emergencyEventId], references: [id], onDelete: Cascade)
+  musterEntry      MusterAccountEntry  @relation(fields: [musterEntryId], references: [id], onDelete: Cascade)
+  musterPoint      MusterPoint?        @relation(fields: [musterPointId], references: [id], onDelete: SetNull)
+
+  @@unique([emergencyEventId, clientEventId])
+  @@index([musterEntryId, accountedAt])
+}
+
+model EmergencyDelivery {
+  id               String                  @id @default(cuid())
+  emergencyEventId String
+  musterEntryId    String?
+  recipientUserId  String?
+  recipientType    EmergencyRecipientType
+  channel          NotificationChannel
+  kind             EmergencyDeliveryKind
+  deliveryKey      String
+  status           EmergencyDeliveryStatus @default(PENDING)
+  error            String?
+  attempts         Int                     @default(0)
+  lastAttemptAt    DateTime?
+  deliveredAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  emergencyEvent   EmergencyEvent          @relation(fields: [emergencyEventId], references: [id], onDelete: Cascade)
+  musterEntry      MusterAccountEntry?     @relation(fields: [musterEntryId], references: [id], onDelete: SetNull)
+  recipientUser    User?                   @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@unique([emergencyEventId, deliveryKey])
+  @@index([emergencyEventId, kind, channel, status])
+  @@index([musterEntryId])
 }
 
 model NdaTemplate {
@@ -486,25 +1039,27 @@ model NdaTemplate {
 }
 
 model BlacklistVisitor {
-  id             String       @id @default(cuid())
-  organizationId String
-  name           String
-  phone          String?
-  email          String?
-  idProofNumber  String?
-  reason         String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                 String       @id @default(cuid())
+  organizationId     String
+  name               String
+  phone              String?
+  email              String?
+  idProofNumber      String?
+  vehiclePlateNumber String?
+  reason             String
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([phone])
   @@index([email])
+  @@index([organizationId, vehiclePlateNumber])
 }
 
 model SecurityLog {
   id             String           @id @default(cuid())
-  organizationId String
+  organizationId String?
   logType        String
   description    String
   severity       SecuritySeverity @default(LOW)
@@ -512,7 +1067,7 @@ model SecurityLog {
   guardName      String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([createdAt])
@@ -542,26 +1097,27 @@ model AuditLog {
 }
 
 model Notification {
-  id             String              @id @default(cuid())
-  organizationId String
-  userId         String?
-  channel        NotificationChannel @default(IN_APP)
-  event          String
-  title          String
-  body           String
-  data           Json?
-  recipient      String?
-  readAt         DateTime?
-  status         NotificationStatus  @default(SENT)
-  error          String?
-  retryCount     Int                 @default(0)
-  lastAttemptAt  DateTime?
-  deliveredAt    DateTime?
-  isDeadLetter   Boolean             @default(false)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String              @id @default(cuid())
+  organizationId   String
+  userId           String?
+  channel          NotificationChannel @default(IN_APP)
+  event            String
+  title            String
+  body             String
+  data             Json?
+  recipient        String?
+  mailjetMessageId String?             @unique
+  readAt           DateTime?
+  status           NotificationStatus  @default(SENT)
+  error            String?
+  retryCount       Int                 @default(0)
+  lastAttemptAt    DateTime?
+  deliveredAt      DateTime?
+  isDeadLetter     Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([userId])
@@ -569,6 +1125,18 @@ model Notification {
   @@index([createdAt])
   @@index([organizationId, channel, status])
   @@index([organizationId, isDeadLetter])
+}
+
+model EmailSuppression {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String
+  reason         String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
 }
 
 model NotificationTemplate {
@@ -783,52 +1351,138 @@ model Kiosk {
 }
 
 model Floor {
-  id           String        @id @default(cuid())
-  name         String
-  number       Int           @default(1)
-  officeId     String
-  deletedAt    DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  office       Office        @relation(fields: [officeId], references: [id], onDelete: Cascade)
-  meetingRooms MeetingRoom[]
-  zones        Zone[]
+  id              String           @id @default(cuid())
+  name            String
+  number          Int              @default(1)
+  officeId        String
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  office          Office           @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  checkIns        CheckIn[]
+  emergencyEvents EmergencyEvent[]
+  meetingRooms    MeetingRoom[]
+  zones           Zone[]
 
   @@index([officeId])
 }
 
 model Zone {
-  id           String        @id @default(cuid())
-  name         String
-  code         String?
-  floorId      String
-  deletedAt    DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  meetingRooms MeetingRoom[]
-  floor        Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  id              String           @id @default(cuid())
+  name            String
+  code            String?
+  floorId         String
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  meetingRooms    MeetingRoom[]
+  checkIns        CheckIn[]
+  emergencyEvents EmergencyEvent[]
+  floor           Floor            @relation(fields: [floorId], references: [id], onDelete: Cascade)
 
   @@index([floorId])
 }
 
 model File {
-  id             String       @id @default(cuid())
-  organizationId String
-  ownerType      String
-  ownerId        String?
-  key            String
-  mime           String
-  size           Int
-  sha256         String
-  createdById    String?
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  documents      Document[]
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id                String          @id @default(cuid())
+  organizationId    String
+  ownerType         String
+  ownerId           String?
+  key               String
+  mime              String
+  size              Int
+  sha256            String
+  createdById       String?
+  deletedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  documents         Document[]
+  bulkImportUploads BulkImportJob[] @relation("BulkImportUpload")
+  bulkImportReports BulkImportJob[] @relation("BulkImportErrorReport")
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([ownerType, ownerId])
+}
+
+enum DeliveryStatus {
+  RECEIVED
+  NOTIFIED
+  COLLECTED
+  RETURNED
+  UNCLAIMED
+}
+
+model Delivery {
+  id                  String         @id @default(cuid())
+  organizationId      String
+  recipientEmployeeId String
+  courierCompany      String
+  trackingNumber      String?
+  packageCount        Int            @default(1)
+  description         String?
+  photoFileId         String?
+  receivedById        String
+  receivedAt          DateTime       @default(now())
+  status              DeliveryStatus @default(RECEIVED)
+  storageLocation     String?
+  pickupCodeHash      String?
+  collectedAt         DateTime?
+  collectedByName     String?
+  signatureFileId     String?
+  notes               String?
+  reminder24hSentAt   DateTime?
+  reminder72hSentAt   DateTime?
+  unclaimedAt         DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  organization        Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipientEmployee   Employee       @relation("DeliveryRecipient", fields: [recipientEmployeeId], references: [id], onDelete: Cascade)
+  receivedBy          Employee       @relation("DeliveryReceivedBy", fields: [receivedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, receivedAt])
+  @@index([organizationId, courierCompany])
+  @@index([organizationId, recipientEmployeeId])
+  @@index([organizationId, trackingNumber])
+  @@index([receivedAt])
+}
+
+model DeliveryPersonLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String?
+  company        String
+  entryTime      DateTime     @default(now())
+  recordedById   String?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entryTime])
+  @@index([organizationId, company])
+}
+
+model BulkImportJob {
+  id                String              @id @default(cuid())
+  organizationId    String
+  createdById       String
+  hostEmployeeId    String
+  fileId            String
+  totalRows         Int                 @default(0)
+  validRows         Int                 @default(0)
+  errorRows         Int                 @default(0)
+  status            BulkImportJobStatus @default(PREVIEW)
+  errorReportFileId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         User                @relation("BulkImportJobCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  hostEmployee      Employee            @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  file              File                @relation("BulkImportUpload", fields: [fileId], references: [id], onDelete: Cascade)
+  errorReportFile   File?               @relation("BulkImportErrorReport", fields: [errorReportFileId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([createdById])
 }
 
 model EmailVerificationToken {
@@ -863,6 +1517,12 @@ enum UserRole {
   EMPLOYEE
 }
 
+enum LoginProvider {
+  PASSWORD
+  GOOGLE
+  MAGIC_LINK
+}
+
 enum InvitationStatus {
   PENDING
   APPROVED
@@ -872,10 +1532,147 @@ enum InvitationStatus {
   EXPIRED
 }
 
+enum InvitationVisitorStatus {
+  INVITED
+  PREREGISTERED
+  CHECKED_IN
+  NO_SHOW
+  CANCELLED
+}
+
+enum InvitationSeriesStatus {
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum BulkImportJobStatus {
+  PREVIEW
+  CONFIRMED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum PreRegistrationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum VehicleType {
+  CAR
+  BIKE
+  EV
+  OTHER
+}
+
+enum ParkingSlotType {
+  CAR
+  BIKE
+  EV
+  ACCESSIBLE
+  RESERVED
+  VIP
+}
+
+enum ParkingAssignmentStatus {
+  RESERVED
+  OCCUPIED
+  RELEASED
+  NO_SHOW
+  OVERSTAY
+}
+
+enum ParkingEventType {
+  ENTRY
+  EXIT
+}
+
+enum ParkingEventSource {
+  MANUAL
+  QR
+}
+
 enum CheckInStatus {
   CHECKED_IN
   CHECKED_OUT
   OVERSTAYED
+}
+
+enum EmergencyType {
+  REAL
+  DRILL
+}
+
+enum EmergencyKind {
+  FIRE
+  EARTHQUAKE
+  SECURITY
+  MEDICAL
+  OTHER
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  ALL_CLEAR
+  CLOSED
+}
+
+enum FeedbackCategory {
+  WAIT_TIME
+  STAFF
+  PROCESS
+  FACILITIES
+  PARKING
+}
+
+enum FeedbackChannel {
+  EMAIL
+  KIOSK
+  QR
+  GENERIC_QR
+}
+
+enum FeedbackSource {
+  EMAIL
+  KIOSK
+  QR
+  GENERIC_QR
+}
+
+enum MusterSubjectType {
+  VISITOR
+  CONTRACTOR
+  EMPLOYEE_OPTIONAL
+}
+
+enum MusterAccountStatus {
+  UNACCOUNTED
+  SAFE
+  MISSING
+  HOSPITAL
+}
+
+enum EmergencyRecipientType {
+  USER
+  VISITOR
+  INTEGRATION
+}
+
+enum EmergencyDeliveryKind {
+  ALERT
+  ALL_CLEAR
+}
+
+enum EmergencyDeliveryStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
 }
 
 enum ApprovalStatus {
@@ -896,6 +1693,10 @@ enum NotificationStatus {
   PENDING
   SENT
   FAILED
+  OPENED
+  BOUNCED
+  SPAM
+  BLOCKED
 }
 
 enum SecuritySeverity {

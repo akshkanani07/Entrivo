@@ -37,6 +37,14 @@ interface ScheduledItem {
   time: string;
   purpose: string;
   isBlacklisted: boolean;
+  vehicleId?: string | null;
+  vehicleType?: string | null;
+}
+
+interface ParkingSlotOption {
+  id: string;
+  label: string;
+  type: string;
 }
 
 interface ActiveItem {
@@ -51,10 +59,12 @@ interface ActiveItem {
 export function CheckinTerminalClient({
   scheduledInvitations,
   activeCheckIns,
+  parkingSlots,
   initialToken,
 }: {
   scheduledInvitations: ScheduledItem[];
   activeCheckIns: ActiveItem[];
+  parkingSlots: ParkingSlotOption[];
   initialToken?: string;
 }) {
   const router = useRouter();
@@ -67,6 +77,7 @@ export function CheckinTerminalClient({
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState<string | null>(null);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
+  const [parkingSlotByInvitation, setParkingSlotByInvitation] = useState<Record<string, string>>({});
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   useEffect(() => {
@@ -89,6 +100,7 @@ export function CheckinTerminalClient({
           invitationId,
           consentGiven: true,
           consentVersion: "v1.0",
+          parkingSlotId: parkingSlotByInvitation[invitationId] || undefined,
         }),
       });
 
@@ -96,6 +108,7 @@ export function CheckinTerminalClient({
       if (!res.ok) {
         throw new Error(data.error || "Check-in failed");
       }
+      if (data.warnings?.length) toast.warning(data.warnings.join(" "));
 
       try {
         void confetti({
@@ -121,6 +134,9 @@ export function CheckinTerminalClient({
         hostOffice: checkInRecord?.host?.office || checkInRecord?.hostEmployee?.office?.name,
         photoUrl: checkInRecord?.visitor?.avatarUrl || checkInRecord?.photoUrl,
         issueDate: formatDateTime(checkInRecord?.checkInTime || new Date()),
+        parkingSlot: checkInRecord?.parkingSlot
+          ? `${checkInRecord.parkingSlot.lotName} / ${checkInRecord.parkingSlot.code}`
+          : undefined,
       });
 
       toast.success(`Check-in successful! Badge ${bNum} issued for ${vName}.`);
@@ -320,6 +336,22 @@ export function CheckinTerminalClient({
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
                     <span className="text-[11px] font-mono text-indigo-400">{item.token}</span>
+                    <div className="flex items-center gap-2">
+                    {item.vehicleId && (
+                      <select
+                        aria-label={`Parking slot for ${item.visitorName}`}
+                        value={parkingSlotByInvitation[item.id] || ""}
+                        onChange={(event) => setParkingSlotByInvitation((current) => ({ ...current, [item.id]: event.target.value }))}
+                        className="max-w-40 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[10px] text-white"
+                      >
+                        <option value="">No parking</option>
+                        {parkingSlots.filter((slot) =>
+                          slot.type === (item.vehicleType === "BIKE" ? "BIKE" : item.vehicleType === "EV" ? "EV" : "CAR") ||
+                          slot.type === "RESERVED" ||
+                          slot.type === "VIP"
+                        ).map((slot) => <option key={slot.id} value={slot.id}>{slot.label}</option>)}
+                      </select>
+                    )}
                     <button
                       onClick={() => handleCheckIn(item.id)}
                       disabled={loadingId === item.id}
@@ -337,6 +369,7 @@ export function CheckinTerminalClient({
                         </>
                       )}
                     </button>
+                    </div>
                   </div>
                 </div>
               ))

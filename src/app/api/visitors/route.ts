@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { requiredString, optionalString, requiredEmail } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
+import { maskIdNumber } from "@/lib/preregistration";
 
 const createVisitorSchema = z.object({
   name: requiredString("Name is required"),
@@ -86,7 +87,13 @@ export async function GET(request: Request) {
         company: v.company,
         avatarUrl: v.avatarUrl,
         idProofType: v.idProofType,
-        idProofNumber: v.idProofNumber,
+        idProofNumber:
+          v.idProofNumberMasked ||
+          (v.idProofNumber
+            ? v.idProofNumber.includes(":")
+              ? "Stored securely"
+              : maskIdNumber(v.idProofNumber)
+            : null),
         isBlacklisted: v.isBlacklisted,
         blacklistReason: v.blacklistReason,
         visitorType: v.visitorType,

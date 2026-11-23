@@ -21,8 +21,12 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `visitors.write` | ✅ | ✅ | ✅ | ❌ | ❌ |
 | `visitors.delete` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `invitations.create` | ✅ | ✅ | ✅ | ❌ | ✅ |
+| `invitations.bulk` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `invitations.series.manage` | ✅ | ✅ | ✅ | ❌ | ✅ (own series) |
 | `invitations.read.all` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `invitations.read.own` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `preregistration.read` | ✅ | ✅ | ✅ | ❌ | ✅ (own invitations) |
+| `preregistration.manage` | ✅ | ✅ | ✅ | ❌ | ✅ (own invitations) |
 | `walkin.create` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `checkin.perform` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `checkout.perform` | ✅ | ✅ | ✅ | ✅ | ❌ |
@@ -45,6 +49,10 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `meetingRooms.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `reports.view` | ✅ | ✅ | ✅ | ❌ | ❌ |
 | `reports.export` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `feedback.read` | ✅ | ✅ | ✅ | ❌ | ✅ (own hosted visits) |
+| `feedback.manage` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `analytics.view` | ✅ | ✅ | ✅ | ❌ | ✅ (own hosted visits) |
+| `analytics.export` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `sessions.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `notifications.self` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `notifications.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
@@ -52,6 +60,15 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `apikeys.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `webhooks.read` | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `webhooks.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `parking.read` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `parking.assign` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `parking.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `deliveries.log` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `deliveries.read.own` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `deliveries.read.all` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `contractors.read` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `contractors.manage` | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `compliance.override` | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
@@ -78,7 +95,19 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/invitations` | GET | `invitations.read.all` or `invitations.read.own` | API `requireAnyPermission` |
 | `/api/invitations` | POST | `invitations.create` | API `requirePermission` |
 | `/api/invitations` | PATCH, DELETE | `invitations.create` (EMPLOYEE scoped to own) | API `requirePermission` |
+| `/api/invitations/group` | POST | `invitations.create` | API `requirePermission` + organization group-size policy |
+| `/api/invitations/group/template` | GET | `invitations.create` | API `requirePermission` + rate limit |
+| `/api/invitations/group/:id` | GET | `invitations.read.all` or `invitations.read.own`; POST `checkin.perform` | API permission + organization scope |
+| `/api/invitations/bulk` | GET, POST | `invitations.bulk` | API `requirePermission` + upload rate limit |
+| `/api/invitations/bulk/:id` | GET, POST | `invitations.bulk` | API `requirePermission` + organization-scoped job |
+| `/api/invitations/bulk/:id/report` | GET | `invitations.bulk` | API `requirePermission` + organization-scoped file |
+| `/api/invitation-series` | GET, POST | `invitations.series.manage` | API `requirePermission` + organization scope |
+| `/api/invitation-series/:id` | PATCH | `invitations.series.manage` | API `requirePermission` + organization scope |
+| `/api/invitation-series/:id/calendar` | GET | `invitations.series.manage` | API `requirePermission` + organization scope |
+| `/api/visitors/:id/vendor` | PATCH | `visitors.write` | API `requirePermission` + organization scope |
 | `/api/invitations/verify-qr` | POST | `qr.verify` | API `requirePermission` |
+| `/api/preregistrations` | GET | `preregistration.read` (+ invitations scoped to own host for employees) | API `requirePermission` + organization scope |
+| `/api/preregistrations/:id` | PATCH | `preregistration.manage` (+ invitations scoped to own host for employees) | API `requirePermission` + organization scope |
 | `/api/employees` | GET | `employees.read` | API `requirePermission` |
 | `/api/employees` | POST, PUT, DELETE | `employees.manage` (+ escalation checks) | API `requirePermission` |
 | `/api/organization` | GET | `requireUser` | API `requireUser` |
@@ -91,6 +120,18 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/security/blacklist` | GET | `blacklist.read` | API `requirePermission` |
 | `/api/security/blacklist` | POST, DELETE | `blacklist.manage` | API `requirePermission` |
 | `/api/security/logs` | GET | `securityLogs.read` | API `requirePermission` |
+| `/api/parking/lots` | GET | `parking.read` | API permission + organization scope |
+| `/api/parking/lots` | POST, PATCH | `parking.manage` | API permission + Zod + rate limit + audit |
+| `/api/parking/slots` | POST | `parking.manage` | API permission + Zod + rate limit + audit |
+| `/api/parking/slots/:id` | PATCH | `parking.manage` | API permission + Zod + rate limit + audit |
+| `/api/parking/availability`, `/api/parking/vehicles` | GET | `parking.read` | API permission + organization scope |
+| `/api/parking/assignments` | GET | `parking.read` | API permission + organization scope |
+| `/api/parking/assignments` | POST | `parking.assign` | API permission + organization scope; rate limited and audited |
+| `/api/parking/assignments/:id` | PATCH | `parking.assign` | API permission + organization scope; rate limited and audited |
+| `/api/parking/events` | POST | `parking.assign` | API permission + organization scope; rate limited and audited |
+| `/api/parking/permits` | GET | `parking.read` | API permission + organization scope |
+| `/api/parking/permits` | POST | `parking.manage` | API permission + Zod + rate limit + audit |
+| `/api/parking/report` | GET | `reports.export` | API permission + organization scope; rate limited and audited |
 | `/api/reports/export` | GET | `reports.export` | API `requirePermission` |
 | `/api/dashboard/stats` | GET | `dashboard.view` | API `requirePermission` |
 | `/api/notifications/templates` | GET, POST, PUT, DELETE | `templates.manage` | API `requirePermission` |

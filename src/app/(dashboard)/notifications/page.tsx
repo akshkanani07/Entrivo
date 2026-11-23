@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 import prisma from "@/lib/db";
 import { requirePagePermission, can } from "@/lib/rbac";
 import { BellRing, ShieldCheck, Mail, Send, Bell, Share2 } from "lucide-react";
@@ -73,13 +74,23 @@ export default async function NotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          Enterprise Notification Platform
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Multi-channel delivery: Desktop & Mobile Chrome Push, Mailjet Email, Slack Block Kit, Microsoft Teams & In-App Alerts.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
+            Enterprise Notification Platform
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Multi-channel delivery: Desktop & Mobile Chrome Push, Mailjet Email, Slack Block Kit, Microsoft Teams & In-App Alerts.
+          </p>
+        </div>
+        {canManage && (
+          <Link
+            href="/notifications/email-preview"
+            className="shrink-0 rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+          >
+            Email preview
+          </Link>
+        )}
       </div>
 
       {/* 1. Push Subscription Manager */}

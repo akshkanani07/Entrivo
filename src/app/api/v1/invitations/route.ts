@@ -12,6 +12,9 @@ import { audit } from "@/services/audit/audit.service";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 import { syncInvitationCalendar } from "@/services/calendar/calendar.service";
 import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
+import { getOrgPolicy } from "@/lib/settings-registry";
+import { createPreRegistrationCredential } from "@/services/preregistration/preregistration.service";
+import { preRegistrationTokenFingerprint } from "@/lib/preregistration";
 
 const createInvitationSchema = z.object({
   visitorName: requiredString("visitorName is required"),
@@ -60,6 +63,13 @@ export async function GET(request: Request) {
         passUrl: true,
         visitor: {
           select: { id: true, name: true, email: true, phone: true, company: true },
+        },
+        visitors: {
+          select: {
+            status: true,
+            qrToken: true,
+            visitor: { select: { id: true, name: true, email: true, phone: true, company: true } },
+          },
         },
         hostEmployee: {
           select: { id: true, user: { select: { name: true, email: true } } },
@@ -179,44 +189,78 @@ export async function POST(request: Request) {
   const qrToken = generateVisitorToken("INV");
   const appUrl = getAppUrl();
   const passUrl = `${appUrl}/pass/${qrToken}`;
+  const { policy, timezone } = await getOrgPolicy(organizationId);
+  const effectiveEndTime = endTime || "11:00";
+  const preRegistrationCredential = createPreRegistrationCredential(
+    new Date(scheduledDate),
+    effectiveEndTime,
+    policy.preRegistrationTokenTtlHours,
+    timezone
+  );
+  const preRegistrationUrl = `${appUrl}/preregister/${preRegistrationCredential.token}`;
 
-  const invitation = await prisma.invitation.create({
-    data: {
-      organizationId,
-      hostEmployeeId: hostEmployee.id,
-      visitorId: visitor.id,
-      meetingRoomId: meetingRoomId || null,
-      scheduledDate: new Date(scheduledDate),
-      startTime: startTime || "10:00",
-      endTime: endTime || "11:00",
-      purpose: purpose.trim(),
-      notes: notes?.trim() || null,
-      qrToken,
-      passUrl,
-      status: requiresApproval ? "PENDING" : "APPROVED",
-    },
-    include: {
-      visitor: true,
-      hostEmployee: { include: { user: true } },
-      meetingRoom: true,
-    },
-  });
-
-  if (requiresApproval) {
-    await prisma.approval.create({
+  const { invitation, preRegistration } = await prisma.$transaction(async (tx) => {
+    const invitation = await tx.invitation.create({
       data: {
-        invitationId: invitation.id,
-        approverId: hostEmployee.id,
-        step: "HOST",
-        status: "PENDING",
+        organizationId,
+        hostEmployeeId: hostEmployee.id,
+        visitorId: visitor.id,
+        meetingRoomId: meetingRoomId || null,
+        scheduledDate: new Date(scheduledDate),
+        startTime: startTime || "10:00",
+        endTime: effectiveEndTime,
+        purpose: purpose.trim(),
+        notes: notes?.trim() || null,
+        qrToken,
+        passUrl,
+        status: requiresApproval ? "PENDING" : "APPROVED",
+        visitors: {
+          create: {
+            visitorId: visitor.id,
+            status: "INVITED",
+            qrToken,
+          },
+        },
+      },
+      include: {
+        visitor: true,
+        visitors: {
+          include: {
+            visitor: { select: { id: true, name: true, email: true, phone: true, company: true } },
+          },
+        },
+        hostEmployee: { include: { user: true } },
+        meetingRoom: true,
       },
     });
-  }
+
+    if (requiresApproval) {
+      await tx.approval.create({
+        data: {
+          invitationId: invitation.id,
+          approverId: hostEmployee.id,
+          step: "HOST",
+          status: "PENDING",
+        },
+      });
+    }
+
+    const preRegistration = await tx.preRegistration.create({
+      data: {
+        organizationId,
+        invitationId: invitation.id,
+        visitorId: visitor.id,
+        tokenHash: preRegistrationCredential.tokenHash,
+        tokenExpiresAt: preRegistrationCredential.tokenExpiresAt,
+        locale: "en",
+      },
+    });
+    return { invitation, preRegistration };
+  });
 
   // Dispatch Email Notification with .ics Attachment
-  await notify(
-    requiresApproval ? NotificationEvent.APPROVAL_REQUESTED : NotificationEvent.VISITOR_INVITED,
-    {
+  if (requiresApproval) {
+    await notify(NotificationEvent.APPROVAL_REQUESTED, {
       organizationId,
       visitorName: visitor.name,
       visitorEmail: visitor.email,
@@ -230,8 +274,32 @@ export async function POST(request: Request) {
       qrPassUrl: passUrl,
       purpose: invitation.purpose,
       entityId: invitation.id,
-    }
-  ).catch(console.error);
+    }).catch(console.error);
+  }
+  await notify(NotificationEvent.PREREG_REQUESTED, {
+    organizationId,
+    visitorName: visitor.name,
+    visitorEmail: visitor.email,
+    visitorCompany: visitor.company || undefined,
+    hostName: hostEmployee.user.name,
+    hostEmail: hostEmployee.user.email,
+    hostUserId: hostEmployee.userId,
+    date: new Date(scheduledDate).toLocaleDateString(),
+    time: `${invitation.startTime} - ${invitation.endTime}`,
+    location: invitation.meetingRoom?.name || hostEmployee.office?.name || "Main Building",
+    qrPassUrl: passUrl,
+    preRegistrationUrl,
+    purpose: invitation.purpose,
+    entityId: invitation.id,
+  }).catch(console.error);
+
+  await audit({
+    organizationId,
+    action: "PREREG_LINK_CREATED",
+    entity: "PREREGISTRATION",
+    entityId: preRegistration.id,
+    details: { tokenFingerprint: preRegistrationTokenFingerprint(preRegistrationCredential.token) },
+  });
 
   // Dispatch Outbound Webhook
   dispatchWebhookEvent(

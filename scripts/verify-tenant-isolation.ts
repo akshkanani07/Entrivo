@@ -27,6 +27,7 @@ const PUBLIC_WHITELIST = new Set([
   "/api/auth/google",
   "/api/auth/accept-terms",
   "/api/invitations/verify-qr",
+  "/api/public/preregister/[token]",
   "/api/kiosk/pair",
   "/api/v1/openapi.json",
   "/api/health",
@@ -36,7 +37,7 @@ interface RouteAuditInfo {
   routePath: string;
   filePath: string;
   methods: string[];
-  securityType: "PUBLIC" | "CRON" | "SIGNED_URL" | "USER_SELF" | "KIOSK" | "API_V1" | "TENANT_SESSION";
+  securityType: "PUBLIC" | "CRON" | "SIGNED_URL" | "WEBHOOK" | "USER_SELF" | "KIOSK" | "API_V1" | "TENANT_SESSION";
   hasTenantScoping: boolean;
   hasRoleOrScopeDenial: boolean;
 }
@@ -70,6 +71,8 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
         securityType = "CRON";
       } else if (routePath === "/api/files/download") {
         securityType = "SIGNED_URL";
+      } else if (routePath === "/api/webhooks/mailjet") {
+        securityType = "WEBHOOK";
       } else if (
         routePath === "/api/integrations/calendar/google/callback" ||
         routePath === "/api/integrations/calendar/outlook/callback" ||
@@ -100,6 +103,8 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
         hasTenantScoping = code.includes("verifyCronSecret") || code.includes("CRON_SECRET");
       } else if (securityType === "SIGNED_URL") {
         hasTenantScoping = code.includes("createHmac") || code.includes("sig");
+      } else if (securityType === "WEBHOOK") {
+        hasTenantScoping = code.includes("organizationId") && code.includes("notification.update");
       } else if (securityType === "USER_SELF") {
         hasTenantScoping =
           code.includes("user.id") ||
@@ -116,6 +121,7 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
           code.includes("organizationId") ||
           code.includes("requireOrg") ||
           code.includes("orgCheck") ||
+          code.includes("authorizeMuster") ||
           code.includes("requirePermission");
       }
 
@@ -127,6 +133,8 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
         hasRoleOrScopeDenial = code.includes("verifyCronSecret") || code.includes("CRON_SECRET");
       } else if (securityType === "SIGNED_URL") {
         hasRoleOrScopeDenial = code.includes("createHmac") || code.includes("sig");
+      } else if (securityType === "WEBHOOK") {
+        hasRoleOrScopeDenial = code.includes("isAuthorized") && code.includes("MAILJET_WEBHOOK_SECRET");
       } else if (securityType === "USER_SELF") {
         hasRoleOrScopeDenial =
           code.includes("requireUser") ||
@@ -148,7 +156,8 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
           code.includes("requirePermission") ||
           code.includes("requireAnyPermission") ||
           code.includes("requireUser") ||
-          code.includes("requireRole");
+          code.includes("requireRole") ||
+          code.includes("authorizeMuster");
       }
 
       results.push({
@@ -163,6 +172,93 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
   }
 
   return results;
+}
+
+function verifyPublicPreRegistrationBoundary(routes: RouteAuditInfo[]) {
+  const route = routes.find((candidate) => candidate.routePath === "/api/public/preregister/[token]");
+  if (!route || route.securityType !== "PUBLIC") {
+    throw new Error("Pre-registration token API must be explicitly classified as public.");
+  }
+
+  const source = fs.readFileSync(route.filePath, "utf-8");
+  const requiredGuards = [
+    "hashPreRegistrationToken(token)",
+    "record.organizationId !== record.invitation.organizationId",
+    "record?.invitation.visitors.some((member) => member.visitorId === record.visitorId)",
+    "isPreRegistrationTokenUsable(token, record)",
+    "maxRequests: 20",
+    "tokenExpiresAt: { gt: new Date() }",
+  ];
+  const missing = requiredGuards.filter((guard) => !source.includes(guard));
+  if (missing.length) {
+    throw new Error(
+      `Pre-registration token API is missing boundary checks: ${missing.join(", ")}`
+    );
+  }
+
+  console.log("  [PUBLIC]  Pre-registration token route: hash, expiry, state, rate, invitation-member, and tenant-link checks verified.");
+}
+
+function verifyParkingTenantBoundary(routes: RouteAuditInfo[]) {
+  const parkingRoutes = routes.filter((route) => route.routePath.startsWith("/api/parking/"));
+  if (!parkingRoutes.length) throw new Error("Parking API routes were not discovered.");
+
+  for (const route of parkingRoutes) {
+    const source = fs.readFileSync(route.filePath, "utf8");
+    const requiredGuards = ["requirePermission", "requireOrg"];
+    const missingGuards = requiredGuards.filter((guard) => !source.includes(guard));
+    if (missingGuards.length) {
+      throw new Error(`${route.routePath} is missing parking tenant/RBAC guards: ${missingGuards.join(", ")}.`);
+    }
+    if (route.methods.some((method) => ["POST", "PATCH", "PUT", "DELETE"].includes(method))) {
+      for (const guard of ["checkRateLimit", "audit("]) {
+        if (!source.includes(guard)) throw new Error(`${route.routePath} is missing ${guard}.`);
+      }
+    }
+  }
+  console.log(`  [PARKING] ${parkingRoutes.length} routes include tenant, RBAC, and mutation controls.`);
+}
+
+function verifyDeliveryTenantBoundary(routes: RouteAuditInfo[]) {
+  const deliveryRoutes = routes.filter((route) => route.routePath.startsWith("/api/deliveries/"));
+  if (!deliveryRoutes.length) throw new Error("Delivery API routes were not discovered.");
+
+  for (const route of deliveryRoutes) {
+    const source = fs.readFileSync(route.filePath, "utf8");
+    for (const guard of ["requireOrg", "deliveries."]) {
+      if (!source.includes(guard)) {
+        throw new Error(`${route.routePath} is missing delivery tenant/RBAC guard ${guard}.`);
+      }
+    }
+    if (route.methods.some((method) => ["POST", "PATCH", "PUT", "DELETE"].includes(method))) {
+      if (!source.includes("checkRateLimit") || !source.includes("audit(")) {
+        throw new Error(`${route.routePath} is missing delivery rate-limit or audit controls.`);
+      }
+    }
+  }
+  console.log(`  [DELIVERY] ${deliveryRoutes.length} routes include tenant, RBAC, and mutation controls.`);
+}
+
+function verifyContractorTenantBoundary(routes: RouteAuditInfo[]) {
+  const contractorRoutes = routes.filter((route) =>
+    route.routePath.startsWith("/api/contractors/")
+  );
+  if (!contractorRoutes.length) throw new Error("Contractor API routes were not discovered.");
+
+  for (const route of contractorRoutes) {
+    const source = fs.readFileSync(route.filePath, "utf8");
+    for (const guard of ["requireOrg", "contractors."]) {
+      if (!source.includes(guard)) {
+        throw new Error(`${route.routePath} is missing contractor tenant/RBAC guard ${guard}.`);
+      }
+    }
+    if (route.methods.some((method) => ["POST", "PATCH", "PUT", "DELETE"].includes(method))) {
+      if (!source.includes("checkRateLimit") || !source.includes("audit(")) {
+        throw new Error(`${route.routePath} is missing contractor rate-limit or audit controls.`);
+      }
+    }
+  }
+  console.log(`  [CONTRACTORS] ${contractorRoutes.length} routes include tenant, RBAC, and mutation controls.`);
 }
 
 /**
@@ -443,6 +539,10 @@ async function runLiveTenantAttacks() {
 async function main() {
   const routes = autoDiscoverApiRoutes(API_DIR);
   verifyAllRoutesSecurity(routes);
+  verifyPublicPreRegistrationBoundary(routes);
+  verifyParkingTenantBoundary(routes);
+  verifyDeliveryTenantBoundary(routes);
+  verifyContractorTenantBoundary(routes);
 
   // Probe live target server if accessible
   let isServerRunning = false;

@@ -11,6 +11,7 @@ interface ApprovalItem {
   status: "PENDING" | "APPROVED" | "REJECTED";
   step: string;
   visitorName: string;
+  visitorNames: string[];
   visitorCompany?: string | null;
   visitorType: string;
   typeColor: string;
@@ -89,6 +90,9 @@ export function ApprovalsClient({ initialApprovals }: { initialApprovals: Approv
                     Host: <strong className="text-white">{app.hostName}</strong> • {formatDate(app.date)} at {app.time}
                   </p>
                   <p className="text-xs text-slate-400 font-medium">Purpose: {app.purpose}</p>
+                  {app.visitorNames.length > 1 && (
+                    <p className="text-xs text-slate-400">Group: {app.visitorNames.join(", ")}</p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">

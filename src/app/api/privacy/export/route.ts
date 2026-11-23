@@ -66,6 +66,30 @@ export async function GET(request: Request) {
             createdAt: true,
           },
         },
+        vehicles: {
+          select: {
+            id: true,
+            plateNumber: true,
+            plateDisplay: true,
+            type: true,
+            make: true,
+            color: true,
+            parkingAssignments: {
+              select: {
+                status: true,
+                reservedFrom: true,
+                reservedUntil: true,
+                enteredAt: true,
+                exitedAt: true,
+                slot: { select: { code: true, lot: { select: { name: true } } } },
+              },
+            },
+            parkingEvents: {
+              select: { type: true, gate: true, at: true, source: true },
+              orderBy: { at: "desc" },
+            },
+          },
+        },
       },
     });
 
@@ -227,6 +251,16 @@ export async function GET(request: Request) {
         hostEmail: ci.hostEmployee?.user?.email || null,
         office: ci.hostEmployee?.office?.name || null,
         department: ci.hostEmployee?.department?.name || null,
+      })),
+      vehicles: visitor.vehicles.map((vehicle) => ({
+        id: vehicle.id,
+        plateNumber: vehicle.plateNumber,
+        plateDisplay: vehicle.plateDisplay,
+        type: vehicle.type,
+        make: vehicle.make,
+        color: vehicle.color,
+        parkingAssignments: vehicle.parkingAssignments,
+        parkingEvents: vehicle.parkingEvents,
       })),
       invitationsHistory: visitor.invitations.map((inv) => ({
         id: inv.id,

@@ -42,6 +42,8 @@ describe("Organizational Settings & Policy Schemas", () => {
 
     expect(policy.workingHoursEnforcement).toBe("WARN");
     expect(policy.holidayEnforcement).toBe("WARN");
+    expect(policy.preRegistrationRequired).toBe("WARN");
+    expect(OrgPolicySchema.parse({ preRegistrationRequired: "OFF" }).preRegistrationRequired).toBe("OFF");
   });
 
   it("rejects out-of-range numerical bounds", () => {

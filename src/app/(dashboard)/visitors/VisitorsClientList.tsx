@@ -38,6 +38,7 @@ interface VisitorItem {
   idProofType?: string | null;
   idProofNumber?: string | null;
   isBlacklisted: boolean;
+  isRegularVendor: boolean;
   blacklistReason?: string | null;
   typeName: string;
   typeColor: string;
@@ -51,9 +52,11 @@ interface VisitorItem {
 export function VisitorsClientList({
   initialVisitors,
   visitorTypes,
+  canManageVisitors,
 }: {
   initialVisitors: VisitorItem[];
   visitorTypes: { id: string; name: string; badgeColor: string }[];
+  canManageVisitors: boolean;
 }) {
   const router = useRouter();
   const [visitors, setVisitors] = useState<VisitorItem[]>(initialVisitors);
@@ -175,6 +178,25 @@ export function VisitorsClientList({
       toast.info(newStatus ? `Added ${visitor.name} to Security Watchlist` : `Removed ${visitor.name} from Security Watchlist`);
     } catch (err: any) {
       toast.error(err.message || "Failed to update security flag");
+    }
+  };
+
+  const toggleRegularVendor = async (visitor: VisitorItem) => {
+    const isRegularVendor = !visitor.isRegularVendor;
+    try {
+      const response = await fetch(`/api/visitors/${visitor.id}/vendor`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isRegularVendor }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to update vendor status.");
+      setVisitors((current) =>
+        current.map((item) => item.id === visitor.id ? { ...item, isRegularVendor } : item)
+      );
+      toast.success(isRegularVendor ? "Marked as a regular vendor." : "Removed from regular vendors.");
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : "Failed to update vendor status.");
     }
   };
 
@@ -301,6 +323,11 @@ export function VisitorsClientList({
                             {v.isBlacklisted && (
                               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-950 text-rose-400 border border-rose-800">
                                 Watchlisted
+                              </span>
+                            )}
+                            {v.isRegularVendor && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                                Regular vendor
                               </span>
                             )}
                           </div>
@@ -431,6 +458,21 @@ export function VisitorsClientList({
                         >
                           {v.isBlacklisted ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                         </button>
+
+                        {canManageVisitors && (
+                          <button
+                            type="button"
+                            onClick={() => toggleRegularVendor(v)}
+                            className={`rounded-lg border px-2 py-1 text-[10px] transition-colors ${
+                              v.isRegularVendor
+                                ? "border-indigo-700 bg-indigo-950 text-indigo-200"
+                                : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                            }`}
+                            title={v.isRegularVendor ? "Remove regular vendor status" : "Mark as regular vendor"}
+                          >
+                            {v.isRegularVendor ? "Vendor" : "Mark vendor"}
+                          </button>
+                        )}
 
                         {/* Delete Visitor */}
                         <button

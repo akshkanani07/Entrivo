@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { hashToken, hashPassword } from "@/lib/auth";
 import { passwordPolicyService } from "@/services/auth/password-policy.service";
 import { emailService } from "@/services/email/mailjet.service";
+import { generateResetPasswordConfirmationEmail } from "@/services/email/email.templates";
 import { requiredString } from "@/lib/zod-helpers";
 
 const resetPasswordSchema = z.object({
@@ -133,31 +134,16 @@ export async function POST(request: Request) {
     // Send security notification email (fire-and-forget)
     emailService
       .sendEmail(
-        {
-          to: user.email,
-          recipientName: user.name,
-          subject: "Your Entrivo Password Was Changed",
-          htmlContent: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
-            <div style="margin-bottom: 24px; text-align: center;">
-              <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
-              <p style="font-size: 11px; color: #818cf8; margin-top: 4px; font-weight: 600; text-transform: uppercase;">Security Alert</p>
-            </div>
-            <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Password Reset Confirmation</h2>
-            <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px;">
-              Hello ${user.name}, the password for your Entrivo workplace terminal was changed on ${new Date().toUTCString()}.
-            </p>
-            <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 20px;">
-              For your security, all active sessions on other browsers and devices have been logged out.
-            </p>
-            <p style="font-size: 11px; color: #f43f5e; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px; margin: 0;">
-              If you did not make this change, please contact your security administrator immediately.
-            </p>
-          </div>
-        `,
-          textContent: `Your Entrivo password was changed on ${new Date().toUTCString()}. All active sessions were revoked.`,
-        },
-        user.id
+        generateResetPasswordConfirmationEmail({
+          email: user.email,
+          name: user.name,
+          organizationName: user.organization?.name,
+          timeZone: user.organization?.timezone,
+          changedAt: new Date(),
+        }),
+        user.id,
+        user.organizationId || undefined,
+        "PASSWORD_RESET_CONFIRMATION"
       )
       .catch((err) => {
         console.error("[ResetPassword] Email notification error:", err);

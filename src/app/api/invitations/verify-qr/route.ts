@@ -36,31 +36,45 @@ export async function POST(request: Request) {
     }
 
     // Look up strictly by qrToken and organizationId (no raw ID fallback)
-    const invitation = await prisma.invitation.findFirst({
+    const membership = await prisma.invitationVisitor.findFirst({
       where: {
         qrToken: cleanToken,
-        organizationId: orgId,
+        invitation: { organizationId: orgId },
       },
       include: {
         visitor: { include: { visitorType: true } },
-        hostEmployee: { include: { user: true, office: true } },
-        meetingRoom: true,
-        checkIns: {
-          orderBy: { checkInTime: "desc" },
-          take: 1,
+        invitation: {
+          include: {
+            hostEmployee: { include: { user: true, office: true } },
+            meetingRoom: true,
+            checkIns: { orderBy: { checkInTime: "desc" } },
+            preRegistrations: {
+              select: { visitorId: true, status: true, tokenExpiresAt: true },
+            },
+          },
         },
       },
     });
 
-    if (!invitation) {
+    if (!membership || ["CANCELLED", "NO_SHOW"].includes(membership.status)) {
       return NextResponse.json(
         { success: false, error: "Invalid, expired, or unauthorized QR pass for this organization." },
         { status: 404 }
       );
     }
+    const invitation = membership.invitation;
 
-    const isBlacklisted = invitation.visitor.isBlacklisted;
-    const activeCheckIn = invitation.checkIns.find((c) => c.status === "CHECKED_IN");
+    const isBlacklisted = membership.visitor.isBlacklisted;
+    const activeCheckIn = invitation.checkIns.find(
+      (checkIn) => checkIn.visitorId === membership.visitorId && checkIn.status === "CHECKED_IN"
+    );
+    const preRegistration = invitation.preRegistrations.find(
+      (item) => item.visitorId === membership.visitorId
+    );
+    const isPreRegistered =
+      Boolean(preRegistration) &&
+      ["SUBMITTED", "APPROVED"].includes(preRegistration?.status || "") &&
+      (preRegistration?.tokenExpiresAt.getTime() ?? 0) > Date.now();
 
     return NextResponse.json({
       success: true,
@@ -71,17 +85,19 @@ export async function POST(request: Request) {
         endTime: invitation.endTime,
         purpose: invitation.purpose,
         status: invitation.status,
+        isPreRegistered,
+        preRegistrationStatus: preRegistration?.status ?? null,
         visitor: {
-          id: invitation.visitor.id,
-          name: invitation.visitor.name,
-          email: invitation.visitor.email,
-          phone: invitation.visitor.phone,
-          company: invitation.visitor.company,
-          avatarUrl: invitation.visitor.avatarUrl,
-          visitorTypeName: invitation.visitor.visitorType?.name,
-          badgeColor: invitation.visitor.visitorType?.badgeColor || "#6366f1",
+          id: membership.visitor.id,
+          name: membership.visitor.name,
+          email: membership.visitor.email,
+          phone: membership.visitor.phone,
+          company: membership.visitor.company,
+          avatarUrl: membership.visitor.avatarUrl,
+          visitorTypeName: membership.visitor.visitorType?.name,
+          badgeColor: membership.visitor.visitorType?.badgeColor || "#6366f1",
           isBlacklisted,
-          blacklistReason: invitation.visitor.blacklistReason,
+          blacklistReason: membership.visitor.blacklistReason,
         },
         host: {
           id: invitation.hostEmployee.id,

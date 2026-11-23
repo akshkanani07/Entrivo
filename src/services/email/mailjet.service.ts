@@ -1,6 +1,14 @@
 import "server-only";
+import { NotificationChannel, NotificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { EmailPayload } from "./email.templates";
+import { logger } from "@/lib/logger";
+import { emailQueue } from "@/lib/queue";
+import { applyEmailBranding, EmailPayload, stripHtml } from "./email.templates";
+
+type EmailRetryOptions = {
+  notificationId?: string;
+  isRetry?: boolean;
+};
 
 export class MailjetEmailService {
   private apiKey: string;
@@ -8,6 +16,10 @@ export class MailjetEmailService {
   private fromEmail: string;
   private fromName: string;
   private isConfigured: boolean;
+
+  isAvailable() {
+    return this.isConfigured;
+  }
 
   constructor() {
     this.apiKey = process.env.MAILJET_API_KEY || "";
@@ -24,89 +36,99 @@ export class MailjetEmailService {
     payload: EmailPayload,
     userId?: string,
     organizationId?: string,
-    eventName = "EMAIL_NOTIFICATION"
+    eventName = "EMAIL_NOTIFICATION",
+    retryOptions: EmailRetryOptions = {}
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    let notificationId = retryOptions.notificationId;
+    let resolvedOrganizationId = organizationId;
+    const textContent = payload.textContent || stripHtml(payload.htmlContent);
+    let completePayload: EmailPayload = { ...payload, textContent };
+
     try {
+      if (!resolvedOrganizationId && userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { organizationId: true },
+        });
+        resolvedOrganizationId = user?.organizationId || undefined;
+      }
+
+      if (resolvedOrganizationId) {
+        const organization = await prisma.organization.findUnique({
+          where: { id: resolvedOrganizationId },
+          select: { name: true, logo: true, contactEmail: true },
+        });
+        if (organization) {
+          completePayload = applyEmailBranding(completePayload, organization);
+        }
+      }
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!payload.to || !emailRegex.test(payload.to)) {
-        const errMsg = `Invalid recipient email address "${payload.to}".`;
-        console.error(`[Email Service] Aborted: ${errMsg}`);
-        if (organizationId) {
-          await prisma.notification.create({
-            data: {
-              organizationId,
-              userId: userId || null,
-              channel: "EMAIL",
-              event: eventName,
-              title: payload.subject,
-              body: payload.textContent || payload.subject,
-              recipient: payload.to || "unknown",
-              status: "FAILED",
-              error: errMsg,
-              lastAttemptAt: new Date(),
-              data: { to: payload.to },
+        return this.fail(
+          "Invalid recipient email address.",
+          completePayload,
+          userId,
+          resolvedOrganizationId,
+          eventName,
+          retryOptions,
+          notificationId,
+          NotificationStatus.FAILED,
+          false
+        );
+      }
+
+      if (resolvedOrganizationId) {
+        const suppression = await prisma.emailSuppression.findUnique({
+          where: {
+            organizationId_email: {
+              organizationId: resolvedOrganizationId,
+              email: payload.to.toLowerCase(),
             },
-          }).catch(() => null);
+          },
+          select: { reason: true },
+        });
+        if (suppression) {
+          return this.fail(
+            `Recipient is suppressed: ${suppression.reason}`,
+            completePayload,
+            userId,
+            resolvedOrganizationId,
+            eventName,
+            { ...retryOptions, isRetry: true },
+            notificationId,
+            NotificationStatus.BLOCKED,
+            false
+          );
         }
-        return { success: false, error: errMsg };
       }
 
       if (!this.isConfigured) {
-        console.log(`[Email Service - Simulated Mailjet Output]`);
-        console.log(`To: ${payload.to} (${payload.recipientName || "Recipient"})`);
-        console.log(`Subject: ${payload.subject}`);
-        if (payload.attachments?.length) {
-          console.log(`Attachments: ${payload.attachments.map((a) => a.filename).join(", ")}`);
-        }
-        console.log(`-------------------------------------------`);
-
-        if (organizationId) {
-          await prisma.notification.create({
-            data: {
-              organizationId,
-              userId: userId || null,
-              channel: "EMAIL",
-              event: eventName,
-              title: payload.subject,
-              body: payload.textContent || payload.subject,
-              recipient: payload.to,
-              status: "SENT",
-              deliveredAt: new Date(),
-              data: {
-                to: payload.to,
-                simulated: true,
-                attachments: payload.attachments?.map((a) => a.filename),
-              },
-            },
-          });
-        }
-
+        logger.info({ eventName }, "[Email Service] Simulated Mailjet delivery");
+        notificationId = await this.saveNotification({
+          payload: completePayload,
+          userId,
+          organizationId: resolvedOrganizationId,
+          eventName,
+          status: NotificationStatus.SENT,
+          notificationId,
+        });
         return { success: true, messageId: `mock-email-${Date.now()}` };
       }
 
-      // Real Mailjet Send API v3.1 call
-      const authHeader = "Basic " + Buffer.from(`${this.apiKey}:${this.secretKey}`).toString("base64");
-      const messageObj: Record<string, any> = {
-        From: {
-          Email: this.fromEmail,
-          Name: this.fromName,
-        },
-        To: [
-          {
-            Email: payload.to,
-            Name: payload.recipientName,
-          },
-        ],
+      const authHeader = `Basic ${Buffer.from(`${this.apiKey}:${this.secretKey}`).toString("base64")}`;
+      const message: Record<string, unknown> = {
+        From: { Email: this.fromEmail, Name: this.fromName },
+        To: [{ Email: payload.to, Name: payload.recipientName }],
         Subject: payload.subject,
-        TextPart: payload.textContent || payload.subject,
+        TextPart: textContent,
         HTMLPart: payload.htmlContent,
       };
-
-      if (payload.attachments && payload.attachments.length > 0) {
-        messageObj.Attachments = payload.attachments.map((att) => ({
-          ContentType: att.contentType,
-          Filename: att.filename,
-          Base64Content: att.base64Content,
+      if (payload.attachments?.length) {
+        message.Attachments = payload.attachments.map((attachment) => ({
+          ContentType: attachment.contentType,
+          Filename: attachment.filename,
+          Base64Content: attachment.base64Content,
         }));
       }
 
@@ -116,74 +138,149 @@ export class MailjetEmailService {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify({ Messages: [messageObj] }),
+        body: JSON.stringify({ Messages: [message] }),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Mailjet API Error:", errorText);
-
-        if (organizationId) {
-          await prisma.notification.create({
-            data: {
-              organizationId,
-              userId: userId || null,
-              channel: "EMAIL",
-              event: eventName,
-              title: payload.subject,
-              body: payload.textContent || payload.subject,
-              recipient: payload.to,
-              status: "FAILED",
-              error: `Mailjet API ${response.status}: ${errorText.slice(0, 300)}`,
-              lastAttemptAt: new Date(),
-              data: { to: payload.to },
-            },
-          });
-        }
-
-        return { success: false, error: `Mailjet HTTP ${response.status}` };
+        const errorText = (await response.text()).slice(0, 300);
+        return this.fail(
+          `Mailjet API ${response.status}: ${errorText}`,
+          completePayload,
+          userId,
+          resolvedOrganizationId,
+          eventName,
+          retryOptions,
+          notificationId,
+          NotificationStatus.FAILED,
+          true
+        );
       }
 
-      const resData = await response.json();
-      if (organizationId) {
-        await prisma.notification.create({
-          data: {
-            organizationId,
-            userId: userId || null,
-            channel: "EMAIL",
-            event: eventName,
-            title: payload.subject,
-            body: payload.textContent || payload.subject,
-            recipient: payload.to,
-            status: "SENT",
-            deliveredAt: new Date(),
-            data: resData,
-          },
-        });
-      }
-
-      return { success: true, messageId: resData?.Messages?.[0]?.To?.[0]?.MessageID?.toString() };
-    } catch (error: any) {
-      console.error("Mailjet Service Exception:", error);
-      if (organizationId) {
-        await prisma.notification.create({
-          data: {
-            organizationId,
-            userId: userId || null,
-            channel: "EMAIL",
-            event: eventName,
-            title: payload.subject,
-            body: payload.textContent || payload.subject,
-            recipient: payload.to,
-            status: "FAILED",
-            error: error?.message || "Mailjet Service Exception",
-            lastAttemptAt: new Date(),
-            data: { to: payload.to },
-          },
-        }).catch(() => null);
-      }
-      return { success: false, error: error?.message || "Delivery exception" };
+      const responseData: unknown = await response.json();
+      const messageId = this.getMessageId(responseData);
+      notificationId = await this.saveNotification({
+        payload: completePayload,
+        userId,
+        organizationId: resolvedOrganizationId,
+        eventName,
+        status: NotificationStatus.SENT,
+        notificationId,
+        messageId,
+        data: responseData,
+      });
+      return { success: true, messageId };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Mailjet delivery failed";
+      logger.error(
+        { eventName, errorName: error instanceof Error ? error.name : "UnknownError" },
+        "[Email Service] Delivery failed"
+      );
+      return this.fail(
+        message,
+        completePayload,
+        userId,
+        resolvedOrganizationId,
+        eventName,
+        retryOptions,
+        notificationId
+      );
     }
+  }
+
+  private getMessageId(response: unknown): string | undefined {
+    if (!response || typeof response !== "object") return undefined;
+    const messages = (response as { Messages?: Array<{ To?: Array<{ MessageID?: string | number }> }> }).Messages;
+    const id = messages?.[0]?.To?.[0]?.MessageID;
+    return id === undefined ? undefined : String(id);
+  }
+
+  private async fail(
+    error: string,
+    payload: EmailPayload,
+    userId: string | undefined,
+    organizationId: string | undefined,
+    eventName: string,
+    retryOptions: EmailRetryOptions,
+    notificationId?: string,
+    status: NotificationStatus = NotificationStatus.FAILED,
+    shouldRetry = true
+  ): Promise<{ success: false; error: string }> {
+    notificationId = await this.saveNotification({
+      payload,
+      userId,
+      organizationId,
+      eventName,
+      status,
+      notificationId,
+      error,
+    });
+
+    if (shouldRetry && !retryOptions.isRetry) {
+      try {
+        const { processEmailJob } = await import("@/services/jobs/email.job");
+        emailQueue.process(processEmailJob);
+        await emailQueue.add(
+          "send-email",
+          { payload, userId, organizationId, eventName, notificationId },
+          { attempts: 5, delay: 3000 }
+        );
+      } catch (queueError) {
+        logger.error(
+          { eventName, errorName: queueError instanceof Error ? queueError.name : "UnknownError" },
+          "[Email Service] Failed to queue delivery retry"
+        );
+      }
+    }
+    return { success: false, error };
+  }
+
+  private async saveNotification(input: {
+    payload: EmailPayload;
+    userId?: string;
+    organizationId?: string;
+    eventName: string;
+    status: NotificationStatus;
+    notificationId?: string;
+    messageId?: string;
+    error?: string;
+    data?: unknown;
+  }): Promise<string | undefined> {
+    if (!input.organizationId) return input.notificationId;
+
+    const body = input.payload.textContent || stripHtml(input.payload.htmlContent) || input.payload.subject;
+    const values = {
+      organizationId: input.organizationId,
+      userId: input.userId || null,
+      channel: NotificationChannel.EMAIL,
+      event: input.eventName,
+      title: input.payload.subject,
+      body,
+      recipient: input.payload.to,
+      status: input.status,
+      error: input.error || null,
+      lastAttemptAt: new Date(),
+      ...(input.status === NotificationStatus.SENT ? { deliveredAt: new Date() } : {}),
+      ...(input.messageId ? { mailjetMessageId: input.messageId } : {}),
+      ...(input.data ? { data: input.data as object } : {}),
+    };
+
+    if (input.notificationId) {
+      const notification = await prisma.notification.update({
+        where: { id: input.notificationId },
+        data: {
+          ...values,
+          retryCount: input.status === NotificationStatus.FAILED ? { increment: 1 } : undefined,
+        },
+        select: { id: true },
+      });
+      return notification.id;
+    }
+
+    const notification = await prisma.notification.create({
+      data: values,
+      select: { id: true },
+    });
+    return notification.id;
   }
 }
 

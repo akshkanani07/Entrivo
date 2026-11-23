@@ -2,6 +2,7 @@ import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
 import { ReportsClient } from "@/components/reports/ReportsClient";
+import { can } from "@/lib/rbac-base";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +47,20 @@ export default async function ReportsPage() {
   ]);
 
   return (
-    <ReportsClient
-      branches={branches}
-      departments={departments}
-      visitorTypes={visitorTypes}
-      hosts={hosts}
-    />
+    <div className="space-y-4">
+      {can(user, "reports.export") && (
+        <div className="flex justify-end">
+          <a href="/api/parking/report" className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-indigo-500">
+            Export parking utilization
+          </a>
+        </div>
+      )}
+      <ReportsClient
+        branches={branches}
+        departments={departments}
+        visitorTypes={visitorTypes}
+        hosts={hosts}
+      />
+    </div>
   );
 }

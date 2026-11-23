@@ -19,6 +19,11 @@ Every setting listed here is:
 | `maxVisitDurationHours` | `z.number().min(1).max(24)` | `8` | `src/app/api/cron/auto-checkout/route.ts` | `scripts/verify-phase-6-acceptance.cjs` (Test 3: Auto-Checkout Overstay) |
 | `maxVisitorsPerHostPerDay` | `z.number().min(1).max(100)` | `20` | `src/services/visitors/walkin.service.ts` (`performWalkIn`) | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Daily Host Limit) |
 | `blockedVisitorTypes` | `z.array(z.string())` | `[]` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts` | Unit / Tenant Isolation Tests |
+| `maxGroupInvitationSize` | `z.number().int().min(1).max(200)` | `50` | `src/app/api/invitations/group/route.ts`, `src/app/api/invitation-series/route.ts` | P10-D acceptance and invitation tests |
+| `bulkImportMaxRows` | `z.number().int().min(1).max(10000)` | `1000` | `src/services/invitations/bulk-csv.ts`, `src/app/api/invitations/bulk/route.ts` | Bulk CSV unit tests |
+| `bulkImportMaxSizeMb` | `z.number().int().min(1).max(25)` | `5` | `src/app/api/invitations/bulk/route.ts` | P10-D acceptance checks |
+| `invitationSeriesHorizonDays` | `z.number().int().min(1).max(90)` | `30` | `src/services/invitations/invitation-series.service.ts` | Recurrence unit tests |
+| `preApproveRecurringSeries` | `z.boolean()` | `false` | `src/app/api/invitation-series/route.ts`, `src/services/invitations/invitation-series.service.ts` | P10-D acceptance checks |
 
 ---
 
@@ -110,4 +115,24 @@ These settings dynamically control form rendering on staff dashboards and self-s
 | **Data Subject Export (PDF)** | `GET /api/privacy/export?visitorId=...&format=pdf` | `visitors.read` | Generates official branded vector PDF document via `pdfkit` for regulatory compliance submissions. Logs `DATA_SUBJECT_EXPORT` audit event. |
 | **Data Subject Erasure (PII Anonymization)** | `POST /api/privacy/erase` | `visitors.delete` | Atomically anonymizes visitor name (`Erasure Request - [ID]`), redacts phone/email, nullifies photo/signature/document links. Retains `CheckIn` and `CheckOut` rows so aggregate security reporting stays 100% accurate. Logs `DATA_SUBJECT_ERASURE` audit event. |
 | **Consent Records View** | `GET /api/privacy/consents` | `visitors.read` | Paginated immutable record of consents captured with version and timestamp. |
+
+## 9. Parking & Vehicle Policies (P10-E)
+
+| Setting Key | Type & Constraints | Default | Enforcing File & Function | Verification Test |
+| :--- | :--- | :--- | :--- | :--- |
+| `parkingOverstayGraceMinutes` | `z.number().int().min(0).max(1440)` | `30` | `src/services/parking/parking.service.ts` (`runParkingSweep`) | P10-E acceptance and parking unit tests |
+| `parkingNoShowGraceMinutes` | `z.number().int().min(1).max(1440)` | `30` | `src/services/parking/parking.service.ts` (`runParkingSweep`) | P10-E acceptance and parking unit tests |
+| `parkingBlacklistEnforcement` | `z.enum(["WARN", "BLOCK"])` | `"BLOCK"` | `src/app/api/parking/assignments/route.ts`, `src/app/api/parking/events/route.ts`, `src/services/visitors/checkin.service.ts` | P10-E acceptance and parking unit tests |
+
+## 10. Delivery / Courier Entry Policy (P10-F1)
+
+| Setting Key | Type | Default | Enforcing File | Verification |
+| :--- | :--- | :--- | :--- | :--- |
+| `deliveryPersonEntryPolicy` | `z.enum(["OFF", "ENABLED"])` | `"ENABLED"` | `src/app/api/deliveries/person/route.ts` | P10-F1 acceptance |
+
+## 11. Contractor Compliance Enforcement (P10-F2)
+
+| Setting Key | Type | Default | Enforcing File | Verification |
+| :--- | :--- | :--- | :--- | :--- |
+| `contractorComplianceEnforcement` | `z.enum(["BLOCK", "WARN", "OFF"])` | `"BLOCK"` | `src/services/visitors/checkin.service.ts` | P10-F2 compliance unit and acceptance tests |
 

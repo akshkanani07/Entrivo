@@ -207,6 +207,10 @@ export function KioskClientView({
       if (!checkinRes.ok) {
         throw new Error(checkinData.error || "Failed to check in");
       }
+      if (verifyData.data.isPreRegistered) {
+        toast.info("Pre-registered visitor details verified for fast-lane check-in.");
+      }
+      if (checkinData.warnings?.length) toast.warning(checkinData.warnings.join(" "));
 
       try {
         void confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });

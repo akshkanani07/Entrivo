@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { createDatabaseSession, getClientIp } from "@/lib/auth";
 import { twoFactorRateLimiter } from "@/lib/rate-limit";
 import { twoFactorService } from "@/services/auth/two-factor.service";
+import { logGoogleAuthEvent } from "@/services/auth/google-auth-logging.service";
 import { requiredString } from "@/lib/zod-helpers";
 
 const verifyChallengeSchema = z.object({
@@ -42,12 +43,13 @@ export async function POST(request: Request) {
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
 
-    let decoded: { userId: string; email: string; type: string };
+    let decoded: { userId: string; email: string; type: string; provider?: string };
     try {
       decoded = jwt.verify(challengeToken, JWT_SECRET) as {
         userId: string;
         email: string;
         type: string;
+        provider?: string;
       };
     } catch {
       return NextResponse.json(
@@ -92,10 +94,29 @@ export async function POST(request: Request) {
         });
       }
 
+      if (decoded.provider === "GOOGLE") {
+        await logGoogleAuthEvent({
+          organizationId: user.organizationId,
+          userId: user.id,
+          action: "GOOGLE_LOGIN_FAILURE",
+          details: "Google sign-in failed because the second factor was not verified.",
+          ipAddress: ip,
+          userAgent,
+          severity: "HIGH",
+        });
+      }
+
       return NextResponse.json(
         { success: false, error: check.error || "Invalid 2FA code." },
         { status: 401 }
       );
+    }
+
+    if (decoded.provider === "GOOGLE" || decoded.provider === "PASSWORD") {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginProvider: decoded.provider },
+      });
     }
 
     // Determine device label
@@ -125,6 +146,18 @@ export async function POST(request: Request) {
           ipAddress: ip,
           userAgent,
         },
+      });
+    }
+
+    if (decoded.provider === "GOOGLE") {
+      await logGoogleAuthEvent({
+        organizationId: user.organizationId,
+        userId: user.id,
+        action: "GOOGLE_LOGIN",
+        details: `Google sign-in succeeded after ${check.usedBackupCode ? "backup code" : "authenticator"} verification (Session: ${sessionId}).`,
+        ipAddress: ip,
+        userAgent,
+        severity: "LOW",
       });
     }
 

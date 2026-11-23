@@ -31,7 +31,7 @@ Every tenant's data is strictly partitioned by `organizationId`:
    - All Prisma queries explicitly filter on `{ organizationId }` in the `where` clause.
    - Relational joins traverse relations owned by the caller's organization.
 3. **Automated Tenant Boundary Auditing (`scripts/verify-tenant-isolation.ts`)**:
-   - Automatically crawls and discovers all 108 API endpoints in `src/app/api`.
+   - Automatically crawls and discovers API endpoints in `src/app/api`.
    - Categorizes every endpoint into security classes (`PUBLIC`, `CRON`, `SIGNED_URL`, `USER_SELF`, `KIOSK`, `API_V1`, `TENANT_SESSION`).
    - Asserts non-zero exit code if any endpoint lacks session authentication or tenant isolation.
 
@@ -86,6 +86,44 @@ Not all routes require a standard staff web session. The following routes are in
 | `/api/auth/2fa/verify` | Second factor completion | **Challenge Token**: Validates short-lived, signed JWT (`type: "2fa_challenge"`) issued after primary password verification. |
 | `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/resend-verification`, `/api/auth/google` | Account entry points | **Rate-Limited Public**: Open for onboarding/login, protected by per-IP and per-email sliding-window rate limiters, bcrypt timing defense, and anti-enumeration uniform responses. |
 | `/api/health`, `/api/v1/openapi.json` | Monitoring & API specs | **Public Read-Only**: System availability probe and public OpenAPI 3.0 specification. |
+| `/preregister/[token]`, `/api/public/preregister/[token]` | Invitation visitor pre-registration | **Bearer Capability**: 32-byte random token; only its SHA-256 hash is stored. Links are visit-expiring, rate-limited per IP and token, bound to an invitation and organization, and become unusable after submission, approval, expiry, or revocation. Invalid links return a generic 404. JSON-only writes reject cross-site requests; responses are private/no-store and set `Referrer-Policy: no-referrer`. Application audit records use only a six-character hash fingerprint. |
+
+#### Pre-registration token threat model
+
+- Treat each link as a password: deliver it only in the visitor email and the invitation's private calendar description, do not place it in analytics or application logs, and redact `/preregister/<token>` from reverse-proxy access logs.
+- The database stores only the SHA-256 hash. The raw token is not recoverable by staff; resend, reject, reopen, or regenerate operations issue a new token and invalidate the old one.
+- Public requests are throttled to 20 requests per 10 minutes per source IP and per token. Draft saves are schema-validated; upload bytes are magic-byte validated, size-limited, and image re-encoded to remove EXIF data. Configure an upstream malware scanner if required by deployment policy; this repository currently has no antivirus scanning provider/hook.
+- ID numbers entered through pre-registration are encrypted at rest; Aadhaar-like IDs retain only a masked last-four display value. Staff review pages return masked values only. Rejection reasons reject phone/ID-like digit sequences.
+- Check-in still enforces invitation approval, schedule/working-hour policy, blacklist rules, and the configured pre-registration policy. A submitted registration satisfies the collected ID/photo/NDA requirements; `BLOCK` additionally requires host approval.
+
+### 2.7 Recurring, group, and bulk invitations (P10-D)
+
+- `InvitationVisitor` is the authoritative per-person membership and pass record. Every legacy invitation is backfilled into exactly one membership; legacy `Invitation.visitorId` and `qrToken` remain intact for existing API and workflow consumers.
+- QR resolution, public pre-registration, and group check-in verify the member against the organization-scoped invitation. Group members have separate unique QR tokens and pre-registration records; approvals remain attached to the parent invitation.
+- Series and bulk-import APIs require dedicated RBAC permissions, organization-scoped queries, and server-side host revalidation. Series creation and CSV uploads are rate limited; state-changing actions are audited.
+- CSV files are size- and row-limited, decoded as UTF-8 (including BOM), validated per row, and formula prefixes are stripped from imported values and error exports. Group CSV uploads are parsed server-side and validated before the single group invitation is created. CSV values are never treated as HTML. Imports recheck blacklist and tenant membership during processing.
+- Recurrence stores local visit time with an IANA timezone; materialized invitations have a unique `(seriesId, occurrenceDate)` key. Calendar exports include an RRULE and timezone observances. External calendar synchronization remains per occurrence, so cancellations/update operations address the same concrete events.
+- Bulk import jobs store organization and host identity and revalidate both before processing. Error reports are stored as organization-owned files and served only through an authorized, tenant-scoped route.
+
+### 2.8 Parking & Vehicle Management (P10-E)
+
+- Parking APIs require an organization membership, the corresponding `parking.*` permission, Zod-validated input, and tenant-scoped queries. Mutations are rate limited and audited.
+- Slot assignments run in serializable transactions, lock the selected `ParkingSlot` row with `FOR UPDATE`, and reject time-window overlaps. Gate transitions lock the slot before changing assignment state; checkout releases active assignments.
+- Vehicle plates are normalized before matching. Security and audit messages contain only the final two plate characters; plate values are included in authorized data exports and are scrubbed during visitor erasure/retention anonymization.
+- Gate entry checks the organization plate blacklist and applies the configured `BLOCK` or `WARN` policy. A match creates a security log and sends a security alert.
+- Contractor permits and parking reports are organization scoped. CSV/spreadsheet exports escape formula-leading values.
+
+### 2.9 Delivery / Courier Management (P10-F1)
+
+- Delivery reception, pickup, return, and export routes require organization context and the appropriate `deliveries.*` permission. Mutations use Zod validation, rate limits, and append-only audit entries.
+- Pickup codes are generated with a cryptographically secure random generator and stored only as SHA-256 hashes. Verification uses constant-time byte comparison and invalidates the hash after collection.
+- Package and signature images reuse the existing magic-byte, storage-adapter, signed-file, and audit infrastructure. Tracking/AWB values are hashed in audit metadata rather than logged as plaintext.
+
+### 2.10 Contractor Compliance (P10-F2)
+
+- Contractor companies and workers are organization scoped and controlled by `contractors.*` and `compliance.override` RBAC permissions. Status changes and overrides are audited with reasons.
+- Government IDs and police verification documents reuse signed storage URLs and existing antivirus/magic-byte validation. Document view/download operations create audit entries; sensitive values are excluded from logs.
+- Check-in enforcement evaluates mandatory document expiry, company status, work-permit date/site/shift window, and safety induction validity. Override access is permission-gated and requires a reason.
 
 
 ---
@@ -110,13 +148,14 @@ Entrivo is built to comply with modern digital privacy frameworks, including Ind
 
 | Security Control | Implementation File | Status |
 | :--- | :--- | :---: |
-| Tenant Isolation on all API routes | `scripts/verify-tenant-isolation.ts` | **VERIFIED (108/108 Routes)** |
+| Tenant Isolation on all API routes | `scripts/verify-tenant-isolation.ts` | **VERIFIED (auto-discovered routes)** |
 | Cryptographic QR validation | `src/lib/qr.ts`, `tests/unit/qr.test.ts` | **VERIFIED (5/5 Tests Pass)** |
 | TOTP 2FA & Backup Codes | `src/lib/totp.ts`, `tests/unit/totp.test.ts` | **VERIFIED (5/5 Tests Pass)** |
 | RBAC Permission Hierarchy | `src/lib/rbac.ts`, `tests/unit/rbac.test.ts` | **VERIFIED (8/8 Tests Pass)** |
 | SSRF Defense Engine | `src/lib/ssrf.ts` | **VERIFIED** |
 | PII Redaction in Logging | `src/lib/logger.ts` | **VERIFIED** |
 | Rate Limiting & Brute-Force Guards | `src/lib/rate-limiter.ts`, `src/lib/auth.ts` | **VERIFIED** |
+| Parking slot/vehicle assignment controls | `src/services/parking/parking.service.ts`, `src/app/api/parking/` | **VERIFIED (unit and static acceptance checks)** |
 | Healthcheck Endpoint | `src/app/api/health/route.ts` | **VERIFIED** |
 | Playwright E2E Security Flows | `tests/e2e/*.spec.ts` | **VERIFIED (15/15 Tests Pass)** |
 

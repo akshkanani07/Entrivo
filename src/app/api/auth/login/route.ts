@@ -108,22 +108,21 @@ export async function POST(request: Request) {
     clearLoginEmailRateLimit(cleanEmail);
 
     // Set termsAcceptedAt and termsVersion on first successful login if not already set
-    if (!user.termsAcceptedAt) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          termsAcceptedAt: new Date(),
-          termsVersion: LEGAL_VERSION,
-        },
-      });
-    }
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        ...(!user.termsAcceptedAt
+          ? { termsAcceptedAt: new Date(), termsVersion: LEGAL_VERSION }
+          : {}),
+      },
+    });
 
     // Two-factor authentication challenge step (short-lived partial auth token)
     if (user.isTwoFactorEnabled) {
       const JWT_SECRET = process.env.JWT_SECRET;
       if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
       const challengeToken = jwt.sign(
-        { userId: user.id, email: user.email, type: "2fa_challenge" },
+        { userId: user.id, email: user.email, type: "2fa_challenge", provider: "PASSWORD" },
         JWT_SECRET,
         { expiresIn: "5m" }
       );
@@ -135,6 +134,11 @@ export async function POST(request: Request) {
         message: "Two-factor authentication code required.",
       });
     }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginProvider: "PASSWORD" },
+    });
 
     // Determine device label
     let deviceLabel = "Desktop Browser";

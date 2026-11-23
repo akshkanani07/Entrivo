@@ -36,7 +36,7 @@ export default async function CheckinDeskPage({
       organizationId: orgId,
     },
     include: {
-      visitor: { include: { visitorType: true } },
+      visitor: { include: { visitorType: true, vehicles: { orderBy: { createdAt: "desc" }, take: 1 } } },
       hostEmployee: { include: { user: true, office: true } },
       meetingRoom: true,
     },
@@ -55,6 +55,21 @@ export default async function CheckinDeskPage({
     },
     orderBy: { checkInTime: "desc" },
   });
+  const parkingSlots = await prisma.parkingSlot.findMany({
+    where: {
+      isActive: true,
+      lot: { organizationId: orgId, isActive: true },
+      assignments: {
+        none: {
+          status: { in: ["RESERVED", "OCCUPIED", "OVERSTAY"] },
+          reservedFrom: { lt: endOfToday },
+          reservedUntil: { gt: startOfToday },
+        },
+      },
+    },
+    select: { id: true, code: true, type: true, lot: { select: { name: true } } },
+    orderBy: [{ lot: { name: "asc" } }, { code: "asc" }],
+  });
 
   const formattedScheduled = scheduledInvitations.map((inv) => ({
     id: inv.id,
@@ -71,6 +86,8 @@ export default async function CheckinDeskPage({
     time: `${inv.startTime} - ${inv.endTime}`,
     purpose: inv.purpose,
     isBlacklisted: inv.visitor.isBlacklisted,
+    vehicleId: inv.visitor.vehicles[0]?.id ?? null,
+    vehicleType: inv.visitor.vehicles[0]?.type ?? null,
   }));
 
   const formattedActive = activeCheckIns.map((ci) => ({
@@ -98,6 +115,11 @@ export default async function CheckinDeskPage({
       <CheckinTerminalClient
         scheduledInvitations={formattedScheduled}
         activeCheckIns={formattedActive}
+        parkingSlots={parkingSlots.map((slot) => ({
+          id: slot.id,
+          label: `${slot.lot.name} / ${slot.code} (${slot.type})`,
+          type: slot.type,
+        }))}
         initialToken={initialToken}
       />
     </div>

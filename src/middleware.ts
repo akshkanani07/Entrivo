@@ -41,6 +41,7 @@ const PUBLIC_ROUTES = [
   "/privacy",
   "/forbidden",
   "/pass",
+  "/preregister",
   "/kiosk",
   "/offline",
   "/developers",
@@ -49,6 +50,7 @@ const PUBLIC_ROUTES = [
   "/icons",
   // Public API v1 & health check:
   "/api/v1",
+  "/api/public/preregister",
   "/api/health",
   // Public auth API handlers only:
   "/api/auth/login",

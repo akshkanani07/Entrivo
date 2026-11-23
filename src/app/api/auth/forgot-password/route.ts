@@ -6,7 +6,7 @@ import { hashToken, getClientIp } from "@/lib/auth";
 import { forgotPasswordRateLimiter } from "@/lib/rate-limit";
 import { emailService } from "@/services/email/mailjet.service";
 import { getAppUrl } from "@/lib/app-url";
-import { escapeHtml } from "@/services/email/email.templates";
+import { generateForgotPasswordEmail } from "@/services/email/email.templates";
 import { requiredEmail } from "@/lib/zod-helpers";
 
 const forgotPasswordSchema = z.object({
@@ -86,33 +86,16 @@ export async function POST(request: Request) {
       // Fire-and-forget: do not await email delivery to prevent response timing side-channels
       emailService
         .sendEmail(
-          {
-            to: user.email,
-            recipientName: user.name,
-            subject: "Entrivo Password Reset Request",
-            htmlContent: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #070b14; color: #f8fafc; padding: 32px 24px; border-radius: 12px; max-width: 520px; margin: 0 auto; border: 1px solid #1e293b;">
-              <div style="margin-bottom: 24px; text-align: center;">
-                <span style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #fff;">ENTRIVO</span>
-                <p style="font-size: 11px; color: #818cf8; margin-top: 4px; font-weight: 600; text-transform: uppercase;">Security & Workplace Access</p>
-              </div>
-              <h2 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 12px;">Reset Your Password</h2>
-              <p style="font-size: 13px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px;">
-                Hello ${escapeHtml(user.name)}, a request was received to reset the password for your Entrivo workplace terminal. Click below to choose a new password:
-              </p>
-              <div style="text-align: center; margin-bottom: 28px;">
-                <a href="${resetUrl}" style="display: inline-block; padding: 12px 28px; background: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);">
-                  Reset Password &rarr;
-                </a>
-              </div>
-              <p style="font-size: 11px; color: #64748b; line-height: 1.5; border-top: 1px solid #1e293b; padding-top: 16px; margin: 0;">
-                This link will expire in 30 minutes. If you did not make this request, your account is secure and you may safely disregard this message.
-              </p>
-            </div>
-          `,
-            textContent: `Reset your Entrivo password: ${resetUrl}\nThis link expires in 30 minutes.`,
-          },
-          user.id
+          generateForgotPasswordEmail({
+            email: user.email,
+            name: user.name,
+            resetUrl,
+            organizationName: user.organization?.name,
+            timeZone: user.organization?.timezone,
+          }),
+          user.id,
+          user.organizationId || undefined,
+          "FORGOT_PASSWORD"
         )
         .catch((err) => {
           console.error("[ForgotPassword] Failed to send email:", err);

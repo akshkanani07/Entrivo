@@ -15,6 +15,7 @@ import {
 import { emailService } from "@/services/email/mailjet.service";
 import { sendInAppNotification } from "@/services/notifications/channels/inapp";
 import { NotificationEvent } from "@/services/notifications/events";
+import { escapeHtml, renderBrandedEmailLayout } from "@/services/email/email.templates";
 
 const templateActionSchema = z.object({
   action: optionalString(),
@@ -119,7 +120,12 @@ export async function POST(request: Request) {
             to: auth.user.email,
             recipientName: auth.user.name,
             subject: `[TEST PREVIEW] ${previewSubject}`,
-            htmlContent: `<div style="font-family: sans-serif; background: #0b0f19; color: #f1f5f9; padding: 24px; border-radius: 8px;"><h3 style="color: #6366f1;">Test Template Dispatch</h3><p style="white-space: pre-wrap;">${previewBody}</p></div>`,
+            htmlContent: renderBrandedEmailLayout({
+              title: `[TEST PREVIEW] ${previewSubject}`,
+              tag: "Test Template Dispatch",
+              organizationName: auth.user.organizationName || "Entrivo Workplace",
+              contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(previewBody).replace(/\n/g, "<br>")}</div>`,
+            }),
             textContent: previewBody,
           },
           auth.user.id,

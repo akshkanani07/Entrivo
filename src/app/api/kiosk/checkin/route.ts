@@ -19,6 +19,8 @@ const kioskCheckinSchema = z.object({
   signatureUrl: optionalString(),
   consentGiven: z.boolean().optional().nullable(),
   consentVersion: optionalString(),
+  complianceOverride: z.boolean().optional(),
+  complianceOverrideReason: optionalString(),
 });
 
 export async function POST(request: Request) {
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
       actorName: `Kiosk: ${kioskName}`,
       consentGiven: parsed.data.consentGiven,
       consentVersion: parsed.data.consentVersion,
+      complianceOverride: parsed.data.complianceOverride,
+      complianceOverrideReason: parsed.data.complianceOverrideReason,
     });
 
     if (!result.success) {
@@ -73,6 +77,7 @@ export async function POST(request: Request) {
         visitorCompany: checkIn?.visitor?.company || "",
         hostName: checkIn?.hostEmployee?.user?.name || "Host",
       },
+      warnings: result.warnings ?? [],
       message: `Visitor ${checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${checkIn?.badgeNumber || ""}`,
     };
 

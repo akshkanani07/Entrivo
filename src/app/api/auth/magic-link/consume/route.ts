@@ -86,6 +86,11 @@ export async function POST(request: Request) {
       userAgent,
     });
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginProvider: "MAGIC_LINK" },
+    });
+
     // Write audit log
     await prisma.auditLog.create({
       data: {

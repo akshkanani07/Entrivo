@@ -116,7 +116,7 @@ export async function runDataRetentionPurge(specificOrgId?: string): Promise<Ret
     let anonymizedCount = 0;
     for (const v of eligibleVisitors) {
       await prisma.visitor.update({
-        where: { id: v.id },
+        where: { id: v.id, organizationId: org.id },
         data: {
           name: "Anonymized Visitor",
           email: `anonymized-${v.id.slice(-6)}@privacy.local`,
@@ -127,6 +127,34 @@ export async function runDataRetentionPurge(specificOrgId?: string): Promise<Ret
           idProofUrl: null,
         },
       });
+      const vehicles = await prisma.vehicle.findMany({
+        where: { organizationId: org.id, visitorId: v.id },
+        select: { id: true, plateNumber: true },
+      });
+      if (vehicles.length) {
+        await prisma.blacklistVisitor.updateMany({
+          where: {
+            organizationId: org.id,
+            vehiclePlateNumber: { in: vehicles.map((vehicle) => vehicle.plateNumber) },
+          },
+          data: { vehiclePlateNumber: null },
+        });
+        for (const vehicle of vehicles) {
+          await prisma.vehicle.update({
+            where: { id: vehicle.id, organizationId: org.id },
+            data: {
+              plateNumber: `ERASED-${vehicle.id}`,
+              plateDisplay: "REDACTED",
+              make: null,
+              color: null,
+            },
+          });
+        }
+        await prisma.contractorPermit.updateMany({
+          where: { organizationId: org.id, vehicleId: { in: vehicles.map((vehicle) => vehicle.id) } },
+          data: { visitorId: null },
+        });
+      }
       anonymizedCount++;
     }
 

@@ -26,6 +26,10 @@ describe("RBAC Permissions & Roles Matrix", () => {
       "settings.manage",
       "webhooks.manage",
       "apikeys.manage",
+      "muster.view",
+      "muster.broadcast",
+      "muster.manage",
+      "muster.account",
     ];
 
     for (const p of corePermissions) {
@@ -69,6 +73,19 @@ describe("RBAC Permissions & Roles Matrix", () => {
     expect(can(receptionist, "settings.manage")).toBe(false);
     expect(can(receptionist, "apikeys.manage")).toBe(false);
     expect(can(receptionist, "org.manage")).toBe(false);
+    expect(can(receptionist, "muster.view")).toBe(true);
+    expect(can(receptionist, "muster.broadcast")).toBe(false);
+    expect(can(receptionist, "muster.manage")).toBe(false);
+    expect(can(receptionist, "muster.account")).toBe(false);
+  });
+
+  it("grants muster controls to security wardens without granting point management", () => {
+    const guard = { role: "SECURITY_GUARD" as UserRole };
+    expect(can(guard, "muster.view")).toBe(true);
+    expect(can(guard, "muster.broadcast")).toBe(true);
+    expect(can(guard, "muster.account")).toBe(true);
+    expect(can(guard, "muster.manage")).toBe(false);
+    expect(can({ role: "EMPLOYEE" }, "muster.view")).toBe(false);
   });
 
   it("denies access when user is null or undefined", () => {

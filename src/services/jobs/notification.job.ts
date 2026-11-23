@@ -11,12 +11,25 @@ import { sendTeamsNotification } from "@/services/notifications/channels/teams";
 import { NotificationChannel, UserRole } from "@prisma/client";
 import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
+import { processEmergencyNotificationJob } from "@/services/muster/muster-notifications.service";
 
 export { type NotificationJobData };
 
 export async function processNotificationJob(jobData: NotificationJobData): Promise<void> {
   const { event, payload } = jobData;
+  if (
+    event === NotificationEvent.SECURITY_ALERT &&
+    payload.emergencyEventId &&
+    payload.emergencyAction
+  ) {
+    await processEmergencyNotificationJob(payload);
+    return;
+  }
+
   const appUrl = getAppUrl();
+  const nonEmailPayload = payload.preRegistrationUrl
+    ? { ...payload, preRegistrationUrl: undefined }
+    : payload;
 
   logger.info({ event, organizationId: payload.organizationId }, "[Job:Notification] Processing notification");
 
@@ -34,33 +47,39 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
       organizationId: payload.organizationId,
       event,
       channel: NotificationChannel.IN_APP,
-      payload,
+      payload: nonEmailPayload,
       companyName: orgName,
     }),
     renderNotificationContent({
       organizationId: payload.organizationId,
       event,
       channel: NotificationChannel.WEB_PUSH,
-      payload,
+      payload: nonEmailPayload,
       companyName: orgName,
     }),
     renderNotificationContent({
       organizationId: payload.organizationId,
       event,
       channel: NotificationChannel.SLACK,
-      payload,
+      payload: nonEmailPayload,
       companyName: orgName,
     }),
     renderNotificationContent({
       organizationId: payload.organizationId,
       event,
       channel: NotificationChannel.TEAMS,
-      payload,
+      payload: nonEmailPayload,
       companyName: orgName,
     }),
   ]);
 
   const dispatches: Promise<unknown>[] = [];
+  const visitorLinkEvents = new Set<string>([
+    NotificationEvent.PREREG_REQUESTED,
+    NotificationEvent.PREREG_REMINDER,
+    NotificationEvent.PREREG_REJECTED,
+  ]);
+  const emailOnlyVisitorLink = visitorLinkEvents.has(event);
 
   // 1. RECIPIENT RESOLUTION
   const targetUserIds = new Set<string>();
@@ -73,11 +92,17 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
     try {
       const hostEmployee = await prisma.employee.findFirst({
         where: { userId: payload.hostUserId, organizationId: payload.organizationId },
-        include: { backupApprover: { select: { userId: true } } },
+        include: {
+          backupApprover: { select: { userId: true } },
+          manager: { select: { userId: true } },
+        },
       });
 
       if (hostEmployee?.backupApprover?.userId) {
         targetUserIds.add(hostEmployee.backupApprover.userId);
+      }
+      if (event === NotificationEvent.FEEDBACK_DETRACTOR && hostEmployee?.manager?.userId) {
+        targetUserIds.add(hostEmployee.manager.userId);
       }
     } catch {}
   }
@@ -86,13 +111,18 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   if (
     event === NotificationEvent.SECURITY_ALERT ||
     event === NotificationEvent.VISITOR_OVERSTAYED ||
-    event === NotificationEvent.APPROVAL_ESCALATED
+    event === NotificationEvent.APPROVAL_ESCALATED ||
+    event === NotificationEvent.DOCUMENT_EXPIRING ||
+    event === NotificationEvent.FEEDBACK_DETRACTOR
   ) {
     try {
+      const recipientRoles = event === NotificationEvent.DOCUMENT_EXPIRING
+        ? [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN]
+        : [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.SECURITY_GUARD];
       const staffUsers = await prisma.user.findMany({
         where: {
           organizationId: payload.organizationId,
-          role: { in: [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.SECURITY_GUARD] },
+          role: { in: recipientRoles },
           isActive: true,
         },
         select: { id: true, email: true },
@@ -104,7 +134,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
 
   // 2. DISPATCH CHANNELS
   // A. In-App Notifications
-  for (const userId of targetUserIds) {
+  for (const userId of emailOnlyVisitorLink ? [] : targetUserIds) {
     const allowed = await isChannelAllowedForUser({
       userId,
       channel: NotificationChannel.IN_APP,
@@ -119,14 +149,14 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
           event,
           title: inAppContent.subject,
           body: inAppContent.body,
-          data: payload,
+          data: nonEmailPayload,
         })
       );
     }
   }
 
   // B. Web Push Notifications
-  for (const userId of targetUserIds) {
+  for (const userId of emailOnlyVisitorLink ? [] : targetUserIds) {
     const allowed = await isChannelAllowedForUser({
       userId,
       channel: NotificationChannel.WEB_PUSH,
@@ -135,7 +165,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
     });
     if (allowed) {
       dispatches.push(
-        sendWebPushNotification(userId, event, payload, {
+        sendWebPushNotification(userId, event, nonEmailPayload, {
           title: webPushContent.subject,
           body: webPushContent.body,
           url: payload.approvalUrl || payload.qrPassUrl || `${appUrl}/notifications`,
@@ -148,22 +178,26 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   dispatches.push(sendEmailNotification(event, payload));
 
   // D. Slack Integration (Workspace Channel)
-  dispatches.push(
-    sendSlackNotification(event, payload, {
-      title: slackContent.subject,
-      body: slackContent.body,
-      url: payload.approvalUrl || payload.qrPassUrl || `${appUrl}/dashboard`,
-    })
-  );
+  if (!emailOnlyVisitorLink) {
+    dispatches.push(
+      sendSlackNotification(event, nonEmailPayload, {
+        title: slackContent.subject,
+        body: slackContent.body,
+        url: payload.approvalUrl || payload.qrPassUrl || `${appUrl}/dashboard`,
+      })
+    );
+  }
 
   // E. Microsoft Teams Integration (Webhook Channel)
-  dispatches.push(
-    sendTeamsNotification(event, payload, {
-      title: teamsContent.subject,
-      body: teamsContent.body,
-      url: payload.approvalUrl || payload.qrPassUrl || `${appUrl}/dashboard`,
-    })
-  );
+  if (!emailOnlyVisitorLink) {
+    dispatches.push(
+      sendTeamsNotification(event, nonEmailPayload, {
+        title: teamsContent.subject,
+        body: teamsContent.body,
+        url: payload.approvalUrl || payload.qrPassUrl || `${appUrl}/dashboard`,
+      })
+    );
+  }
 
   const results = await Promise.allSettled(dispatches);
   logger.info(

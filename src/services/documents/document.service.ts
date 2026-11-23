@@ -7,12 +7,25 @@ import { notify } from "@/services/notifications/dispatcher";
 import { NotificationEvent } from "@/services/notifications/events";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 
-export type DocumentType = "ID_PROOF" | "NDA" | "AGREEMENT" | "OTHER";
+export type DocumentType =
+  | "ID_PROOF"
+  | "NDA"
+  | "AGREEMENT"
+  | "INSURANCE"
+  | "TRADE_LICENSE"
+  | "WORK_PERMIT"
+  | "SAFETY_INDUCTION"
+  | "POLICE_VERIFICATION"
+  | "ESI_PF"
+  | "MEDICAL_FITNESS"
+  | "OTHER";
 export type DocumentStatus = "VALID" | "EXPIRING" | "EXPIRED";
 
 export interface CreateDocumentInput {
   organizationId: string;
-  visitorId: string;
+  visitorId?: string;
+  contractorCompanyId?: string;
+  contractorWorkerId?: string;
   title: string;
   docType: DocumentType;
   buffer: Buffer;
@@ -34,14 +47,34 @@ export function computeDocumentStatus(expiryDate: Date | null | undefined, now =
 }
 
 export async function createDocument(input: CreateDocumentInput) {
-  const { organizationId, visitorId, title, docType, buffer, declaredMime, filename, expiryDate, actorId, metadata } = input;
+  const { organizationId, visitorId, contractorCompanyId, contractorWorkerId, title, docType, buffer, declaredMime, filename, expiryDate, actorId, metadata } = input;
 
-  // 1. Verify visitor exists in organization
-  const visitor = await prisma.visitor.findFirst({
-    where: { id: visitorId, organizationId },
-  });
-  if (!visitor) {
-    throw new Error("Visitor not found in organization");
+  if (!visitorId && !contractorCompanyId && !contractorWorkerId) {
+    throw new Error("A visitor or contractor owner is required");
+  }
+
+  let visitorName = "Contractor";
+  if (visitorId) {
+    const visitor = await prisma.visitor.findFirst({
+      where: { id: visitorId, organizationId },
+      select: { id: true, name: true },
+    });
+    if (!visitor) throw new Error("Visitor not found in organization");
+    visitorName = visitor.name;
+  }
+  if (contractorCompanyId) {
+    const company = await prisma.contractorCompany.findFirst({
+      where: { id: contractorCompanyId, organizationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!company) throw new Error("Contractor company not found in organization");
+  }
+  if (contractorWorkerId) {
+    const worker = await prisma.contractorWorker.findFirst({
+      where: { id: contractorWorkerId, organizationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!worker) throw new Error("Contractor worker not found in organization");
   }
 
   // 2. Validate upload (magic bytes, size limits, sharp sanitize)
@@ -69,7 +102,7 @@ export async function createDocument(input: CreateDocumentInput) {
     data: {
       organizationId,
       ownerType: docType === "NDA" ? "NDA_DOCUMENT" : "ID_PROOF",
-      ownerId: visitorId,
+      ownerId: visitorId || contractorWorkerId || contractorCompanyId || null,
       key: putResult.key,
       mime: validation.mime!,
       size: validation.size!,
@@ -86,6 +119,8 @@ export async function createDocument(input: CreateDocumentInput) {
     data: {
       organizationId,
       visitorId,
+      contractorCompanyId: contractorCompanyId || null,
+      contractorWorkerId: contractorWorkerId || null,
       title: title.trim(),
       docType,
       fileId: fileRecord.id,
@@ -114,10 +149,10 @@ export async function createDocument(input: CreateDocumentInput) {
     data: {
       organizationId,
       userId: actorId || null,
-      action: "DOCUMENT_UPLOAD",
+      action: contractorCompanyId || contractorWorkerId ? "COMPLIANCE_DOC_UPLOAD" : "DOCUMENT_UPLOAD",
       entity: "DOCUMENT",
       entityId: doc.id,
-      details: `Document '${doc.title}' (${doc.docType}) uploaded for visitor ${visitor.name}. SHA256: ${validation.sha256}`,
+      details: `Document '${doc.title}' (${doc.docType}) uploaded for ${visitorName}. SHA256: ${validation.sha256}`,
     },
   });
 
@@ -271,6 +306,8 @@ export async function checkExpiringDocuments(testClock = new Date()) {
     include: {
       visitor: true,
       organization: true,
+      contractorCompany: { select: { id: true, name: true, contactName: true, contactEmail: true, sponsorEmployee: { include: { user: { select: { id: true, name: true, email: true } } } } } },
+      contractorWorker: { select: { id: true, visitor: { select: { id: true, name: true, email: true } } } },
     },
   });
 
@@ -294,11 +331,15 @@ export async function checkExpiringDocuments(testClock = new Date()) {
     // Trigger alerts at specific buckets: 30 days, 7 days, 1 day, or already expired (0 days)
     if (diffDays === 30 || diffDays === 7 || diffDays === 1 || diffDays <= 0) {
       notificationsSent++;
+      const recipientName = doc.visitor?.name || doc.contractorWorker?.visitor.name || doc.contractorCompany?.name || "Contractor";
+      const recipientEmail = doc.visitor?.email || doc.contractorWorker?.visitor.email || doc.contractorCompany?.contactEmail || undefined;
       notify(NotificationEvent.DOCUMENT_EXPIRING, {
         organizationId: doc.organizationId,
-        visitorName: doc.visitor.name,
-        visitorEmail: doc.visitor.email,
+        visitorName: recipientName,
+        visitorEmail: recipientEmail,
         hostName: doc.organization.name,
+        hostEmail: doc.contractorCompany?.sponsorEmployee.user.email,
+        hostUserId: doc.contractorCompany?.sponsorEmployee.user.id,
         documentTitle: doc.title,
         documentType: doc.docType,
         daysRemaining: Math.max(0, diffDays),
@@ -312,11 +353,13 @@ export async function checkExpiringDocuments(testClock = new Date()) {
         docType: doc.docType,
         expiryDate: doc.expiryDate.toISOString(),
         daysRemaining: Math.max(0, diffDays),
-        visitor: {
+        visitor: doc.visitor ? {
           id: doc.visitor.id,
           name: doc.visitor.name,
           email: doc.visitor.email,
-        },
+        } : null,
+        contractorCompanyId: doc.contractorCompanyId,
+        contractorWorkerId: doc.contractorWorkerId,
       }).catch(console.error);
     }
   }

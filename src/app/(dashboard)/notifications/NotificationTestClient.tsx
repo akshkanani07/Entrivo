@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Mail, Send, Loader2, Bell, CheckCircle2 } from "lucide-react";
+import { Mail, Send, Loader2, Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -10,6 +10,32 @@ export function NotificationTestClient() {
   const [testEmail, setTestEmail] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const [emailTemplate, setEmailTemplate] = useState("visitor-invitation");
+
+  const emailTemplates = [
+    "visitor-invitation",
+    "checkin-confirmation",
+    "visitor-reminder",
+    "invitation-cancelled",
+    "invitation-rescheduled",
+    "visitor-checkout",
+    "host-arrival",
+    "visitor-waiting",
+    "host-approval",
+    "approval-escalated",
+    "visitor-overstayed",
+    "daily-report",
+    "security-alert",
+    "verify-email",
+    "forgot-password",
+    "reset-password-confirmation",
+    "magic-link",
+    "employee-invite",
+    "password-changed",
+    "new-device-login",
+    "two-factor-enabled",
+    "two-factor-disabled",
+  ];
 
   const handleSendTestEmail = async () => {
     if (!testEmail || !testEmail.includes("@")) {
@@ -22,12 +48,12 @@ export function NotificationTestClient() {
       const res = await fetch("/api/notifications/test-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: testEmail }),
+        body: JSON.stringify({ to: testEmail, template: emailTemplate }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Email delivery failed");
 
-      toast.success(`Mailjet transactional email successfully queued to ${testEmail}!`);
+      toast.success(`Email template sent to ${testEmail}.`);
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Email test failed");
@@ -92,6 +118,18 @@ export function NotificationTestClient() {
               Send Email
             </button>
           </div>
+          <select
+            value={emailTemplate}
+            onChange={(event) => setEmailTemplate(event.target.value)}
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+            aria-label="Email template"
+          >
+            {emailTemplates.map((template) => (
+              <option key={template} value={template}>
+                {template.replace(/-/g, " ")}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Web Push test */}

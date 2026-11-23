@@ -9,6 +9,7 @@ import {
 } from "@/services/documents/document.service";
 import { requiredString, optionalString } from "@/lib/zod-helpers";
 import { z } from "zod";
+import { audit } from "@/services/audit/audit.service";
 
 export async function GET(request: Request) {
   try {
@@ -36,6 +37,15 @@ export async function GET(request: Request) {
       take: limit,
       skip,
     });
+
+    await Promise.all(result.items.map((item) => audit({
+      organizationId,
+      userId: auth.user.id,
+      action: "DOCUMENT_VIEW",
+      entity: "DOCUMENT",
+      entityId: item.id,
+      details: { docType: item.docType, contractorOwned: Boolean(item.contractorCompanyId || item.contractorWorkerId) },
+    })));
 
     return NextResponse.json({
       success: true,
@@ -71,6 +81,8 @@ export async function POST(request: Request) {
       const title = (formData.get("title") as string) || (file?.name ? file.name.replace(/\.[^/.]+$/, "") : "Untitled Document");
       const docType = ((formData.get("docType") as string) || "ID_PROOF").toUpperCase() as DocumentType;
       const visitorId = formData.get("visitorId") as string | null;
+      const contractorCompanyId = formData.get("contractorCompanyId") as string | null;
+      const contractorWorkerId = formData.get("contractorWorkerId") as string | null;
       const expiryDateStr = formData.get("expiryDate") as string | null;
 
       if (!file) {
@@ -80,9 +92,9 @@ export async function POST(request: Request) {
         );
       }
 
-      if (!visitorId) {
+      if (!visitorId && !contractorCompanyId && !contractorWorkerId) {
         return NextResponse.json(
-          { success: false, error: "Visitor ID is required to associate document" },
+          { success: false, error: "A visitor or contractor owner is required to associate document" },
           { status: 400 }
         );
       }
@@ -92,7 +104,9 @@ export async function POST(request: Request) {
 
       const doc = await createDocument({
         organizationId,
-        visitorId,
+        visitorId: visitorId || undefined,
+        contractorCompanyId: contractorCompanyId || undefined,
+        contractorWorkerId: contractorWorkerId || undefined,
         title: title.trim(),
         docType,
         buffer,
@@ -116,11 +130,13 @@ export async function POST(request: Request) {
     }
 
     const jsonSchema = z.object({
-      visitorId: requiredString("Visitor ID is required"),
+      visitorId: optionalString(),
+      contractorCompanyId: optionalString(),
+      contractorWorkerId: optionalString(),
       title: requiredString("Document title is required"),
       docType: z.preprocess(
         (v) => (v === null || v === undefined || v === "" ? "ID_PROOF" : String(v).trim().toUpperCase()),
-        z.enum(["ID_PROOF", "NDA", "AGREEMENT", "OTHER"])
+        z.enum(["ID_PROOF", "NDA", "AGREEMENT", "INSURANCE", "TRADE_LICENSE", "WORK_PERMIT", "SAFETY_INDUCTION", "POLICE_VERIFICATION", "ESI_PF", "MEDICAL_FITNESS", "OTHER"])
       ),
       base64: requiredString("File base64 data is required"),
       mimeType: requiredString("MIME type is required"),
@@ -136,6 +152,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!parsed.data.visitorId && !parsed.data.contractorCompanyId && !parsed.data.contractorWorkerId) {
+      return NextResponse.json(
+        { success: false, error: "A visitor or contractor owner is required" },
+        { status: 400 }
+      );
+    }
+
     // Extract clean buffer from base64 (handle both data:image/...;base64, and raw base64)
     let rawBase64 = parsed.data.base64;
     if (rawBase64.includes(",")) {
@@ -147,6 +170,8 @@ export async function POST(request: Request) {
     const doc = await createDocument({
       organizationId,
       visitorId: parsed.data.visitorId,
+      contractorCompanyId: parsed.data.contractorCompanyId,
+      contractorWorkerId: parsed.data.contractorWorkerId,
       title: parsed.data.title,
       docType: parsed.data.docType,
       buffer,

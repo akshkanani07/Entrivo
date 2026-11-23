@@ -1,5 +1,25 @@
 import { z } from "zod";
 
+function getDefaultPreRegistrationTtlHours(): number {
+  const configured = process.env.PREREG_TOKEN_TTL_HOURS;
+  if (configured === undefined) return 24;
+  const value = Number(configured);
+  if (!Number.isInteger(value) || value < 1 || value > 720) {
+    throw new Error("PREREG_TOKEN_TTL_HOURS must be an integer from 1 to 720.");
+  }
+  return value;
+}
+
+function getEnvInt(name: string, fallback: number, min: number, max: number): number {
+  const configured = process.env[name];
+  if (configured === undefined || configured.trim() === "") return fallback;
+  const value = Number(configured);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer from ${min} to ${max}.`);
+  }
+  return value;
+}
+
 export const WeekdayScheduleSchema = z.object({
   isOpen: z.boolean().default(true),
   openTime: z.string().default("08:30"), // 24-hour format "HH:mm"
@@ -18,6 +38,7 @@ export const WorkingHoursSchema = z.object({
 
 export const EnforcementModeSchema = z.enum(["ALLOW", "WARN", "BLOCK"]);
 export type EnforcementMode = z.infer<typeof EnforcementModeSchema>;
+export const PreRegistrationPolicySchema = z.enum(["BLOCK", "WARN", "OFF"]);
 
 export const OrgPolicySchema = z.object({
   // 1. Visitor Policies & Limits
@@ -25,6 +46,14 @@ export const OrgPolicySchema = z.object({
   advanceBookingDays: z.number().min(1).max(90).default(30),
   maxVisitDurationHours: z.number().min(1).max(24).default(8),
   maxVisitorsPerHostPerDay: z.number().min(1).max(100).default(20),
+  maxGroupInvitationSize: z.number().int().min(1).max(200).default(50),
+  bulkImportMaxRows: z.number().int().min(1).max(10_000).default(1_000),
+  bulkImportMaxSizeMb: z.number().int().min(1).max(25).default(5),
+  invitationSeriesHorizonDays: z.number().int().min(1).max(90).default(30),
+  preApproveRecurringSeries: z.boolean().default(false),
+  parkingOverstayGraceMinutes: z.number().int().min(0).max(1440).default(30),
+  parkingNoShowGraceMinutes: z.number().int().min(1).max(1440).default(30),
+  parkingBlacklistEnforcement: z.enum(["WARN", "BLOCK"]).default("BLOCK"),
   blockedVisitorTypes: z.array(z.string()).default([]),
 
   // 2. Verification & NDA Policies
@@ -41,6 +70,8 @@ export const OrgPolicySchema = z.object({
   requirePurpose: z.boolean().default(true),
   requireIdNumber: z.boolean().default(false),
   requireHost: z.boolean().default(true),
+  preRegistrationRequired: PreRegistrationPolicySchema.default("WARN"),
+  preRegistrationTokenTtlHours: z.number().int().min(1).max(720).default(getDefaultPreRegistrationTtlHours()),
 
   // 4. Approval Rules
   autoApprovalEnabled: z.boolean().default(false),
@@ -82,12 +113,25 @@ export const OrgPolicySchema = z.object({
   quietHoursStart: z.string().default("21:00"),
   quietHoursEnd: z.string().default("07:00"),
 
-  // 9. Data Retention & DPDP Tooling (P6-03)
+  // 9. Delivery & Courier Operations (P10-F1)
+  deliveryPersonEntryPolicy: z.enum(["OFF", "ENABLED"]).default("ENABLED"),
+  contractorComplianceEnforcement: z.enum(["BLOCK", "WARN", "OFF"]).default("BLOCK"),
+
+  // 10. Data Retention & DPDP Tooling (P6-03)
   retentionPhotosDays: z.number().min(1).max(3650).default(90),
   retentionSignaturesDays: z.number().min(1).max(3650).default(180),
   retentionIdProofsDays: z.number().min(1).max(3650).default(90),
   retentionVisitorRecordsDays: z.number().min(30).max(3650).default(365),
   privacyPolicyNoticeVersion: z.string().default("v1.0"),
+
+  // 11. Visitor Feedback & Analytics (P10-G)
+  feedbackRequestDelayMinutes: z.number().int().min(0).max(1440).default(getEnvInt("FEEDBACK_REQUEST_DELAY_MINUTES", 30, 0, 1440)),
+  feedbackTokenTtlHours: z.number().int().min(1).max(720).default(getEnvInt("FEEDBACK_TOKEN_TTL_HOURS", 168, 1, 720)),
+  feedbackDetractorThreshold: z.number().int().min(0).max(10).default(getEnvInt("FEEDBACK_DETRACTOR_THRESHOLD", 6, 0, 10)),
+  feedbackRetentionDays: z.number().int().min(30).max(3650).default(getEnvInt("FEEDBACK_RETENTION_DAYS", 365, 30, 3650)),
+  feedbackCommentMaxLength: z.number().int().min(100).max(5000).default(getEnvInt("FEEDBACK_COMMENT_MAX_LENGTH", 1000, 100, 5000)),
+  feedbackHostLoadThreshold: z.number().int().min(1).max(1000).default(getEnvInt("FEEDBACK_HOST_LOAD_THRESHOLD", 5, 1, 1000)),
+  feedbackAnalyticsCacheSeconds: z.number().int().min(10).max(3600).default(getEnvInt("FEEDBACK_ANALYTICS_CACHE_SECONDS", 300, 10, 3600)),
 });
 
 export type OrgPolicy = z.infer<typeof OrgPolicySchema>;

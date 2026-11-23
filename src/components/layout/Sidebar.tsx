@@ -24,6 +24,10 @@ import {
   Activity,
   Webhook,
   X,
+  Car,
+  Package,
+  HardHat,
+  MessageSquareText,
 } from "lucide-react";
 import { CurrentUser } from "@/types";
 import { can, Permission } from "@/lib/rbac-base";
@@ -67,8 +71,12 @@ export function Sidebar({ currentUser, isOpenMobile = false, onCloseMobile }: Si
     { label: "Visitors", href: "/visitors", icon: Users, permission: "visitors.read" },
     { label: "New Walk-in", href: "/visitors/new", icon: UserPlus, permission: "walkin.create", highlight: true },
     { label: "Invitations", href: "/invitations", icon: MailCheck, permission: "invitations.read.own" },
+    { label: "Pre-registration Review", href: "/preregistrations", icon: ClipboardCheck, permission: "preregistration.read" },
     { label: "Check-In Desk", href: "/checkin", icon: QrCode, permission: "checkin.perform" },
     { label: "Security Gate", href: "/security", icon: ShieldAlert, permission: "securityLogs.read" },
+    { label: "Parking", href: "/parking", icon: Car, permission: "parking.read" },
+    { label: "Deliveries", href: "/deliveries", icon: Package },
+    { label: "Contractors", href: "/contractors", icon: HardHat, permission: "contractors.read" },
     { label: "Approvals", href: "/approvals", icon: ClipboardCheck, permission: "approvals.act" },
     { label: "Documents", href: "/documents", icon: FileText, permission: "documents.read" },
     { label: "Meeting Rooms", href: "/meeting-rooms", icon: Video, permission: "meetingRooms.read" },
@@ -76,6 +84,7 @@ export function Sidebar({ currentUser, isOpenMobile = false, onCloseMobile }: Si
     { label: "Self Kiosk", href: "/kiosk", icon: Tablet, targetBlank: true },
     { label: "Notifications", href: "/notifications", icon: BellRing, permission: "notifications.self" },
     { label: "Reports & Logs", href: "/reports", icon: BarChart3, permission: "reports.view" },
+    { label: "Feedback Inbox", href: "/feedback", icon: MessageSquareText, permission: "feedback.read" },
     { label: "Organization", href: "/organization", icon: Building2, permission: "org.manage" },
     { label: "Audit Trail", href: "/audit-logs", icon: Activity, permission: "audit.read" },
     { label: "Integrations", href: "/integrations", icon: Webhook, permission: "integrations.manage" },

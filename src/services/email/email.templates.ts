@@ -1,3 +1,5 @@
+import { getAppUrl } from "@/lib/app-url";
+
 /**
  * Secure Email Templates with Branded Responsive Layout & HTML Escaping
  *
@@ -21,6 +23,12 @@ export interface EmailPayload {
   unsubscribeUrl?: string;
 }
 
+export interface EmailBranding {
+  name: string;
+  logo?: string | null;
+  contactEmail?: string | null;
+}
+
 export function escapeHtml(str: string | number | null | undefined): string {
   if (str === null || str === undefined) return "";
   return String(str)
@@ -33,6 +41,8 @@ export function escapeHtml(str: string | number | null | undefined): string {
 
 export function stripHtml(html: string): string {
   return html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<div[^>]*display\s*:\s*none[^>]*>[\s\S]*?<\/div>/gi, "")
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/<[^>]+>/g, " ")
@@ -40,8 +50,24 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
+function renderTableDetails(contentHtml: string): string {
+  return contentHtml.replace(
+    /<div class="details-box">\s*((?:<div class="detail-row">[\s\S]*?<\/div>\s*)+)<\/div>/g,
+    (_box, rows: string) => {
+    const tableRows = rows.replace(
+      /<div class="detail-row">\s*<span class="label">([\s\S]*?)<\/span>\s*<span class="val"([^>]*)>([\s\S]*?)<\/span>\s*<\/div>/g,
+      (_row, label: string, valueStyle: string, value: string) => {
+        const customStyle = valueStyle.match(/style="([^"]*)"/)?.[1] || "";
+        return `<tr><td style="display:block;width:100%;padding:7px 12px 0;color:#526174;font-size:13px;font-weight:600;vertical-align:top;">${label}</td><td style="${customStyle};display:block;width:100%;padding:2px 12px 9px;color:#172033;font-size:14px;font-weight:600;text-align:left;vertical-align:top;">${value}</td></tr>`;
+      }
+    );
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:20px 0;background-color:#f1f5f9;border:1px solid #dbe3ec;border-collapse:separate;border-spacing:0;">${tableRows}</table>`;
+    }
+  );
+}
+
 /**
- * Shared responsive branded dark/glass email layout
+ * Shared email-safe layout. It uses fluid tables and inline styles only.
  */
 export function renderBrandedEmailLayout(params: {
   title: string;
@@ -50,70 +76,104 @@ export function renderBrandedEmailLayout(params: {
   contentHtml: string;
   actionButton?: { text: string; url: string };
   organizationName?: string;
+  organizationLogo?: string;
+  contactEmail?: string;
   footerNote?: string;
   unsubscribeUrl?: string;
 }): string {
   const orgName = escapeHtml(params.organizationName || "Entrivo Workplace");
-  const tagColor = params.tagColor || "#4f46e5";
   const title = escapeHtml(params.title);
+  const contentHtml = renderTableDetails(params.contentHtml)
+    .replace(/#cbd5e1/gi, "#354256")
+    .replace(/#94a3b8/gi, "#526174")
+    .replace(/#64748b/gi, "#526174")
+    .replace(/#f8fafc/gi, "#172033")
+    .replace(/#ffffff/gi, "#172033");
+  const tagColor =
+    params.tagColor && /^#[0-9a-f]{6}$/i.test(params.tagColor)
+    ? params.tagColor
+    : "#c7d2fe";
+  const contactEmail = escapeHtml(params.contactEmail || process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || "support@entrivo.com");
+  const logo = params.organizationLogo
+    ? `<img src="${escapeHtml(params.organizationLogo)}" alt="${orgName}" width="48" height="48" style="display:block;width:48px;height:48px;max-width:48px;margin:0 auto 10px;border:0;">`
+    : "";
+  const actionUrl = params.actionButton ? escapeHtml(params.actionButton.url) : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
   <title>${title}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #f1f5f9; margin: 0; padding: 24px; -webkit-font-smoothing: antialiased; }
-    .wrapper { max-width: 600px; margin: 0 auto; background: #111827; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
-    .header { background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); padding: 32px 24px; text-align: center; border-bottom: 1px solid #1e293b; }
-    .header h1 { margin: 0; color: #ffffff; font-size: 22px; letter-spacing: -0.5px; font-weight: 700; }
-    .header p { margin: 6px 0 0; color: #94a3b8; font-size: 13px; }
-    .content { padding: 32px 28px; }
-    .tag { display: inline-block; background: rgba(79, 70, 229, 0.15); border: 1px solid ${tagColor}; color: #c7d2fe; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
-    .details-box { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 18px 20px; margin: 24px 0; }
-    .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; }
-    .detail-row:last-child { border-bottom: none; }
-    .label { color: #94a3b8; font-size: 13px; font-weight: 500; }
-    .val { color: #f8fafc; font-weight: 600; font-size: 14px; text-align: right; }
-    .btn-wrapper { text-align: center; margin: 32px 0 16px; }
-    .btn { display: inline-block; background: #4f46e5; color: #ffffff !important; text-decoration: none; padding: 13px 28px; border-radius: 8px; font-weight: 600; font-size: 14px; letter-spacing: 0.2px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35); }
-    .footer { padding: 24px 28px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #1e293b; background: #0c1222; }
-    .footer p { margin: 4px 0; }
-    .unsub { color: #94a3b8; text-decoration: underline; margin-top: 8px; display: inline-block; font-size: 11px; }
-  </style>
 </head>
-<body>
-  <div class="wrapper">
-    <div class="header">
-      <h1>${orgName}</h1>
-      <p>Secure Enterprise Visitor Access</p>
-    </div>
-    <div class="content">
-      <div class="tag">${escapeHtml(params.tag)}</div>
-      ${params.contentHtml}
-      ${
-        params.actionButton
-          ? `<div class="btn-wrapper">
-               <a href="${escapeHtml(params.actionButton.url)}" class="btn" target="_blank">${escapeHtml(
-              params.actionButton.text
-            )}</a>
-             </div>`
-          : ""
-      }
-    </div>
-    <div class="footer">
-      <p>${escapeHtml(params.footerNote || "Sent securely via Entrivo Workplace Visitor Management.")}</p>
-      <p>© ${new Date().getFullYear()} ${orgName}. All rights reserved.</p>
-      ${
-        params.unsubscribeUrl
-          ? `<a href="${escapeHtml(params.unsubscribeUrl)}" class="unsub">Manage notification preferences or unsubscribe</a>`
-          : ""
-      }
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:#f3f5f8;color:#172033;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${escapeHtml(params.title)} &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#f3f5f8;border-collapse:collapse;">
+    <tr><td align="center" style="padding:20px 10px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background-color:#ffffff;border:1px solid #dbe3ec;border-collapse:collapse;">
+        <tr><td align="center" style="padding:24px 20px;background-color:#f8fafc;border-bottom:1px solid #dbe3ec;">
+          ${logo}
+          <div data-email-org-name="true" style="font-size:21px;line-height:28px;font-weight:700;color:#172033;">${orgName}</div>
+          <div style="padding-top:4px;font-size:12px;line-height:18px;color:#526174;">Secure Enterprise Visitor Access</div>
+        </td></tr>
+        <tr><td style="padding:24px 20px;background-color:#ffffff;color:#172033;">
+          <div style="display:inline-block;margin:0 0 14px;padding:5px 10px;border:1px solid ${tagColor};background-color:#eef2ff;color:#3730a3;font-size:11px;line-height:16px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;">${escapeHtml(params.tag)}</div>
+          ${contentHtml}
+          ${
+            params.actionButton
+              ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:24px auto 8px;border-collapse:collapse;"><tr><td align="center" bgcolor="#4f46e5" style="background-color:#4f46e5;border:1px solid #4338ca;">
+                <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${actionUrl}" style="height:46px;v-text-anchor:middle;width:240px;" arcsize="12%" strokecolor="#4338ca" fillcolor="#4f46e5"><w:anchorlock/><center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">${escapeHtml(params.actionButton.text)}</center></v:roundrect><![endif]-->
+                <!--[if !mso]><!--><a href="${actionUrl}" target="_blank" style="display:inline-block;padding:14px 24px;color:#ffffff;background-color:#4f46e5;text-decoration:none;font-size:14px;line-height:18px;font-weight:700;mso-hide:all;">${escapeHtml(params.actionButton.text)}</a><!--<![endif]-->
+              </td></tr></table>`
+              : ""
+          }
+        </td></tr>
+        <tr><td align="center" style="padding:18px 20px;background-color:#f8fafc;border-top:1px solid #dbe3ec;color:#526174;font-size:12px;line-height:18px;">
+          <div>${escapeHtml(params.footerNote || "Sent securely via Entrivo Workplace Visitor Management.")}</div>
+          <div style="padding-top:4px;">Contact <a data-email-contact="true" href="mailto:${contactEmail}" style="color:#3730a3;text-decoration:underline;">${contactEmail}</a></div>
+          <div style="padding-top:4px;">&copy; ${new Date().getFullYear()} ${orgName}. All rights reserved.</div>
+          ${params.unsubscribeUrl ? `<div style="padding-top:8px;"><a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#3730a3;text-decoration:underline;">Unsubscribe or manage preferences</a></div>` : ""}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
+}
+
+export function applyEmailBranding(payload: EmailPayload, branding: EmailBranding): EmailPayload {
+  const name = escapeHtml(branding.name);
+  let htmlContent = payload.htmlContent.replace(
+    /(<div data-email-org-name="true"[^>]*>)[\s\S]*?(<\/div>)/,
+    (_match, prefix: string, suffix: string) => `${prefix}${name}${suffix}`
+  );
+  if (branding.logo) {
+    let logoUrl: string;
+    try {
+      const parsedLogoUrl = new URL(branding.logo, `${getAppUrl()}/`);
+      logoUrl = parsedLogoUrl.protocol === "http:" || parsedLogoUrl.protocol === "https:"
+        ? parsedLogoUrl.toString()
+        : "";
+    } catch {
+      logoUrl = "";
+    }
+    if (logoUrl) {
+      htmlContent = htmlContent.replace(
+        '<div data-email-org-name="true"',
+        () => `<img src="${escapeHtml(logoUrl)}" alt="${name}" width="48" height="48" style="display:block;width:48px;height:48px;max-width:48px;margin:0 auto 10px;border:0;"><div data-email-org-name="true"`
+      );
+    }
+  }
+  if (branding.contactEmail) {
+    const contactEmail = escapeHtml(branding.contactEmail);
+    htmlContent = htmlContent.replace(
+      /<a data-email-contact="true"[^>]*>[\s\S]*?<\/a>/,
+      `<a data-email-contact="true" href="mailto:${contactEmail}" style="color:#3730a3;text-decoration:underline;">${contactEmail}</a>`
+    );
+  }
+  return { ...payload, htmlContent };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +189,7 @@ export function generateVisitorInvitationEmail(data: {
   time: string;
   location: string;
   qrPassUrl: string;
+  preRegistrationUrl?: string;
   purpose: string;
   icsAttachment?: EmailAttachment;
 }): EmailPayload {
@@ -140,6 +201,7 @@ export function generateVisitorInvitationEmail(data: {
   const location = escapeHtml(data.location);
   const purpose = escapeHtml(data.purpose);
   const qrPassUrl = escapeHtml(data.qrPassUrl);
+  const preRegistrationUrl = data.preRegistrationUrl ? escapeHtml(data.preRegistrationUrl) : "";
 
   const contentHtml = `
     <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">Welcome, ${visitorName}</h2>
@@ -154,6 +216,11 @@ export function generateVisitorInvitationEmail(data: {
       <div class="detail-row"><span class="label">Location</span><span class="val">${location}</span></div>
       <div class="detail-row"><span class="label">Purpose</span><span class="val">${purpose}</span></div>
     </div>
+    ${
+      preRegistrationUrl
+        ? `<p style="font-size:14px;line-height:1.6;color:#cbd5e1;">Complete your pre-registration before arrival: <a href="${preRegistrationUrl}" style="color:#a5b4fc;">Open secure pre-registration</a></p>`
+        : ""
+    }
     <p style="font-size: 13px; color: #94a3b8; line-height: 1.5;">
       A calendar invite (.ics) is attached to this email. Please bring a valid government ID for security verification.
     </p>
@@ -173,7 +240,7 @@ export function generateVisitorInvitationEmail(data: {
     recipientName: data.visitorName,
     subject: `Visitor Pass: Meeting at ${data.companyName} on ${data.date}`,
     htmlContent,
-    textContent: `Hello ${data.visitorName}, you are invited by ${data.hostName} to visit ${data.companyName} on ${data.date} at ${data.time}. Access your pass: ${data.qrPassUrl}`,
+    textContent: `Hello ${data.visitorName}, you are invited by ${data.hostName} to visit ${data.companyName} on ${data.date} at ${data.time}. Access your pass: ${data.qrPassUrl}${data.preRegistrationUrl ? ` Complete pre-registration: ${data.preRegistrationUrl}` : ""}`,
     attachments: data.icsAttachment ? [data.icsAttachment] : undefined,
   };
 }
@@ -386,11 +453,18 @@ export function generateVisitorCheckoutEmail(data: {
   companyName: string;
   durationMinutes: number;
   checkOutTime: string;
+  feedbackUrl?: string;
 }): EmailPayload {
   const visitorName = escapeHtml(data.visitorName);
-  const companyName = escapeHtml(data.companyName);
   const checkOutTime = escapeHtml(data.checkOutTime);
   const durationMinutes = escapeHtml(data.durationMinutes);
+  const feedbackUrl = data.feedbackUrl;
+  const npsRow = feedbackUrl
+    ? `<p style="margin:18px 0 8px;color:#cbd5e1;font-size:13px;"><strong>How likely are you to recommend us?</strong></p>
+       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:12px;">
+         <tr>${Array.from({ length: 11 }, (_, score) => `<td align="center" style="padding:2px;"><a href="${escapeHtml(`${feedbackUrl}${feedbackUrl.includes("?") ? "&" : "?"}nps=${score}`)}" style="display:block;padding:8px 2px;background:#eef2ff;color:#3730a3;text-decoration:none;font-size:12px;font-weight:700;border-radius:6px;">${score}</a></td>`).join("")}</tr>
+       </table>`
+    : "";
 
   const contentHtml = `
     <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">Thank You for Visiting!</h2>
@@ -401,6 +475,7 @@ export function generateVisitorCheckoutEmail(data: {
       <div class="detail-row"><span class="label">Visit Duration</span><span class="val">${durationMinutes} minutes</span></div>
       <div class="detail-row"><span class="label">Checkout Time</span><span class="val">${checkOutTime}</span></div>
     </div>
+    ${npsRow}
     <p style="font-size: 13px; color: #94a3b8; line-height: 1.5;">
       Have a safe journey, and we look forward to welcoming you back again soon.
     </p>
@@ -412,6 +487,9 @@ export function generateVisitorCheckoutEmail(data: {
     tagColor: "#3b82f6",
     contentHtml,
     organizationName: data.companyName,
+    actionButton: data.feedbackUrl
+      ? { text: "Share your feedback", url: data.feedbackUrl }
+      : undefined,
   });
 
   return {
@@ -435,6 +513,7 @@ export function generateHostArrivalEmail(data: {
   badgeNumber: string;
   location: string;
   time: string;
+  organizationName?: string;
 }): EmailPayload {
   const hostName = escapeHtml(data.hostName);
   const visitorName = escapeHtml(data.visitorName);
@@ -464,6 +543,7 @@ export function generateHostArrivalEmail(data: {
     tag: "Visitor Arrived",
     tagColor: "#10b981",
     contentHtml,
+    organizationName: data.organizationName,
   });
 
   return {
@@ -481,6 +561,7 @@ export function generateVisitorWaitingEmail(data: {
   visitorName: string;
   visitorCompany: string;
   location: string;
+  organizationName?: string;
 }): EmailPayload {
   const hostName = escapeHtml(data.hostName);
   const visitorName = escapeHtml(data.visitorName);
@@ -507,6 +588,7 @@ export function generateVisitorWaitingEmail(data: {
     tag: "Guest Waiting",
     tagColor: "#f59e0b",
     contentHtml,
+    organizationName: data.organizationName,
   });
 
   return {
@@ -527,6 +609,7 @@ export function generateHostApprovalEmail(data: {
   time: string;
   purpose: string;
   approvalUrl: string;
+  organizationName?: string;
 }): EmailPayload {
   const hostName = escapeHtml(data.hostName);
   const visitorName = escapeHtml(data.visitorName);
@@ -554,6 +637,7 @@ export function generateHostApprovalEmail(data: {
     tagColor: "#d97706",
     contentHtml,
     actionButton: { text: "Review & Authorize Pass", url: approvalUrl },
+    organizationName: data.organizationName,
   });
 
   return {
@@ -571,6 +655,7 @@ export function generateApprovalEscalatedEmail(data: {
   visitorName: string;
   hostName: string;
   actionUrl: string;
+  organizationName?: string;
 }): EmailPayload {
   const adminName = escapeHtml(data.adminName);
   const visitorName = escapeHtml(data.visitorName);
@@ -590,6 +675,7 @@ export function generateApprovalEscalatedEmail(data: {
     tagColor: "#dc2626",
     contentHtml,
     actionButton: { text: "Open Approvals Portal", url: actionUrl },
+    organizationName: data.organizationName,
   });
 
   return {
@@ -609,6 +695,7 @@ export function generateVisitorOverstayedEmail(data: {
   hostName: string;
   location: string;
   duration: string;
+  organizationName?: string;
 }): EmailPayload {
   const recipientName = escapeHtml(data.recipientName);
   const visitorName = escapeHtml(data.visitorName);
@@ -639,6 +726,7 @@ export function generateVisitorOverstayedEmail(data: {
     tag: "Security Alert",
     tagColor: "#ef4444",
     contentHtml,
+    organizationName: data.organizationName,
   });
 
   return {
@@ -673,6 +761,7 @@ export function generateDailyReportEmail(data: {
   const companyName = escapeHtml(data.companyName);
   const date = escapeHtml(data.date);
   const stats = data.stats;
+  const count = (value: number) => (Number.isFinite(value) ? value : 0);
 
   const contentHtml = `
     <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">Daily Visitor Operations Digest</h2>
@@ -680,12 +769,12 @@ export function generateDailyReportEmail(data: {
       Hello ${adminName}, here is the daily visitor access summary for <strong>${companyName}</strong> on <strong>${date}</strong>.
     </p>
     <div class="details-box">
-      <div class="detail-row"><span class="label">Total Check-Ins</span><span class="val">${stats.totalCheckIns}</span></div>
-      <div class="detail-row"><span class="label">Total Check-Outs</span><span class="val">${stats.totalCheckOuts}</span></div>
-      <div class="detail-row"><span class="label">Currently On-Site</span><span class="val" style="color: #34d399;">${stats.currentlyOnPremises}</span></div>
-      <div class="detail-row"><span class="label">Overstay Incidents</span><span class="val" style="color: ${stats.overstayedCount > 0 ? '#f87171' : '#f8fafc'};">${stats.overstayedCount}</span></div>
-      <div class="detail-row"><span class="label">Security Alerts</span><span class="val" style="color: ${stats.securityAlertsCount > 0 ? '#f87171' : '#f8fafc'};">${stats.securityAlertsCount}</span></div>
-      <div class="detail-row"><span class="label">Scheduled Invitations</span><span class="val">${stats.scheduledInvitations}</span></div>
+      <div class="detail-row"><span class="label">Total Check-Ins</span><span class="val">${count(stats.totalCheckIns)}</span></div>
+      <div class="detail-row"><span class="label">Total Check-Outs</span><span class="val">${count(stats.totalCheckOuts)}</span></div>
+      <div class="detail-row"><span class="label">Currently On-Site</span><span class="val" style="color: #34d399;">${count(stats.currentlyOnPremises)}</span></div>
+      <div class="detail-row"><span class="label">Overstay Incidents</span><span class="val" style="color: ${count(stats.overstayedCount) > 0 ? '#f87171' : '#f8fafc'};">${count(stats.overstayedCount)}</span></div>
+      <div class="detail-row"><span class="label">Security Alerts</span><span class="val" style="color: ${count(stats.securityAlertsCount) > 0 ? '#f87171' : '#f8fafc'};">${count(stats.securityAlertsCount)}</span></div>
+      <div class="detail-row"><span class="label">Scheduled Invitations</span><span class="val">${count(stats.scheduledInvitations)}</span></div>
     </div>
   `;
 
@@ -703,7 +792,7 @@ export function generateDailyReportEmail(data: {
     recipientName: data.adminName,
     subject: `Daily Visitor Report: ${data.companyName} (${data.date})`,
     htmlContent,
-    textContent: `Daily Visitor Report for ${data.companyName} on ${data.date}: Check-Ins: ${stats.totalCheckIns}, Check-Outs: ${stats.totalCheckOuts}, Currently On-Site: ${stats.currentlyOnPremises}, Overstays: ${stats.overstayedCount}. Details: ${data.reportUrl}`,
+    textContent: `Daily Visitor Report for ${data.companyName} on ${data.date}: Check-Ins: ${count(stats.totalCheckIns)}, Check-Outs: ${count(stats.totalCheckOuts)}, Currently On-Site: ${count(stats.currentlyOnPremises)}, Overstays: ${count(stats.overstayedCount)}. Details: ${data.reportUrl}`,
   };
 }
 
@@ -716,6 +805,8 @@ export function generateSecurityAlertEmail(data: {
   description: string;
   visitorName?: string;
   guardName?: string;
+  emergencyType?: "REAL" | "DRILL";
+  emergencyAction?: "ALERT" | "ALL_CLEAR";
 }): EmailPayload {
   const recipientName = escapeHtml(data.recipientName);
   const companyName = escapeHtml(data.companyName);
@@ -724,11 +815,18 @@ export function generateSecurityAlertEmail(data: {
   const description = escapeHtml(data.description);
   const visitorName = escapeHtml(data.visitorName || "N/A");
   const guardName = escapeHtml(data.guardName || "System Automated Alert");
+  const alertLabel =
+    data.emergencyAction === "ALL_CLEAR" ? "ALL CLEAR" : "SECURITY ALERT";
+  const drillLabel = data.emergencyType === "DRILL" ? "[DRILL] " : "";
+  const intro =
+    data.emergencyAction === "ALL_CLEAR"
+      ? "An all-clear update has been issued for the workplace."
+      : "An emergency alert has been issued for the workplace.";
 
   const contentHtml = `
-    <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">SECURITY ALERT [${severity}]</h2>
+    <h2 style="color: #ffffff; margin-top: 0; font-size: 20px;">${drillLabel}${alertLabel} [${severity}]</h2>
     <p style="color: #cbd5e1; line-height: 1.6; font-size: 14px;">
-      Hello ${recipientName}, an immediate security incident was logged at <strong>${companyName}</strong>.
+      Hello ${recipientName}, ${intro} <strong>${companyName}</strong>.
     </p>
     <div class="details-box">
       <div class="detail-row"><span class="label">Severity</span><span class="val" style="color: #ef4444; font-weight: 700;">${severity}</span></div>
@@ -740,8 +838,8 @@ export function generateSecurityAlertEmail(data: {
   `;
 
   const htmlContent = renderBrandedEmailLayout({
-    title: `SECURITY INCIDENT [${data.severity}]`,
-    tag: `Security Alert - ${data.severity}`,
+    title: `${drillLabel}${alertLabel} [${data.severity}]`,
+    tag: `${drillLabel}${alertLabel} - ${data.severity}`,
     tagColor: "#ef4444",
     contentHtml,
     organizationName: data.companyName,
@@ -750,8 +848,451 @@ export function generateSecurityAlertEmail(data: {
   return {
     to: data.recipientEmail,
     recipientName: data.recipientName,
-    subject: `SECURITY ALERT [${data.severity}]: Workplace Security Incident`,
+    subject: `${drillLabel}${alertLabel} [${data.severity}]: Workplace Emergency`,
     htmlContent,
-    textContent: `SECURITY ALERT [${data.severity}] at ${data.location}: ${data.description}. Visitor: ${data.visitorName || "N/A"}`,
+    textContent: `${drillLabel}${alertLabel} [${data.severity}] at ${data.location}: ${data.description}. Visitor: ${data.visitorName || "N/A"}`,
+  };
+}
+
+export function formatEmailDateTime(
+  value: string | Date | null | undefined,
+  timeZone = "Asia/Kolkata",
+  kind: "date" | "time" | "datetime" = "datetime"
+): string {
+  if (value === null || value === undefined || value === "") return "";
+  const raw = value instanceof Date ? value : String(value);
+  if (kind === "time" && typeof raw === "string") {
+    const timeOnly = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
+    if (timeOnly) {
+      const localTime = new Date(Date.UTC(2020, 0, 1, Number(timeOnly[1]), Number(timeOnly[2])));
+      return new Intl.DateTimeFormat("en", {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "UTC",
+      }).format(localTime);
+    }
+  }
+  const dateOnly = typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  const parsed = value instanceof Date ? value : new Date(dateOnly ? `${raw}T12:00:00Z` : raw);
+  if (Number.isNaN(parsed.getTime())) return String(raw);
+
+  const options: Intl.DateTimeFormatOptions =
+    kind === "date"
+      ? { dateStyle: "long" }
+      : kind === "time"
+        ? { hour: "numeric", minute: "2-digit" }
+        : { dateStyle: "long", timeStyle: "short" };
+  try {
+    return new Intl.DateTimeFormat("en", { ...options, timeZone }).format(parsed);
+  } catch {
+    return new Intl.DateTimeFormat("en", { ...options, timeZone: "Asia/Kolkata" }).format(parsed);
+  }
+}
+
+function absoluteAppUrl(path: string): string {
+  const url = new URL(path, `${getAppUrl()}/`);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Email action URL must use HTTP or HTTPS.");
+  }
+  return url.toString();
+}
+
+type AccountEmailData = {
+  email: string;
+  name: string;
+  organizationName?: string;
+  timeZone?: string;
+};
+
+function accountEmail(data: {
+  to: string;
+  recipientName: string;
+  subject: string;
+  title: string;
+  tag: string;
+  message: string;
+  actionText?: string;
+  actionUrl?: string;
+  footerNote?: string;
+  organizationName?: string;
+  timeZone?: string;
+  changedAt?: Date | string;
+  details?: Array<[string, string]>;
+}): EmailPayload {
+  const details = data.details?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">${data.details
+        .map(
+          ([label, value]) =>
+            `<tr><td style="padding:6px 0;color:#526174;font-size:13px;">${escapeHtml(label)}</td><td style="padding:6px 0;color:#172033;font-size:13px;text-align:right;">${escapeHtml(value)}</td></tr>`
+        )
+        .join("")}</table>`
+    : "";
+  const message = escapeHtml(data.message);
+  const changedAt = data.changedAt
+    ? formatEmailDateTime(data.changedAt, data.timeZone)
+    : "";
+  const htmlContent = renderBrandedEmailLayout({
+    title: data.title,
+    tag: data.tag,
+    organizationName: data.organizationName,
+    contentHtml: `<h2 style="margin:0 0 12px;color:#172033;font-size:20px;line-height:28px;">${escapeHtml(data.title)}</h2><p style="margin:0 0 18px;color:#354256;font-size:15px;line-height:24px;">${message}${
+      changedAt ? ` <strong>${escapeHtml(changedAt)}</strong>.` : ""
+    }</p>${details}`,
+    actionButton:
+      data.actionText && data.actionUrl
+        ? { text: data.actionText, url: data.actionUrl }
+        : undefined,
+    footerNote: data.footerNote,
+  });
+
+  return {
+    to: data.to,
+    recipientName: data.recipientName,
+    subject: data.subject,
+    htmlContent,
+    textContent: stripHtml(htmlContent),
+  };
+}
+
+export function generateVerifyEmailEmail(
+  data: AccountEmailData & { verifyUrl: string; expiresIn?: string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "Verify your Entrivo email address",
+    title: "Verify your email address",
+    tag: "Account verification",
+    message: `Hello ${data.name}, confirm your work email to activate your Entrivo account. This link expires in ${data.expiresIn || "24 hours"}.`,
+    actionText: "Verify email address",
+    actionUrl: absoluteAppUrl(data.verifyUrl),
+    organizationName: data.organizationName,
+    timeZone: data.timeZone,
+  });
+}
+
+export function generateForgotPasswordEmail(
+  data: AccountEmailData & { resetUrl: string; expiresIn?: string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "Reset your Entrivo password",
+    title: "Reset your password",
+    tag: "Password reset",
+    message: `Hello ${data.name}, we received a request to reset your Entrivo password. The link expires in ${data.expiresIn || "30 minutes"}. If you did not make this request, you can ignore this email.`,
+    actionText: "Reset password",
+    actionUrl: absoluteAppUrl(data.resetUrl),
+    organizationName: data.organizationName,
+    timeZone: data.timeZone,
+  });
+}
+
+export function generateResetPasswordConfirmationEmail(
+  data: AccountEmailData & { changedAt?: Date | string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "Your Entrivo password reset is complete",
+    title: "Password reset confirmation",
+    tag: "Account security",
+    message: `Hello ${data.name}, your Entrivo password reset was completed on`,
+    changedAt: data.changedAt,
+    timeZone: data.timeZone,
+    organizationName: data.organizationName,
+    details: [["Security", "All other active sessions were signed out."]],
+    footerNote: "If you did not make this change, contact your security administrator immediately.",
+  });
+}
+
+export function generateMagicLinkEmail(
+  data: AccountEmailData & { magicUrl: string; expiresIn?: string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "Your secure Entrivo sign-in link",
+    title: "Sign in to your workplace",
+    tag: "Secure sign-in",
+    message: `Hello ${data.name}, use this one-time sign-in link to access your Entrivo account. It expires in ${data.expiresIn || "15 minutes"}.`,
+    actionText: "Continue to Entrivo",
+    actionUrl: absoluteAppUrl(data.magicUrl),
+    organizationName: data.organizationName,
+    timeZone: data.timeZone,
+  });
+}
+
+export function generateEmployeeInviteEmail(
+  data: AccountEmailData & { inviteUrl: string; expiresIn?: string; organizationName: string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: `Welcome to ${data.organizationName} - activate your account`,
+    title: `Welcome to ${data.organizationName}`,
+    tag: "Employee invitation",
+    message: `Hello ${data.name}, you have been invited to join ${data.organizationName}. Set a password to activate your workplace account. This invitation expires in ${data.expiresIn || "48 hours"}.`,
+    actionText: "Set password and activate",
+    actionUrl: absoluteAppUrl(data.inviteUrl),
+    organizationName: data.organizationName,
+    timeZone: data.timeZone,
+  });
+}
+
+export function generatePasswordChangedEmail(
+  data: AccountEmailData & { changedAt?: Date | string; timeZone?: string }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "Your Entrivo password was changed",
+    title: "Password changed",
+    tag: "Account security",
+    message: `Hello ${data.name}, the password for your Entrivo account was changed on`,
+    changedAt: data.changedAt || new Date(),
+    timeZone: data.timeZone,
+    organizationName: data.organizationName,
+    footerNote: "If you did not make this change, contact your security administrator immediately.",
+  });
+}
+
+export function generateNewDeviceLoginEmail(
+  data: AccountEmailData & {
+    device: string;
+    location?: string;
+    loginAt?: Date | string;
+    timeZone?: string;
+  }
+): EmailPayload {
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: "New sign-in to your Entrivo account",
+    title: "New device sign-in",
+    tag: "Security alert",
+    message: `Hello ${data.name}, a new sign-in was detected for your account.`,
+    details: [
+      ["Device", data.device],
+      ["Location", data.location || "Not available"],
+      ["Time", formatEmailDateTime(data.loginAt || new Date(), data.timeZone)],
+    ],
+    organizationName: data.organizationName,
+    timeZone: data.timeZone,
+    footerNote: "If this was not you, secure your account and contact your administrator.",
+  });
+}
+
+export function generateTwoFactorStatusEmail(
+  data: AccountEmailData & { enabled: boolean; changedAt?: Date | string }
+): EmailPayload {
+  const verb = data.enabled ? "enabled" : "disabled";
+  return accountEmail({
+    to: data.email,
+    recipientName: data.name,
+    subject: `Two-factor authentication ${verb}`,
+    title: `Two-factor authentication ${verb}`,
+    tag: "Account security",
+    message: `Hello ${data.name}, two-factor authentication was ${verb} for your Entrivo account on`,
+    changedAt: data.changedAt || new Date(),
+    timeZone: data.timeZone,
+    organizationName: data.organizationName,
+    footerNote: `If you did not ${verb} two-factor authentication, contact your security administrator immediately.`,
+  });
+}
+
+export const EMAIL_TEMPLATE_NAMES = [
+  "visitor-invitation",
+  "checkin-confirmation",
+  "visitor-reminder",
+  "invitation-cancelled",
+  "invitation-rescheduled",
+  "visitor-checkout",
+  "host-arrival",
+  "visitor-waiting",
+  "host-approval",
+  "approval-escalated",
+  "visitor-overstayed",
+  "daily-report",
+  "security-alert",
+  "verify-email",
+  "forgot-password",
+  "reset-password-confirmation",
+  "magic-link",
+  "employee-invite",
+  "password-changed",
+  "new-device-login",
+  "two-factor-enabled",
+  "two-factor-disabled",
+] as const;
+
+export type EmailTemplateName = (typeof EMAIL_TEMPLATE_NAMES)[number];
+
+export function buildEmailTemplateSamples(
+  to = "preview@example.com",
+  organizationName = "Entrivo Workplace"
+): Record<EmailTemplateName, EmailPayload> {
+  const appUrl = getAppUrl();
+  const common = {
+    name: "Jordan Lee",
+    email: to,
+    organizationName,
+    timeZone: "Asia/Kolkata",
+  };
+  const sampleUrl = (path: string) => new URL(path, `${appUrl}/`).toString();
+  const stats = {
+    totalCheckIns: 12,
+    totalCheckOuts: 9,
+    currentlyOnPremises: 3,
+    overstayedCount: 0,
+    securityAlertsCount: 1,
+    scheduledInvitations: 5,
+  };
+  return {
+    "visitor-invitation": generateVisitorInvitationEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      hostName: "Alex Morgan",
+      companyName: organizationName,
+      date: "23 November 2026",
+      time: "11:00 AM",
+      location: "Main Reception",
+      qrPassUrl: sampleUrl("/pass/sample"),
+      purpose: "Product planning meeting",
+    }),
+    "checkin-confirmation": generateCheckinConfirmationEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      hostName: "Alex Morgan",
+      companyName: organizationName,
+      badgeNumber: "EMP-1042",
+      location: "Main Reception",
+      checkInTime: "11:00 AM",
+    }),
+    "visitor-reminder": generateVisitorReminderEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      hostName: "Alex Morgan",
+      companyName: organizationName,
+      date: "23 November 2026",
+      time: "11:00 AM",
+      location: "Main Reception",
+      qrPassUrl: sampleUrl("/pass/sample"),
+      reminderWindow: "24 hours",
+    }),
+    "invitation-cancelled": generateInvitationCancelledEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      hostName: "Alex Morgan",
+      companyName: organizationName,
+      date: "23 November 2026",
+      reason: "Schedule update",
+    }),
+    "invitation-rescheduled": generateInvitationRescheduledEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      hostName: "Alex Morgan",
+      companyName: organizationName,
+      date: "24 November 2026",
+      time: "2:30 PM",
+      location: "Conference Room A",
+      qrPassUrl: sampleUrl("/pass/sample"),
+    }),
+    "visitor-checkout": generateVisitorCheckoutEmail({
+      visitorName: "Jordan Lee",
+      visitorEmail: to,
+      companyName: organizationName,
+      durationMinutes: 45,
+      checkOutTime: "11:45 AM",
+    }),
+    "host-arrival": generateHostArrivalEmail({
+      hostName: "Alex Morgan",
+      hostEmail: to,
+      visitorName: "Jordan Lee",
+      visitorCompany: "Example Industries",
+      badgeNumber: "EMP-1042",
+      location: "Main Reception",
+      time: "11:00 AM",
+      organizationName,
+    }),
+    "visitor-waiting": generateVisitorWaitingEmail({
+      hostName: "Alex Morgan",
+      hostEmail: to,
+      visitorName: "Jordan Lee",
+      visitorCompany: "Example Industries",
+      location: "Main Reception",
+      organizationName,
+    }),
+    "host-approval": generateHostApprovalEmail({
+      hostName: "Alex Morgan",
+      hostEmail: to,
+      visitorName: "Jordan Lee",
+      visitorCompany: "Example Industries",
+      date: "23 November 2026",
+      time: "11:00 AM",
+      purpose: "Product planning meeting",
+      approvalUrl: sampleUrl("/approvals"),
+      organizationName,
+    }),
+    "approval-escalated": generateApprovalEscalatedEmail({
+      adminEmail: to,
+      adminName: "Alex Morgan",
+      visitorName: "Jordan Lee",
+      hostName: "Casey Taylor",
+      actionUrl: sampleUrl("/approvals"),
+      organizationName,
+    }),
+    "visitor-overstayed": generateVisitorOverstayedEmail({
+      recipientEmail: to,
+      recipientName: "Alex Morgan",
+      visitorName: "Jordan Lee",
+      badgeNumber: "EMP-1042",
+      hostName: "Casey Taylor",
+      location: "Main Reception",
+      duration: "30 minutes",
+      organizationName,
+    }),
+    "daily-report": generateDailyReportEmail({
+      adminEmail: to,
+      adminName: "Alex Morgan",
+      companyName: organizationName,
+      date: "23 November 2026",
+      stats,
+      reportUrl: sampleUrl("/reports"),
+    }),
+    "security-alert": generateSecurityAlertEmail({
+      recipientEmail: to,
+      recipientName: "Alex Morgan",
+      companyName: organizationName,
+      severity: "HIGH",
+      location: "Main Reception",
+      description: "Sample security event",
+      visitorName: "Jordan Lee",
+    }),
+    "verify-email": generateVerifyEmailEmail({
+      ...common,
+      verifyUrl: sampleUrl("/verify-email?token=sample"),
+    }),
+    "forgot-password": generateForgotPasswordEmail({
+      ...common,
+      resetUrl: sampleUrl("/reset-password?token=sample"),
+    }),
+    "reset-password-confirmation": generateResetPasswordConfirmationEmail(common),
+    "magic-link": generateMagicLinkEmail({
+      ...common,
+      magicUrl: sampleUrl("/magic-link/confirm?token=sample"),
+    }),
+    "employee-invite": generateEmployeeInviteEmail({
+      ...common,
+      inviteUrl: sampleUrl("/reset-password?token=sample"),
+    }),
+    "password-changed": generatePasswordChangedEmail(common),
+    "new-device-login": generateNewDeviceLoginEmail({
+      ...common,
+      device: "Windows workstation",
+      location: "Ahmedabad, India",
+    }),
+    "two-factor-enabled": generateTwoFactorStatusEmail({ ...common, enabled: true }),
+    "two-factor-disabled": generateTwoFactorStatusEmail({ ...common, enabled: false }),
   };
 }

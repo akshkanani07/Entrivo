@@ -8,6 +8,7 @@ export const ALLOWED_TEMPLATE_VARIABLES = [
   "visitor_name",
   "visitor_email",
   "visitor_company",
+  "visitor_count",
   "host_name",
   "host_email",
   "date",
@@ -15,6 +16,7 @@ export const ALLOWED_TEMPLATE_VARIABLES = [
   "location",
   "badge_number",
   "qr_link",
+  "prereg_link",
   "purpose",
   "action_url",
   "reason",
@@ -27,6 +29,11 @@ export const ALLOWED_TEMPLATE_VARIABLES = [
   "reminder_window",
   "overstay_duration",
   "report_summary",
+  "courier_company",
+  "tracking_number",
+  "pickup_code",
+  "storage_location",
+  "package_count",
 ] as const;
 
 export type AllowedVariable = (typeof ALLOWED_TEMPLATE_VARIABLES)[number];
@@ -43,6 +50,22 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
     [`${NotificationEvent.VISITOR_INVITED}:${NotificationChannel.EMAIL}`]: {
       subject: "Workplace Access Pass for {{company_name}} on {{date}}",
       body: "Hello {{visitor_name}},\n\n{{host_name}} has scheduled a visit for you at {{location}} on {{date}} at {{time}}.\n\nPurpose: {{purpose}}\n\nPlease use your pre-issued digital pass for expedited check-in:\n{{qr_link}}",
+    },
+    [`${NotificationEvent.PREREG_REQUESTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Complete visitor pre-registration for {{company_name}}",
+      body: "Hello {{visitor_name}},\n\nPlease complete your visitor pre-registration before your visit on {{date}}:\n{{prereg_link}}\n\nPlease bring the same government-issued photo ID entered in the form.",
+    },
+    [`${NotificationEvent.PREREG_REMINDER}:${NotificationChannel.EMAIL}`]: {
+      subject: "Reminder: complete your visitor pre-registration",
+      body: "Hello {{visitor_name}},\n\nPlease complete your visitor pre-registration before your upcoming visit:\n{{prereg_link}}\n\nPlease bring the same government-issued photo ID entered in the form.",
+    },
+    [`${NotificationEvent.PREREG_SUBMITTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Pre-registration submitted for {{visitor_name}}",
+      body: "{{visitor_name}} submitted pre-registration for {{date}} at {{time}}. Review the submission in Entrivo.",
+    },
+    [`${NotificationEvent.PREREG_REJECTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Action required: update your visitor pre-registration",
+      body: "Hello {{visitor_name}},\n\nYour pre-registration needs an update. Reason: {{reason}}\n\nUse this fresh secure link to make corrections:\n{{prereg_link}}",
     },
     [`${NotificationEvent.INVITATION_CANCELLED}:${NotificationChannel.EMAIL}`]: {
       subject: "Visit Cancelled: {{company_name}} on {{date}}",
@@ -136,6 +159,26 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
       subject: "Visitor Approval Required",
       body: "Approval needed for {{visitor_name}} ({{visitor_company}}) on {{date}}.",
     },
+    [`${NotificationEvent.GROUP_INVITE_CREATED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Group visit scheduled: {{visitor_count}} visitors",
+      body: "{{host_name}} has scheduled a group visit for {{visitor_count}} visitors on {{date}} at {{time}}. Review the visit in Entrivo.",
+    },
+    [`${NotificationEvent.GROUP_INVITE_CREATED}:${NotificationChannel.IN_APP}`]: {
+      subject: "Group visit scheduled",
+      body: "{{visitor_count}} visitors are scheduled to arrive on {{date}} at {{time}}.",
+    },
+    [`${NotificationEvent.GROUP_INVITE_CREATED}:${NotificationChannel.WEB_PUSH}`]: {
+      subject: "Group visit scheduled",
+      body: "{{visitor_count}} visitors are scheduled to arrive on {{date}}.",
+    },
+    [`${NotificationEvent.GROUP_INVITE_CREATED}:${NotificationChannel.SLACK}`]: {
+      subject: "Group visit scheduled",
+      body: "{{visitor_count}} visitors are scheduled to arrive on {{date}} at {{time}}.",
+    },
+    [`${NotificationEvent.GROUP_INVITE_CREATED}:${NotificationChannel.TEAMS}`]: {
+      subject: "Group visit scheduled",
+      body: "{{visitor_count}} visitors are scheduled to arrive on {{date}} at {{time}}.",
+    },
     [`${NotificationEvent.APPROVAL_DECIDED}:${NotificationChannel.EMAIL}`]: {
       subject: "Pass Request {{reason}}: {{visitor_name}}",
       body: "Hello {{visitor_name}},\n\nYour visitor pass request for {{date}} at {{company_name}} has been {{reason}} by {{host_name}}.",
@@ -147,6 +190,22 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
     [`${NotificationEvent.APPROVAL_ESCALATED}:${NotificationChannel.IN_APP}`]: {
       subject: "Approval Escalated",
       body: "Pass request for {{visitor_name}} escalated to administrator.",
+    },
+    [`${NotificationEvent.DELIVERY_RECEIVED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Package received: {{courier_company}}",
+      body: "Hello {{visitor_name}},\n\nA package from {{courier_company}} has been received for you. Tracking/AWB: {{tracking_number}}. Package count: {{package_count}}. Pickup location: {{storage_location}}. One-time pickup code: {{pickup_code}}.",
+    },
+    [`${NotificationEvent.DELIVERY_RECEIVED}:${NotificationChannel.IN_APP}`]: {
+      subject: "Package received",
+      body: "{{courier_company}} package ready for pickup at {{storage_location}}.",
+    },
+    [`${NotificationEvent.DELIVERY_REMINDER}:${NotificationChannel.EMAIL}`]: {
+      subject: "Reminder: uncollected package",
+      body: "Hello {{visitor_name}},\n\nYou have an uncollected package at {{storage_location}}. Tracking/AWB: {{tracking_number}}.",
+    },
+    [`${NotificationEvent.DELIVERY_UNCLAIMED}:${NotificationChannel.IN_APP}`]: {
+      subject: "Delivery marked unclaimed",
+      body: "{{courier_company}} package for {{visitor_name}} is unclaimed.",
     },
     [`${NotificationEvent.DOCUMENT_EXPIRING}:${NotificationChannel.EMAIL}`]: {
       subject: "Action Required: Document Expiring - {{document_title}}",
@@ -176,6 +235,22 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
 
   // Hindi (hi)
   hi: {
+    [`${NotificationEvent.PREREG_REQUESTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "{{company_name}} के लिए आगमन-पूर्व पंजीकरण पूरा करें",
+      body: "नमस्ते {{visitor_name}},\n\nकृपया यात्रा से पहले आगमन-पूर्व पंजीकरण पूरा करें:\n{{prereg_link}}\n\nकृपया वही सरकारी फोटो पहचान पत्र साथ लाएँ।",
+    },
+    [`${NotificationEvent.PREREG_REMINDER}:${NotificationChannel.EMAIL}`]: {
+      subject: "अनुस्मारक: आगमन-पूर्व पंजीकरण पूरा करें",
+      body: "नमस्ते {{visitor_name}},\n\nकृपया अपनी आगामी यात्रा से पहले पंजीकरण पूरा करें:\n{{prereg_link}}",
+    },
+    [`${NotificationEvent.PREREG_SUBMITTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "{{visitor_name}} का आगमन-पूर्व पंजीकरण समीक्षा के लिए तैयार है",
+      body: "{{visitor_name}} ने {{date}} को {{time}} की यात्रा के लिए पंजीकरण जमा किया है। Entrivo में समीक्षा करें।",
+    },
+    [`${NotificationEvent.PREREG_REJECTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "कार्रवाई आवश्यक: आगमन-पूर्व पंजीकरण अपडेट करें",
+      body: "नमस्ते {{visitor_name}},\n\nआपके पंजीकरण में बदलाव आवश्यक है। कारण: {{reason}}\n\nअपडेट के लिए नया सुरक्षित लिंक:\n{{prereg_link}}",
+    },
     [`${NotificationEvent.VISITOR_INVITED}:${NotificationChannel.EMAIL}`]: {
       subject: "{{company_name}} के लिए कार्यस्थल प्रवेश पास - {{date}}",
       body: "नमस्ते {{visitor_name}},\n\n{{host_name}} ने {{date}} को {{time}} बजे {{location}} में {{company_name}} की यात्रा निर्धारित की है।\n\nउद्देश्य: {{purpose}}\n\nत्वरित सुरक्षा जांच के लिए अपने डिजिटल पास का उपयोग करें:\n{{qr_link}}",
@@ -204,6 +279,22 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
 
   // Gujarati (gu)
   gu: {
+    [`${NotificationEvent.PREREG_REQUESTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "{{company_name}} માટે મુલાકાત-પૂર્વ નોંધણી પૂર્ણ કરો",
+      body: "નમસ્તે {{visitor_name}},\n\nકૃપા કરીને મુલાકાત પહેલાં નોંધણી પૂર્ણ કરો:\n{{prereg_link}}\n\nકૃપા કરીને દાખલ કરેલ એ જ સરકારી ફોટો ID સાથે લાવો.",
+    },
+    [`${NotificationEvent.PREREG_REMINDER}:${NotificationChannel.EMAIL}`]: {
+      subject: "યાદ અપાવવું: મુલાકાત-પૂર્વ નોંધણી પૂર્ણ કરો",
+      body: "નમસ્તે {{visitor_name}},\n\nતમારી આગામી મુલાકાત પહેલાં નોંધણી પૂર્ણ કરો:\n{{prereg_link}}",
+    },
+    [`${NotificationEvent.PREREG_SUBMITTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "{{visitor_name}} ની મુલાકાત-પૂર્વ નોંધણી સમીક્ષા માટે તૈયાર છે",
+      body: "{{visitor_name}} એ {{date}} ના રોજ {{time}} ની મુલાકાત માટે નોંધણી સબમિટ કરી છે. Entrivo માં સમીક્ષા કરો.",
+    },
+    [`${NotificationEvent.PREREG_REJECTED}:${NotificationChannel.EMAIL}`]: {
+      subject: "જરૂરી કાર્યવાહી: મુલાકાત-પૂર્વ નોંધણી અપડેટ કરો",
+      body: "નમસ્તે {{visitor_name}},\n\nતમારી નોંધણીમાં સુધારો જરૂરી છે. કારણ: {{reason}}\n\nઅપડેટ માટે નવો સુરક્ષિત લિંક:\n{{prereg_link}}",
+    },
     [`${NotificationEvent.VISITOR_INVITED}:${NotificationChannel.EMAIL}`]: {
       subject: "{{company_name}} માટે એક્સેસ પાસ - {{date}}",
       body: "નમસ્તે {{visitor_name}},\n\n{{host_name}} એ {{date}} ના રોજ {{time}} વાગ્યે {{location}} ખાતે {{company_name}} ની મુલાકાત નક્કી કરી છે.\n\nહેતુ: {{purpose}}\n\nડિજિટલ પાસ: {{qr_link}}",
@@ -243,6 +334,7 @@ export function buildVariableMap(
     visitor_name: payload.visitorName || "Guest",
     visitor_email: payload.visitorEmail || "",
     visitor_company: payload.visitorCompany || "Guest",
+    visitor_count: String(payload.visitorCount ?? ""),
     host_name: payload.hostName || "Host",
     host_email: payload.hostEmail || "",
     date: payload.date || new Date().toLocaleDateString(),
@@ -250,18 +342,29 @@ export function buildVariableMap(
     location: payload.location || "Main Reception",
     badge_number: payload.badgeNumber || "BADGE-101",
     qr_link: payload.qrPassUrl || `${appUrl}/pass/sample`,
+    prereg_link: payload.preRegistrationUrl || "",
     purpose: payload.purpose || "Business Meeting",
     action_url: payload.approvalUrl || `${appUrl}/dashboard`,
-    reason: payload.reason || payload.cancellationReason || payload.rescheduleReason || "Standard Procedure",
+    reason: payload.rejectionReason || payload.reason || payload.cancellationReason || payload.rescheduleReason || "Standard Procedure",
     severity: payload.severity || "MEDIUM",
     document_title: payload.documentTitle || "Visitor Agreement",
     document_type: payload.documentType || "ID Proof",
     days_remaining: String(payload.daysRemaining ?? 30),
     expiry_date: payload.expiryDate || "soon",
     company_name: companyName,
-    reminder_window: payload.reminderType === "1H" ? "1 hour" : "24 hours",
+    reminder_window:
+      payload.reminderType === "2H"
+        ? "2 hours"
+        : payload.reminderType === "1H"
+        ? "1 hour"
+        : "24 hours",
     overstay_duration: payload.overstayDuration || "Overdue",
     report_summary: payload.reportSummary || "All operations running normally.",
+    courier_company: payload.courierCompany || "Courier",
+    tracking_number: payload.trackingNumber || "Not provided",
+    pickup_code: payload.pickupCode || "",
+    storage_location: payload.storageLocation || "Reception",
+    package_count: String(payload.packageCount ?? 1),
   };
 }
 

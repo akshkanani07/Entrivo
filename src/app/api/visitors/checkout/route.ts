@@ -9,6 +9,14 @@ import { optionalString } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
 import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
+import { releaseParkingForCheckout } from "@/services/parking/parking.service";
+import { feedbackQueue } from "@/lib/queue";
+import { scheduleFeedbackRequest } from "@/services/feedback/feedback.service";
+import { getOrgPolicy } from "@/lib/settings-registry";
+import {
+  createSignedFeedbackVisitPayload,
+  generateQRCodeDataUrl,
+} from "@/lib/qr";
 
 const checkoutSchema = z.object({
   checkInId: optionalString(),
@@ -62,10 +70,19 @@ export async function POST(request: Request) {
         ],
         status: "CHECKED_IN",
         visitor: { organizationId: orgId },
+        hostEmployee: {
+          organizationId: orgId,
+          user: { organizationId: orgId },
+        },
       },
       include: {
         visitor: true,
-        hostEmployee: { include: { user: true } },
+        hostEmployee: {
+          include: {
+            user: true,
+            office: { select: { branchId: true } },
+          },
+        },
       },
     });
 
@@ -84,7 +101,27 @@ export async function POST(request: Request) {
         ? `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`
         : `${durationMinutes} mins`;
 
-    await prisma.$transaction(async (tx) => {
+    const checkoutResult = await prisma.$transaction(async (tx) => {
+      const branchId = checkIn.hostEmployee.office?.branchId;
+      const activeEvent = await tx.emergencyEvent.findFirst({
+        where: {
+          organizationId: orgId,
+          status: "ACTIVE",
+          OR: [
+            { branchId: null, officeId: null, floorId: null, zoneId: null },
+            ...(branchId
+              ? [{ branchId, officeId: null, floorId: null, zoneId: null }]
+              : []),
+            ...(checkIn.hostEmployee.officeId
+              ? [{ officeId: checkIn.hostEmployee.officeId, floorId: null, zoneId: null }]
+              : []),
+            ...(checkIn.floorId ? [{ floorId: checkIn.floorId, zoneId: null }] : []),
+            ...(checkIn.zoneId ? [{ zoneId: checkIn.zoneId }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+
       // 1. Update CheckIn
       await tx.checkIn.update({
         where: { id: checkIn.id },
@@ -95,6 +132,7 @@ export async function POST(request: Request) {
       await tx.checkOut.create({
         data: {
           checkInId: checkIn.id,
+          emergencyEventId: activeEvent?.id ?? null,
           checkOutTime,
           durationMinutes,
           checkoutMethod: checkoutMethod || "MANUAL",
@@ -110,17 +148,36 @@ export async function POST(request: Request) {
         });
       }
 
+      const parkingRelease = await releaseParkingForCheckout(tx, orgId, checkIn.id, checkOutTime);
+      if (parkingRelease.missingExit) {
+        await tx.securityLog.create({
+          data: {
+            organizationId: orgId,
+            logType: "PARKING_EXIT_MISSING",
+            description: `Parking assignment for visitor ${checkIn.visitor?.name || "Guest"} was released at checkout without a recorded vehicle exit.`,
+            severity: "MEDIUM",
+            guardName: user.name,
+          },
+        });
+      }
+
       // 4. Security Log
       await tx.securityLog.create({
         data: {
           organizationId: orgId,
-          logType: "VISITOR_CHECKOUT",
-          description: `Visitor ${checkIn.visitor?.name || "Guest"} (Badge: ${checkIn.badgeNumber || "N/A"}) checked out. Duration: ${durationFormatted}.`,
-          severity: "LOW",
+          logType: activeEvent ? "CHECKOUT_DURING_EMERGENCY" : "VISITOR_CHECKOUT",
+          description: activeEvent
+            ? "A visitor checkout was recorded while an emergency was active."
+            : `Visitor ${checkIn.visitor?.name || "Guest"} (Badge: ${checkIn.badgeNumber || "N/A"}) checked out. Duration: ${durationFormatted}.`,
+          severity: activeEvent ? "HIGH" : "LOW",
           guardName: user.name,
         },
       });
+
+      return { activeEvent, parkingRelease };
     });
+    const activeEmergency = checkoutResult.activeEvent;
+    const parkingRelease = checkoutResult.parkingRelease;
 
     audit({
       organizationId: orgId,
@@ -128,8 +185,39 @@ export async function POST(request: Request) {
       action: "CHECKOUT_SUCCESS",
       entity: "CHECKIN",
       entityId: checkIn.id,
-      details: { badgeNumber: checkIn.badgeNumber, durationMinutes, visitorName: checkIn.visitor?.name },
+      details: {
+        badgeNumber: checkIn.badgeNumber,
+        durationMinutes,
+        ...(activeEmergency ? { emergencyEventId: activeEmergency.id } : {}),
+      },
     }).catch(console.error);
+    if (parkingRelease.releasedCount) {
+      audit({
+        organizationId: orgId,
+        userId: user.id,
+        action: "PARKING_RELEASE",
+        entity: "CHECKIN",
+        entityId: checkIn.id,
+        details: {
+          releasedAssignments: parkingRelease.releasedCount,
+          missingExit: parkingRelease.missingExit,
+        },
+      }).catch(console.error);
+    }
+
+    if (parkingRelease.missingExit) {
+      await notify(NotificationEvent.SECURITY_ALERT, {
+        organizationId: orgId,
+        visitorName: checkIn.visitor?.name || "Guest",
+        visitorCompany: checkIn.visitor?.company || undefined,
+        hostName: checkIn.hostEmployee?.user?.name || "Security team",
+        hostEmail: checkIn.hostEmployee?.user?.email,
+        hostUserId: checkIn.hostEmployee?.userId,
+        severity: "MEDIUM",
+        reason: "Visitor checkout released a parking slot without a recorded vehicle exit.",
+        entityId: `parking-exit-missing-${checkIn.id}`,
+      });
+    }
 
     // Notify about visitor checkout
     await notify(NotificationEvent.VISITOR_CHECKED_OUT, {
@@ -145,17 +233,50 @@ export async function POST(request: Request) {
       entityId: checkIn.id,
     }).catch(console.error);
 
-    // Send thank you notification to visitor
-    if (checkIn.visitor?.email) {
-      await notify(NotificationEvent.CHECKOUT_THANKS, {
+    let feedbackUrl: string | undefined;
+    let feedbackQrDataUrl: string | undefined;
+
+    // Schedule the existing checkout-thanks event as a delayed feedback request.
+    const isKioskCheckout = checkoutMethod?.toUpperCase() === "KIOSK";
+    if (checkIn.visitor?.email || isKioskCheckout) {
+      try {
+        const scheduled = await scheduleFeedbackRequest({
+          organizationId: orgId,
+          checkInId: checkIn.id,
+          visitorEmail: checkIn.visitor?.email,
+          visitorName: checkIn.visitor?.name || "Guest",
+          hostName: checkIn.hostEmployee?.user?.name || "Host",
+          channelSentVia: "EMAIL",
+        });
+        if (scheduled) {
+          feedbackUrl = scheduled.feedbackUrl;
+          const { policy } = await getOrgPolicy(orgId);
+          if (checkIn.visitor?.email) {
+            await feedbackQueue.add(
+              "send-checkout-feedback",
+              {
+                organizationId: orgId,
+                checkInId: checkIn.id,
+                token: scheduled.token,
+              },
+              { attempts: 5, delay: policy.feedbackRequestDelayMinutes * 60 * 1000 }
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Failed to schedule visitor feedback:", error);
+      }
+    }
+
+    if (isKioskCheckout) {
+      const qrPayload = createSignedFeedbackVisitPayload({
         organizationId: orgId,
-        visitorName: checkIn.visitor.name,
-        visitorEmail: checkIn.visitor.email,
-        visitorCompany: checkIn.visitor.company || undefined,
-        hostName: checkIn.hostEmployee?.user?.name || "Host",
-        time: checkOutTime.toLocaleTimeString(),
-        entityId: `thanks-${checkIn.id}`,
-      }).catch(console.error);
+        checkInId: checkIn.id,
+      });
+      feedbackQrDataUrl = await generateQRCodeDataUrl(
+        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/feedback/qr/${encodeURIComponent(qrPayload)}`
+      );
+      feedbackUrl = feedbackUrl || `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/feedback/qr/${encodeURIComponent(qrPayload)}`;
     }
 
     // Trigger outbound webhook event
@@ -189,6 +310,12 @@ export async function POST(request: Request) {
         durationFormatted,
         visitorName: checkIn.visitor?.name || "Guest",
         badgeNumber: checkIn.badgeNumber,
+        emergencyFlagged: Boolean(activeEmergency),
+        feedbackUrl,
+        feedbackQrDataUrl,
+        warnings: parkingRelease.missingExit
+          ? ["Parking slot was released, but no vehicle exit was recorded."]
+          : [],
       },
     };
 

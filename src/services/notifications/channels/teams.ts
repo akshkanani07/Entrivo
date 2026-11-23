@@ -69,9 +69,10 @@ export async function sendTeamsNotification(
           NotificationEvent.VISITOR_WAITING,
           NotificationEvent.SECURITY_ALERT,
           NotificationEvent.VISITOR_OVERSTAYED,
+          NotificationEvent.FEEDBACK_DETRACTOR,
         ];
 
-    if (!activeEvents.includes(event)) {
+    if (!payload.emergencyEventId && !activeEvents.includes(event)) {
       return { success: false, reason: `Event ${event} not routed to Teams` };
     }
 
@@ -93,6 +94,9 @@ export async function sendTeamsNotification(
 
     // Mock mode support
     if (rawWebhook.startsWith("mock_") || rawWebhook.includes("mock-teams")) {
+      if (payload.emergencyEventId) {
+        return { success: false, reason: "Teams is configured in simulation mode" };
+      }
       const masked = "https://webhook.office.com/MOCK";
       await prisma.notification.create({
         data: {
@@ -178,8 +182,7 @@ export async function sendTeamsNotification(
     const maskedUrl = maskTeamsUrl(rawWebhook);
 
     if (!response.ok && response.type !== "opaqueredirect") {
-      const errText = await response.text().catch(() => "(unreadable)");
-      console.error("[Teams] HTTP error:", response.status, errText.slice(0, 200));
+      console.error("[Teams] HTTP error:", response.status);
 
       await prisma.notification.create({
         data: {
@@ -190,7 +193,7 @@ export async function sendTeamsNotification(
           body: content.body,
           recipient: maskedUrl,
           status: "FAILED",
-          error: `HTTP ${response.status}: ${errText.slice(0, 200)}`,
+          error: `HTTP ${response.status}`,
           lastAttemptAt: new Date(),
           retryCount: 0,
         },
@@ -242,7 +245,10 @@ export async function sendTeamsNotification(
     return { success: true };
   } catch (error: any) {
     const errorMsg = error instanceof Error && error.name === "TimeoutError" ? "Webhook timeout after 5s" : "Dispatch error";
-    console.error("[Teams] Dispatch error:", error);
+    console.error(
+      "[Teams] Dispatch error:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
 
     await prisma.notification.create({
       data: {
