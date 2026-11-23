@@ -17,8 +17,8 @@
     "test:acceptance": "node --experimental-strip-types scripts/verify-phase-0-acceptance.ts",
     "test:phase3": "npx tsx -r ./scripts/mock-server-only.cjs scripts/verify-phase-3-acceptance.ts",
     "migrate:storage": "node --experimental-strip-types scripts/migrate-base64-to-storage.ts",
-    "worker": "npx tsx scripts/worker.ts",
-    "vapid": "npx tsx scripts/generate-vapid.ts",
+    "worker": "tsx -r ./scripts/mock-server-only.cjs scripts/worker.ts",
+    "vapid": "tsx scripts/generate-vapid.ts",
     "gen:key": "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
   },
   "dependencies": {
