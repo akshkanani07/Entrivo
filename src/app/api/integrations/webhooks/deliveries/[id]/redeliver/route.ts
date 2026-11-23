@@ -45,8 +45,8 @@ export async function POST(
         ? `Delivery redelivered successfully (HTTP ${result.statusCode})`
         : `Redelivery failed: ${result.error || "Remote endpoint rejected request"}`,
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

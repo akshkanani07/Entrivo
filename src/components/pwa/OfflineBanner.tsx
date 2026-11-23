@@ -48,7 +48,7 @@ export function OfflineBanner() {
     window.addEventListener(QUEUE_CHANGE_EVENT, updateQueue);
 
     // Initial load
-    updateQueue();
+    void updateQueue();
     const cleanupSync = initOfflineSyncListeners();
 
     return () => {

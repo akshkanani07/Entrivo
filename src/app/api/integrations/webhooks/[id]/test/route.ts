@@ -30,7 +30,7 @@ export async function POST(
       data: {
         webhookSubscriptionId: subscription.id,
         organizationId,
-        event: "ping" as any,
+        event: "ping" as unknown as import("@/services/webhooks/webhook.service").WebhookEvent,
         payload: {
           id: crypto.randomUUID(),
           event: "ping",
@@ -54,8 +54,8 @@ export async function POST(
         ? `Ping successfully delivered (HTTP ${result.statusCode})`
         : `Ping delivery failed: ${result.error || "Unknown error"}`,
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

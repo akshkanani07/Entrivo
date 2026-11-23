@@ -47,10 +47,10 @@ export async function GET() {
       data: masked,
       catalog: WEBHOOK_EVENTS,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhooks GET error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch webhooks" },
+      { success: false, error: (error instanceof Error ? error.message : String(error)) || "Failed to fetch webhooks" },
       { status: 500 }
     );
   }
@@ -120,10 +120,10 @@ export async function POST(request: Request) {
       data: subscription, // Secret returned in full once upon creation
       message: "Webhook subscription created. Please save the secret token securely.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhooks POST error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to create webhook" },
+      { success: false, error: (error instanceof Error ? error.message : String(error)) || "Failed to create webhook" },
       { status: 500 }
     );
   }

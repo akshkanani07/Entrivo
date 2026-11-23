@@ -49,7 +49,7 @@ export function PairingClient() {
       setSuccessName(data.kiosk?.name || "Lobby Terminal");
 
       try {
-        confetti({
+        void confetti({
           particleCount: 70,
           spread: 60,
           origin: { y: 0.6 },

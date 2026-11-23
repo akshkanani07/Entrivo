@@ -79,7 +79,7 @@ export function IdleSessionGuard({
               if (countdownIntervalRef.current) {
                 clearInterval(countdownIntervalRef.current);
               }
-              handleLogoutNow();
+              void handleLogoutNow();
               return 0;
             }
             return prev - 1;

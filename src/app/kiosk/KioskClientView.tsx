@@ -82,7 +82,7 @@ export function KioskClientView({
     setIsOnline(navigator.onLine);
     const onOnline = () => {
       setIsOnline(true);
-      syncOfflineQueue();
+      void syncOfflineQueue();
     };
     const onOffline = () => setIsOnline(false);
 
@@ -209,7 +209,7 @@ export function KioskClientView({
       }
 
       try {
-        confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
+        void confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
       } catch {}
 
       const item = checkinData?.data || checkinData?.checkIn;
@@ -294,7 +294,7 @@ export function KioskClientView({
         notifyQueueChanged();
 
         try {
-          confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
+          void confetti({ particleCount: 70, spread: 60, colors: ["#6366f1", "#10b981"] });
         } catch {}
 
         const selectedHost = employees.find((e) => e.id === hostId);
@@ -352,7 +352,7 @@ export function KioskClientView({
       }
 
       try {
-        confetti({ particleCount: 80, spread: 70, colors: ["#6366f1", "#10b981", "#06b6d4"] });
+        void confetti({ particleCount: 80, spread: 70, colors: ["#6366f1", "#10b981", "#06b6d4"] });
       } catch {}
 
       const item = data?.data || data?.checkIn;
@@ -562,7 +562,7 @@ export function KioskClientView({
                 type="button"
                 onClick={() => {
                   setQrInput("ENTRIVO-INV-APEX-101");
-                  handleQRVerify("ENTRIVO-INV-APEX-101");
+                  void handleQRVerify("ENTRIVO-INV-APEX-101");
                 }}
                 className="w-full text-left px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 hover:border-indigo-500 text-xs text-indigo-300 transition-colors"
               >

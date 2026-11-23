@@ -82,7 +82,7 @@ export function DeliveryLogClient() {
   }, [selectedChannel, selectedStatus, selectedEvent, selectedDate]);
 
   useEffect(() => {
-    fetchLog();
+    void fetchLog();
   }, [fetchLog]);
 
   const handleRetry = async (id: string) => {
@@ -98,7 +98,7 @@ export function DeliveryLogClient() {
         throw new Error(data.error || "Retry failed");
       }
       toast.success(data.message || "Notification retried successfully");
-      await fetchLog();
+      await void fetchLog();
     } catch (err: any) {
       toast.error(err.message || "Failed to retry notification");
     } finally {

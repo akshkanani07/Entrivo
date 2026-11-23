@@ -37,9 +37,11 @@ describe("QR Signing and Verification Security Engine", () => {
     const result = verifySignedQRPayload(signed);
     expect(result.valid).toBe(true);
     expect(result.payload).toBeDefined();
-    expect(result.payload.vId).toBe("vis-rajesh-01");
-    expect(result.payload.mId).toBe("inv-meet-99");
-    expect(result.payload.exp).toBeGreaterThan(Date.now());
+    if (result.payload) {
+      expect(result.payload.vId).toBe("vis-rajesh-01");
+      expect(result.payload.mId).toBe("inv-meet-99");
+      expect(result.payload.exp).toBeGreaterThan(Date.now());
+    }
   });
 
   it("detects and rejects HMAC signature tampering", () => {

@@ -26,7 +26,7 @@ export function PushSubscriptionManager() {
     if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
       setIsSupported(true);
       setPermission(Notification.permission);
-      checkExistingSubscription();
+      void checkExistingSubscription();
     }
   }, []);
 

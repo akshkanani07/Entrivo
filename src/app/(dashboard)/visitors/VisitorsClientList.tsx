@@ -88,7 +88,7 @@ export function VisitorsClientList({
   const handleOpenInspect = (v: VisitorItem) => {
     setInspectVisitor(v);
     setInspectTab("profile");
-    fetchVisitorDocuments(v.id);
+    void fetchVisitorDocuments(v.id);
   };
 
   // Confirm Delete Dialog

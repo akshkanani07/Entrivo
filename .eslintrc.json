@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json.schemastore.org/eslintrc",
+  "root": true,
+  "extends": [
+    "next/core-web-vitals"
+  ],
+  "ignorePatterns": [
+    ".next/",
+    "node_modules/",
+    "gate-logs/"
+  ],
+  "overrides": [
+    {
+      "files": ["*.ts", "*.tsx"],
+      "parser": "@typescript-eslint/parser",
+      "parserOptions": {
+        "project": "./tsconfig.json"
+      },
+      "plugins": [
+        "@typescript-eslint"
+      ],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-unused-vars": [
+          "warn",
+          {
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^_"
+          }
+        ],
+        "@typescript-eslint/no-explicit-any": "warn"
+      }
+    },
+    {
+      "files": [
+        "src/lib/auth.ts",
+        "src/lib/rbac.ts",
+        "src/lib/qr.ts",
+        "src/lib/encryption.ts",
+        "src/middleware.ts",
+        "src/services/calendar/**/*.ts",
+        "src/services/calendar/**/*.tsx",
+        "src/app/api/integrations/**/*.ts",
+        "src/app/api/integrations/**/*.tsx"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "error"
+      }
+    }
+  ]
+}

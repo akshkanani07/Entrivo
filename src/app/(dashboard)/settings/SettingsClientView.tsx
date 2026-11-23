@@ -226,10 +226,10 @@ export function SettingsClientView({
 
   useEffect(() => {
     if (activeTab === "SECURITY") {
-      fetchSessions();
+      void fetchSessions();
     }
     if (activeTab === "PRIVACY") {
-      fetchConsents();
+      void fetchConsents();
     }
   }, [activeTab]);
 

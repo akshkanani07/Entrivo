@@ -74,7 +74,7 @@ export function CheckinTerminalClient({
       // Find matching invitation and trigger check-in
       const match = scheduledList.find((s) => s.id === initialToken || s.token === initialToken);
       if (match) {
-        handleCheckIn(match.id);
+        void handleCheckIn(match.id);
       }
     }
   }, [initialToken]);
@@ -98,7 +98,7 @@ export function CheckinTerminalClient({
       }
 
       try {
-        confetti({
+        void confetti({
           particleCount: 60,
           spread: 60,
           origin: { y: 0.6 },
@@ -231,7 +231,7 @@ export function CheckinTerminalClient({
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            Today's Scheduled Arrivals ({scheduledList.length})
+            Today&apos;s Scheduled Arrivals ({scheduledList.length})
           </button>
           <button
             onClick={() => setActiveTab("CHECKOUT")}
@@ -428,7 +428,7 @@ export function CheckinTerminalClient({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onVerified={(data) => {
-          handleCheckIn(data.invitationId);
+          void handleCheckIn(data.invitationId);
         }}
       />
     </div>

@@ -141,12 +141,12 @@ export function initOfflineSyncListeners(): () => void {
 
   const handleOnline = () => {
     console.log("[Entrivo Offline] Network restored. Initiating automatic synchronization...");
-    syncOfflineQueue();
+    void syncOfflineQueue();
   };
 
   const handleServiceWorkerMessage = (event: MessageEvent) => {
     if (event.data && event.data.type === "TRIGGER_OFFLINE_SYNC") {
-      syncOfflineQueue();
+      void syncOfflineQueue();
     }
   };
 
@@ -155,7 +155,7 @@ export function initOfflineSyncListeners(): () => void {
 
   // Trigger sync immediately if online
   if (navigator.onLine) {
-    syncOfflineQueue();
+    void syncOfflineQueue();
   }
 
   return () => {

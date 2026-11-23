@@ -252,7 +252,7 @@ export function IntegrationsManager({
       const data = await res.json();
       if (data.success) {
         toast.success(data.message || "Test ping delivered successfully!");
-        refreshDeliveries();
+        void refreshDeliveries();
       } else {
         toast.error(data.message || data.error || "Ping delivery failed");
       }
@@ -333,7 +333,7 @@ export function IntegrationsManager({
       const data = await res.json();
       if (data.success) {
         toast.success(data.message || "Delivery redelivered successfully!");
-        refreshDeliveries();
+        void refreshDeliveries();
       } else {
         toast.error(data.message || data.error || "Redelivery attempt failed");
       }
@@ -1165,7 +1165,7 @@ export function IntegrationsManager({
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText(createdKeySecret.rawKey);
+                  void navigator.clipboard.writeText(createdKeySecret.rawKey);
                   toast.success("API key copied to clipboard!");
                 }}
                 className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1 flex-shrink-0"
@@ -1299,7 +1299,7 @@ export function IntegrationsManager({
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(newRotatedSecret);
+                      void navigator.clipboard.writeText(newRotatedSecret);
                       toast.success("Secret copied!");
                     }}
                     className="p-1 text-slate-400 hover:text-white"

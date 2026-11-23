@@ -46,8 +46,8 @@ export async function GET(
         secret: webhook.secret ? "••••••••" + webhook.secret.slice(-4) : "••••••••",
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 
@@ -80,7 +80,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: Record<string, any> = {};
+    const updateData: Record<string, unknown> = {};
 
     if (parsed.data.url) {
       const ssrfCheck = await assertSafeUrl(parsed.data.url);
@@ -129,8 +129,8 @@ export async function PATCH(
       },
       message: "Webhook updated successfully",
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 
@@ -168,8 +168,8 @@ export async function DELETE(
     }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "Webhook subscription deleted" });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

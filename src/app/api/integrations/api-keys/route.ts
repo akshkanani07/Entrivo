@@ -41,8 +41,8 @@ export async function GET() {
     });
 
     return NextResponse.json({ success: true, data: keys });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 
@@ -111,8 +111,8 @@ export async function POST(request: Request) {
       },
       message: "API key created successfully. Please copy your key now — it cannot be shown again.",
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

@@ -81,7 +81,7 @@ export function AuditLogsClient() {
   }, [page, actionFilter, entityFilter, search, startDate, endDate]);
 
   useEffect(() => {
-    fetchLogs();
+    void fetchLogs();
   }, [fetchLogs]);
 
   const handleExportCsv = () => {

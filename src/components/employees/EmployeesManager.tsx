@@ -457,7 +457,7 @@ export function EmployeesManager({
         </div>
       ) : filteredEmployees.length === 0 ? (
         <div className="glass-card rounded-2xl border border-slate-800 p-8 text-center text-slate-400 text-xs">
-          No host employees match your search filter "{searchQuery}".
+          No host employees match your search filter &quot;{searchQuery}&quot;.
         </div>
       ) : (
         /* Employee Grid */

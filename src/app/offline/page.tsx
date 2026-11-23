@@ -27,13 +27,13 @@ export default function OfflinePage() {
         </div>
 
         <div className="space-y-2 pt-2">
-          <a
+          <Link
             href="/"
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-glow-sm"
           >
             <RefreshCw className="w-4 h-4" />
             Check Connection & Reload
-          </a>
+          </Link>
 
           <Link
             href="/kiosk"

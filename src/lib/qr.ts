@@ -44,7 +44,14 @@ export function createSignedQRPayload(payload: { visitorId: string; meetingId?: 
   return `ENTQ1.${base64Data}.${hmac}`;
 }
 
-export function verifySignedQRPayload(token: string): { valid: boolean; payload?: any; error?: string } {
+export interface SignedQRPayload {
+  vId: string;
+  mId: string | null;
+  exp: number;
+  nonce: string;
+}
+
+export function verifySignedQRPayload(token: string): { valid: boolean; payload?: SignedQRPayload; error?: string } {
   try {
     if (!token.startsWith("ENTQ1.")) {
       // Allow standard fallback to database token search if legacy format
@@ -69,7 +76,7 @@ export function verifySignedQRPayload(token: string): { valid: boolean; payload?
     }
 
     return { valid: false, error: "Invalid cryptographic QR signature." };
-  } catch (err: any) {
+  } catch (err: unknown) {
     return { valid: false, error: "Failed to parse QR token." };
   }
 }

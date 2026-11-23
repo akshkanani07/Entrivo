@@ -408,7 +408,7 @@ export function MeetingRoomsManager({ initialRooms, offices }: Props) {
               <div className="border-t border-slate-800/80 pt-3 space-y-3">
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                    Today's Visitor Bookings ({room.invitations.length}):
+                    Today&apos;s Visitor Bookings ({room.invitations.length}):
                   </span>
                   {room.invitations.length === 0 ? (
                     <span className="text-[11px] text-slate-500 italic block">No bookings scheduled today.</span>

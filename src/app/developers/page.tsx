@@ -178,7 +178,7 @@ export default function DevelopersPage() {
           </p>
 
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 space-y-1 overflow-x-auto">
-            <div className="text-slate-500">// Node.js Verification Example</div>
+            <div className="text-slate-500">{"// Node.js Verification Example"}</div>
             <div>const crypto = require(&apos;crypto&apos;);</div>
             <br />
             <div>function verifyEntrivoSignature(secret, rawBody, signatureHeader, timestampHeader) &#123;</div>

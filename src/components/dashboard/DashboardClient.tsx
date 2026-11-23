@@ -143,14 +143,14 @@ export function DashboardClient({
 
   // Initial and reactive load
   useEffect(() => {
-    fetchStats(true);
+    void fetchStats(true);
   }, [fetchStats]);
 
   // Auto-refresh interval (30 seconds)
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
-      fetchStats(false);
+      void fetchStats(false);
     }, 30000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchStats]);
@@ -303,10 +303,10 @@ export function DashboardClient({
 
       {/* 6 Key Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {/* Card 1: Today's Visitors */}
+        {/* Card 1: Today&apos;s Visitors */}
         <div className="glass-card p-5 rounded-2xl border border-indigo-500/20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today's Visitors</span>
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today&apos;s Visitors</span>
             <Users className="w-4 h-4 text-indigo-400" />
           </div>
           <div className="mt-3 flex items-baseline gap-2">
@@ -434,7 +434,7 @@ export function DashboardClient({
         />
       ) : null}
 
-      {/* Tables Row: Active on Premises & Today's Upcoming Invitations */}
+      {/* Tables Row: Active on Premises & Today&apos;s Upcoming Invitations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Active Visitors Table */}
         <div className="glass-card rounded-2xl border border-indigo-950/70 overflow-hidden flex flex-col justify-between">
@@ -514,7 +514,7 @@ export function DashboardClient({
             <div className="px-5 py-3.5 bg-slate-950/80 border-b border-slate-800/80 flex justify-between items-center text-xs">
               <span className="font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                Today's Scheduled Arrivals
+                Today&apos;s Scheduled Arrivals
               </span>
               <Link href="/invitations" className="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
                 View all <ArrowUpRight className="w-3.5 h-3.5" />

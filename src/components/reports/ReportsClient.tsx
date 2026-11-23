@@ -180,7 +180,7 @@ export function ReportsClient({
   ]);
 
   useEffect(() => {
-    fetchReportData();
+    void fetchReportData();
   }, [fetchReportData]);
 
   // Load Saved Reports

@@ -48,14 +48,14 @@ export function NotificationBell() {
   };
 
   useEffect(() => {
-    fetchUnreadCount();
+    void fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 15000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (isOpen) {
-      fetchRecent();
+      void fetchRecent();
     }
   }, [isOpen]);
 

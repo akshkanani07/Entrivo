@@ -74,7 +74,7 @@ export default async function InvitationsPage() {
               {invitations.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
-                    No visitor invitations created yet. Click "Send New Invitation" to start.
+                    No visitor invitations created yet. Click &quot;Send New Invitation&quot; to start.
                   </td>
                 </tr>
               ) : (

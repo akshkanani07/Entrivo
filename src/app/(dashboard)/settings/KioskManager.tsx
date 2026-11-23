@@ -69,7 +69,7 @@ export function KioskManager() {
   };
 
   useEffect(() => {
-    fetchKiosks();
+    void fetchKiosks();
   }, []);
 
   const handleCreateKiosk = async (e: React.FormEvent) => {
@@ -96,7 +96,7 @@ export function KioskManager() {
         expiresInMinutes: json.data.expiresInMinutes || 10,
       });
       setNewName("");
-      fetchKiosks();
+      void fetchKiosks();
       toast.success("Kiosk registered! Enter pairing code on the device.");
     } catch {
       toast.error("Failed to create kiosk");
@@ -122,7 +122,7 @@ export function KioskManager() {
         code: json.data.pairingCode,
         expiresInMinutes: json.data.expiresInMinutes || 10,
       });
-      fetchKiosks();
+      void fetchKiosks();
       toast.success("New pairing code generated!");
     } catch {
       toast.error("Failed to generate pairing code");
@@ -140,7 +140,7 @@ export function KioskManager() {
       const json = await res.json();
       if (json.success) {
         toast.success(`Kiosk '${revokeDialog.name}' revoked`);
-        fetchKiosks();
+        void fetchKiosks();
       } else {
         toast.error(json.error || "Failed to revoke kiosk");
       }
@@ -153,7 +153,7 @@ export function KioskManager() {
 
   const copyCode = () => {
     if (!pairingModal.code) return;
-    navigator.clipboard.writeText(pairingModal.code);
+    void navigator.clipboard.writeText(pairingModal.code);
     setCopied(true);
     toast.success("Pairing code copied to clipboard");
     setTimeout(() => setCopied(false), 3000);

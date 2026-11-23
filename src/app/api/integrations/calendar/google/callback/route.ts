@@ -71,7 +71,7 @@ export async function GET(request: Request) {
     const response = NextResponse.redirect(`${appUrl}/integrations?calendar_connected=GOOGLE`);
     response.cookies.delete(CALENDAR_OAUTH_COOKIE_NAME);
     return response;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Google Calendar callback error:", err);
     return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Failed+to+complete+Google+Calendar+pairing`);
   }

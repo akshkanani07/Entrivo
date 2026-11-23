@@ -111,7 +111,7 @@ export function QRScannerModal({ isOpen, onClose, onVerified }: QRScannerModalPr
                   }
                   stopCamera();
                   setTokenInput(rawValue);
-                  handleVerify(rawValue);
+                  void handleVerify(rawValue);
                 }
               }
             } catch {
@@ -299,7 +299,7 @@ export function QRScannerModal({ isOpen, onClose, onVerified }: QRScannerModalPr
                   type="button"
                   onClick={() => {
                     setTokenInput(tc.code);
-                    handleVerify(tc.code);
+                    void handleVerify(tc.code);
                   }}
                   className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-indigo-950 hover:border-indigo-500 text-slate-300 border border-slate-700 transition-colors text-left"
                 >

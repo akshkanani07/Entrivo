@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
     const skip = (page - 1) * limit;
 
-    const where: Record<string, any> = {
+    const where: Record<string, unknown> = {
       organizationId,
       ...(webhookId && { webhookSubscriptionId: webhookId }),
       ...(status && { status: status.toUpperCase() }),
@@ -50,8 +50,8 @@ export async function GET(request: Request) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

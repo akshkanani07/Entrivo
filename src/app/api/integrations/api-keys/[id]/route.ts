@@ -42,7 +42,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: Record<string, any> = {};
+    const updateData: Record<string, unknown> = {};
     if (parsed.data.name) updateData.name = parsed.data.name.trim();
     if (parsed.data.scopes) {
       updateData.scopes = parsed.data.scopes.join(",");
@@ -80,8 +80,8 @@ export async function PATCH(
       },
       message: "API key updated successfully",
     });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 
@@ -119,8 +119,8 @@ export async function DELETE(
     }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "API key permanently revoked" });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ success: false, error: (error instanceof Error ? error.message : String(error)) }, { status: 500 });
   }
 }
 

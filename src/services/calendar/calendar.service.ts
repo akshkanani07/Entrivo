@@ -134,7 +134,7 @@ export async function saveCalendarConnection({
 /**
  * Refreshes an expired Google or Outlook access token if necessary.
  */
-async function getValidAccessToken(connection: any): Promise<string | null> {
+async function getValidAccessToken(connection: { id: string; provider: string; expiresAt: Date | null; encryptedAccessToken: string; encryptedRefreshToken?: string | null }): Promise<string | null> {
   const isExpired = !connection.expiresAt || connection.expiresAt.getTime() < Date.now() + 60000;
   if (!isExpired) {
     return decrypt(connection.encryptedAccessToken);
@@ -426,9 +426,9 @@ export async function syncInvitationCalendar(
     }
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Calendar Sync Error]:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

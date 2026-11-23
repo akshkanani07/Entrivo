@@ -80,7 +80,7 @@ export function CameraCapture({
   // Auto-start camera when activeTab is CAMERA
   useEffect(() => {
     if (autoStart && !capturedImage && activeTab === "CAMERA" && !isCameraActive && !isStartingCamera) {
-      startCamera();
+      void startCamera();
     }
     return () => {
       stopCamera();
@@ -169,7 +169,7 @@ export function CameraCapture({
 
   const toggleCameraFacing = () => {
     const nextFacing = facingMode === "user" ? "environment" : "user";
-    startCamera(nextFacing);
+    void startCamera(nextFacing);
   };
 
   const takeSnapshot = () => {
@@ -214,7 +214,7 @@ export function CameraCapture({
     setCapturedImage(null);
     if (onClear) onClear();
     if (activeTab === "CAMERA") {
-      startCamera();
+      void startCamera();
     }
   };
 
@@ -254,7 +254,7 @@ export function CameraCapture({
             type="button"
             onClick={() => {
               setActiveTab("CAMERA");
-              startCamera();
+              void startCamera();
             }}
             className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "CAMERA"

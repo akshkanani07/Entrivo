@@ -56,7 +56,7 @@ export function PwaInstallPrompt() {
 
     // 5. Service Worker Update Detection (P7-02)
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.getRegistration().then((reg) => {
+      void navigator.serviceWorker.getRegistration().then((reg) => {
         if (!reg) return;
 
         // Check if there is already a waiting service worker
