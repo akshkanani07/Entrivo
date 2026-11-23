@@ -37,12 +37,32 @@ graph TD
 
 Entrivo includes a production-ready, multi-stage [`Dockerfile`](file:///c:/Entrivo/Dockerfile) and [`docker-compose.yml`](file:///c:/Entrivo/docker-compose.yml) orchestrating PostgreSQL, Redis, the web application, and the asynchronous BullMQ worker.
 
+### Production Database Migrations
+> [!IMPORTANT]
+> In production environments, always apply schema updates using `prisma migrate deploy` (or `pnpm exec prisma migrate deploy`). **Never use `db push` in production**, as `prisma migrate deploy` executes versioned migration SQL transactions safely without data loss or unintended schema alterations. The container entrypoint script `docker-entrypoint.sh` automatically runs `prisma migrate deploy` before launching the Next.js server.
+
+### Required Cryptographic Secrets
+Production requires strong cryptographic secrets. Generate each using `pnpm gen:key`:
+
+```bash
+# Generate 64-character hexadecimal keys (32 bytes)
+pnpm gen:key
+```
+
+Configure these in `.env`:
+1. `JWT_SECRET`: Minimum 32 characters (HMAC-SHA256 for user session tokens).
+2. `QR_SIGNING_SECRET`: Minimum 32 characters (HMAC-SHA256 for signed QR passes `ENTQ1.*`).
+3. `CRON_SECRET`: Minimum 32 characters (Bearer token for automated maintenance endpoints).
+4. `STORAGE_SIGNING_SECRET`: Minimum 32 characters (HMAC-SHA256 for temporary document access URLs).
+5. `APP_ENCRYPTION_KEY`: Exactly 64 hex characters (AES-256-GCM master encryption key for stored credentials).
+6. `POSTGRES_PASSWORD`: Strong password for PostgreSQL database.
+
 ### Quick Start with Docker Compose
 
 1. **Clone repository and configure environment**:
    ```bash
    cp .env.example .env
-   # Edit .env with your production secrets (JWT_SECRET, QR_SIGNING_SECRET, etc.)
+   # Edit .env with your generated production secrets
    ```
 
 2. **Launch all services**:
@@ -55,10 +75,10 @@ Entrivo includes a production-ready, multi-stage [`Dockerfile`](file:///c:/Entri
    docker compose ps
    ```
    Output:
-   - `entrivo-postgres`: Up (healthy) on port 5432
-   - `entrivo-redis`: Up (healthy) on port 6379
+   - `entrivo-postgres`: Up (healthy, internal network)
+   - `entrivo-redis`: Up (healthy, internal network)
    - `entrivo-app`: Up (healthy) on port 3000
-   - `entrivo-worker`: Up (running background queues)
+   - `entrivo-worker`: Up (healthy via heartbeat)
 
 4. **Verify Health Endpoint**:
    ```bash

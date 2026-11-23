@@ -97,21 +97,27 @@ Copy the template configuration file:
 ```powershell
 copy .env.example .env
 ```
-Ensure your database and secrets are configured in `.env`:
-```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/entrivo"
-REDIS_URL="redis://localhost:6379"
-JWT_SECRET="generate-a-random-32-character-secret-key"
-QR_SIGNING_SECRET="generate-another-random-32-char-key"
-CRON_SECRET="generate-a-secure-cron-bearer-token"
-APP_ENCRYPTION_KEY="32-byte-base64-encoded-master-key"
+Production deployments require strong cryptographic secrets. Generate each using `pnpm gen:key`:
+```powershell
+pnpm gen:key
 ```
-*(For a complete line-by-line guide of all 36 environment variables, see [`docs/ENV.md`](file:///c:/Entrivo/docs/ENV.md))*
+Required secrets in `.env`:
+- `JWT_SECRET`: Minimum 32 characters (HMAC-SHA256 for session authentication tokens)
+- `QR_SIGNING_SECRET`: Minimum 32 characters (HMAC-SHA256 for dynamic visitor passes `ENTQ1.*`)
+- `CRON_SECRET`: Minimum 32 characters (Bearer token for automated maintenance endpoints)
+- `STORAGE_SIGNING_SECRET`: Minimum 32 characters (HMAC-SHA256 for temporary upload/download URLs)
+- `APP_ENCRYPTION_KEY`: Exactly 64 hex characters (AES-256-GCM master key for stored credentials)
+- `POSTGRES_PASSWORD`: Strong database password
+
+*(For a complete line-by-line guide of all environment variables, see [`docs/ENV.md`](file:///c:/Entrivo/docs/ENV.md))*
 
 ### Step 3: Database Migration & Realistic Seed
-Deploy the Prisma schema and run the idempotent database seed:
+> [!IMPORTANT]
+> Always deploy migrations using `prisma migrate deploy` (or `pnpm exec prisma migrate deploy`). **Never use `db push` in production**, as versioned migrations guarantee safe, auditable schema transitions without data loss.
+
+Run database migrations and the idempotent seed:
 ```powershell
-pnpm prisma migrate deploy
+pnpm exec prisma migrate deploy
 pnpm prisma:seed
 ```
 *The seed creates realistic demo organizations (Acme Global), branches, departments, employees across all roles, active visitor records, and approval workflows. Seed credentials are encrypted and outputted upon execution.*

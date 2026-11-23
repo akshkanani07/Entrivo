@@ -7,13 +7,12 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-entrivo}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    # Internal to entrivo_network by default; do not expose to host in production
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d entrivo"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-entrivo}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,8 +25,7 @@ services:
     container_name: entrivo-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    # Internal to entrivo_network by default; do not expose to host in production
     volumes:
       - redis_data:/data
     healthcheck:
@@ -49,13 +47,25 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-entrivo}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-entrivo}?schema=public
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-default_jwt_secret_must_change_in_production}
-      - QR_SIGNING_SECRET=${QR_SIGNING_SECRET:-default_qr_secret_must_change_in_prod}
-      - CRON_SECRET=${CRON_SECRET:-default_cron_secret_must_change_in_prod}
-      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY:-generate_32_byte_base64_encryption_key}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - QR_SIGNING_SECRET=${QR_SIGNING_SECRET:?QR_SIGNING_SECRET is required}
+      - CRON_SECRET=${CRON_SECRET:?CRON_SECRET is required}
+      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY is required}
+      - STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET:?STORAGE_SIGNING_SECRET is required}
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - MAILJET_API_KEY=${MAILJET_API_KEY:-}
+      - MAILJET_SECRET_KEY=${MAILJET_SECRET_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-no-reply@entrivo.com}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Entrivo Workplace Concierge}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:support@entrivo.com}
+      - NEXT_PUBLIC_VAPID_PUBLIC_KEY=${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,25 +80,46 @@ services:
     networks:
       - entrivo_network
 
-  # 4. Asynchronous Queue Worker (BullMQ Notifications & Webhooks)
+  # 4. Asynchronous Queue Worker (BullMQ Notifications, Webhooks, Calendar Sync)
   worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: entrivo-worker
     restart: unless-stopped
-    command: ["pnpm", "worker"]
+    command: ["worker"]
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-entrivo}?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-entrivo}?schema=public
       - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-default_jwt_secret_must_change_in_production}
-      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY:-generate_32_byte_base64_encryption_key}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - QR_SIGNING_SECRET=${QR_SIGNING_SECRET:?QR_SIGNING_SECRET is required}
+      - CRON_SECRET=${CRON_SECRET:?CRON_SECRET is required}
+      - APP_ENCRYPTION_KEY=${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY is required}
+      - STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET:?STORAGE_SIGNING_SECRET is required}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - MAILJET_API_KEY=${MAILJET_API_KEY:-}
+      - MAILJET_SECRET_KEY=${MAILJET_SECRET_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-no-reply@entrivo.com}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-Entrivo Workplace Concierge}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-mailto:support@entrivo.com}
+      - NEXT_PUBLIC_VAPID_PUBLIC_KEY=${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const fs = require('fs'); const diff = (Date.now() - Number(fs.readFileSync('/tmp/worker-heartbeat', 'utf8'))) / 1000; if (diff > 60) process.exit(1);\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     networks:
       - entrivo_network
 
@@ -101,4 +132,3 @@ volumes:
 networks:
   entrivo_network:
     driver: bridge
-
