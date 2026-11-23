@@ -55,6 +55,7 @@ const PUBLIC_ROUTES = [
   "/api/auth/magic-link",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  "/api/auth/2fa/verify",
   // Cron endpoints (manage their own Bearer CRON_SECRET auth):
   "/api/cron",
   // Kiosk endpoints authenticate via x-kiosk-key header (no staff session):
