@@ -3,7 +3,7 @@ import {
   generateCalendarOAuthState,
   verifyCalendarOAuthState,
 } from "@/services/calendar/oauth-state";
-import { GET as mockConnectGet } from "@/app/api/integrations/calendar/mock-connect/route";
+
 
 describe("1.3 Calendar OAuth Security", () => {
   const userId = "usr_test_123";
@@ -112,18 +112,15 @@ describe("1.3 Calendar OAuth Security", () => {
   });
 
   describe("mock-connect in production", () => {
-    const originalEnv = process.env.NODE_ENV;
-
     afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
+      vi.unstubAllEnvs();
     });
 
     it("returns 404 when NODE_ENV is production", async () => {
-      process.env.NODE_ENV = "production";
-
+      vi.stubEnv("NODE_ENV", "production");
+      const { GET: mockConnectGet } = await import("@/app/api/integrations/calendar/mock-connect/route");
       const req = new Request("http://localhost:3000/api/integrations/calendar/mock-connect?provider=GOOGLE");
       const res = await mockConnectGet(req);
-
       expect(res.status).toBe(404);
     });
   });
