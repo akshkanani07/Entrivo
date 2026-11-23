@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { NotificationEvent } from "@/services/notifications/events";
-import { NotificationPayload } from "@/services/notifications/types";
-import { isChannelAllowedForUser } from "@/services/notifications/dispatcher";
+import { NotificationJobData } from "@/services/notifications/types";
+import { isChannelAllowedForUser } from "@/services/notifications/preferences";
 import { renderNotificationContent } from "@/services/notifications/template-engine";
 import { sendInAppNotification } from "@/services/notifications/channels/inapp";
 import { sendWebPushNotification } from "@/services/notifications/channels/webpush";
@@ -12,10 +12,7 @@ import { NotificationChannel, UserRole } from "@prisma/client";
 import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 
-export interface NotificationJobData {
-  event: NotificationEvent;
-  payload: NotificationPayload;
-}
+export { type NotificationJobData };
 
 export async function processNotificationJob(jobData: NotificationJobData): Promise<void> {
   const { event, payload } = jobData;
@@ -63,7 +60,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
     }),
   ]);
 
-  const dispatches: Promise<any>[] = [];
+  const dispatches: Promise<unknown>[] = [];
 
   // 1. RECIPIENT RESOLUTION
   const targetUserIds = new Set<string>();
@@ -174,7 +171,3 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
     "[Job:Notification] Notification processing finished"
   );
 }
-
-// Bind processor to resilient queue for in-process fallback runner
-import { notificationQueue } from "@/lib/queue";
-notificationQueue.process(processNotificationJob);

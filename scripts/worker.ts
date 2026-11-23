@@ -28,10 +28,7 @@ async function startWorker() {
     workers.push(
       new Worker(
         "notification-jobs",
-        async (job) => {
-          logger.info({ jobId: job.id, name: job.name }, "[Worker:Notification] Executing job");
-          await processNotificationJob(job.data);
-        },
+        (job) => processNotificationJob(job.data),
         { connection, concurrency: 5 }
       )
     );

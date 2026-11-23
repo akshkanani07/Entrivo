@@ -10,6 +10,9 @@ let redisChecked = false;
 let isRedisAvailable = false;
 
 export async function getRedisConnection(): Promise<Redis | null> {
+  if (process.env.REDIS_AVAILABLE === "false") {
+    return null;
+  }
   if (redisChecked) {
     return isRedisAvailable ? redisClient : null;
   }

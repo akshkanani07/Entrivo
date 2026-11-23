@@ -1,3 +1,5 @@
+import { NotificationEvent } from "./events";
+
 export interface NotificationPayload {
   organizationId: string;
   visitorName: string;
@@ -28,4 +30,9 @@ export interface NotificationPayload {
   reportSummary?: string;
   stats?: Record<string, any>;
   entityId?: string;
+}
+
+export interface NotificationJobData {
+  event: NotificationEvent;
+  payload: NotificationPayload;
 }
