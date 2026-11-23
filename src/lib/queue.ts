@@ -1,6 +1,7 @@
-import { Queue, Worker, Job } from "bullmq";
+import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { prisma } from "./db";
+import { logger } from "./logger";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 
@@ -26,7 +27,7 @@ export async function getRedisConnection(): Promise<Redis | null> {
     redisClient = client;
     isRedisAvailable = true;
     redisChecked = true;
-    console.log("⚡ Lazy connected to Redis for BullMQ queues.");
+    logger.info("Connected to Redis for BullMQ queues.");
     return redisClient;
   } catch {
     isRedisAvailable = false;
@@ -44,19 +45,26 @@ export interface QueueJob<T = any> {
 const RETRY_DELAYS = [5000, 30000, 120000]; // 5s, 30s, 2m
 
 export class ResilientQueue<T = any> {
-  private queueName: string;
+  public readonly queueName: string;
   private bullQueue: Queue | null = null;
   private processor?: (data: T) => Promise<void>;
 
-  constructor(name: string) {
+  constructor(name: string, defaultProcessor?: (data: T) => Promise<void>) {
     this.queueName = name;
+    if (defaultProcessor) {
+      this.processor = defaultProcessor;
+    }
   }
 
   process(fn: (data: T) => Promise<void>) {
     this.processor = fn;
   }
 
-  async add(jobName: string, data: T) {
+  getProcessor() {
+    return this.processor;
+  }
+
+  async add(jobName: string, data: T, opts?: { attempts?: number; delay?: number }) {
     const connection = await getRedisConnection();
     if (connection) {
       try {
@@ -64,11 +72,14 @@ export class ResilientQueue<T = any> {
           this.bullQueue = new Queue(this.queueName, { connection });
         }
         return await this.bullQueue.add(jobName, data, {
-          attempts: 3,
-          backoff: { type: "exponential", delay: 5000 },
+          attempts: opts?.attempts ?? 5,
+          backoff: { type: "exponential", delay: 3000 },
+          removeOnComplete: true,
+          removeOnFail: false, // Keep in failed state for dead-letter inspection
+          delay: opts?.delay,
         });
       } catch (err) {
-        console.warn(`[BullMQ:${this.queueName}] Fallback to in-process runner:`, err);
+        logger.warn({ queue: this.queueName, err }, "[BullMQ] Fallback to in-process runner");
       }
     }
 
@@ -83,10 +94,10 @@ export class ResilientQueue<T = any> {
       try {
         await this.processor(data);
       } catch (err) {
-        console.error(`[InProcess:${this.queueName}] Error on attempt ${attempt + 1}:`, err);
+        logger.error({ queue: this.queueName, attempt: attempt + 1, err }, "[InProcess] Error executing job");
         if (attempt < RETRY_DELAYS.length) {
           const delay = RETRY_DELAYS[attempt];
-          console.log(`[InProcess:${this.queueName}] Scheduling retry #${attempt + 1} in ${delay / 1000}s`);
+          logger.info({ queue: this.queueName, attempt: attempt + 1, delayMs: delay }, "[InProcess] Scheduling retry");
           setTimeout(() => this.runInProcess(jobName, data, attempt + 1), delay);
         }
       }
@@ -97,6 +108,8 @@ export class ResilientQueue<T = any> {
 export const emailQueue = new ResilientQueue("email-jobs");
 export const notificationQueue = new ResilientQueue("notification-jobs");
 export const reportQueue = new ResilientQueue("report-jobs");
+export const webhookQueue = new ResilientQueue("webhook-jobs");
+export const calendarQueue = new ResilientQueue("calendar-sync");
 
 // Auto Checkout Background Worker
 export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number }> {
@@ -146,14 +159,14 @@ export async function runAutoCheckoutWorker(): Promise<{ overstayedCount: number
             entityId: `overstay-${c.id}`,
           });
         } catch (notifyErr) {
-          console.error("Overstay notification error:", notifyErr);
+          logger.error({ err: notifyErr }, "Overstay notification error");
         }
       }
     }
 
     return { overstayedCount: overdueCheckins.length };
   } catch (error) {
-    console.error("Auto checkout worker error:", error);
+    logger.error({ err: error }, "Auto checkout worker error");
     return { overstayedCount: 0 };
   }
 }
