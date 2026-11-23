@@ -7,6 +7,854 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id                    String                 @id @default(cuid())
+  name                  String
+  slug                  String                 @unique
+  logo                  String?
+  domain                String?
+  address               String?
+  city                  String?
+  country               String?                @default("India")
+  contactEmail          String?
+  contactPhone          String?
+  checkInPolicy         String?
+  workingHours          String?                @default("08:30 - 19:30")
+  timezone              String                 @default("Asia/Kolkata")
+  brandColor            String?                @default("#4f46e5")
+  locale                String?                @default("en-IN")
+  deletedAt             DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  apiKeys               ApiKey[]
+  auditLogs             AuditLog[]
+  badgeTemplates        BadgeTemplate[]
+  blacklists            BlacklistVisitor[]
+  branches              Branch[]
+  calendarConnections   CalendarConnection[]
+  departments           Department[]
+  documents             Document[]
+  employees             Employee[]
+  files                 File[]
+  holidays              Holiday[]
+  invitations           Invitation[]
+  kiosks                Kiosk[]
+  ndaTemplates          NdaTemplate[]
+  notifications         Notification[]
+  notificationTemplates NotificationTemplate[]
+  pushSubscriptions     PushSubscription[]
+  reports               Report[]
+  securityLogs          SecurityLog[]
+  settings              Setting[]
+  users                 User[]
+  visitors              Visitor[]
+  visitorTypes          VisitorType[]
+  webhookDeliveries     WebhookDelivery[]
+  webhooks              WebhookSubscription[]
+
+  @@index([slug])
+}
+
+model Branch {
+  id             String       @id @default(cuid())
+  name           String
+  code           String
+  address        String?
+  workingHours   Json?
+  organizationId String
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  holidays       Holiday[]
+  offices        Office[]
+
+  @@index([organizationId])
+}
+
+model Office {
+  id           String        @id @default(cuid())
+  name         String
+  floor        String?
+  building     String?
+  workingHours Json?
+  branchId     String
+  deletedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  employees    Employee[]
+  floors       Floor[]
+  meetingRooms MeetingRoom[]
+  branch       Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+}
+
+model Department {
+  id             String       @id @default(cuid())
+  name           String
+  code           String
+  organizationId String
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+
+  @@index([organizationId])
+}
+
+model User {
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  passwordHash            String
+  name                    String
+  avatar                  String?
+  phone                   String?
+  role                    UserRole                 @default(EMPLOYEE)
+  isTwoFactorEnabled      Boolean                  @default(false)
+  twoFactorSecret         String?
+  twoFactorBackupCodes    String?
+  twoFactorConfirmedAt    DateTime?
+  isEmailVerified         Boolean                  @default(false)
+  isActive                Boolean                  @default(true)
+  organizationId          String?
+  mustChangePassword      Boolean                  @default(false)
+  passwordChangedAt       DateTime?
+  quietHoursEnabled       Boolean                  @default(false)
+  quietHoursStart         String?                  @default("22:00")
+  quietHoursEnd           String?                  @default("07:00")
+  termsAcceptedAt         DateTime?
+  termsVersion            String?
+  deletedAt               DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  auditLogs               AuditLog[]
+  calendarConnections     CalendarConnection[]
+  employee                Employee?
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  approvedTemplates       NotificationTemplate[]   @relation("TemplateApprover")
+  passwordHistories       PasswordHistory[]
+  pushSubscriptions       PushSubscription[]
+  sessions                Session[]
+  organization            Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  tokenHash    String   @unique
+  device       String?
+  ipAddress    String?
+  userAgent    String?
+  lastActiveAt DateTime @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model MagicLinkToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  purpose   String    @default("RESET")
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+model Employee {
+  id                  String       @id @default(cuid())
+  userId              String       @unique
+  organizationId      String
+  departmentId        String?
+  officeId            String?
+  employeeCode        String
+  designation         String?
+  phone               String?
+  status              String       @default("AVAILABLE")
+  autoApproveVisitors Boolean      @default(false)
+  backupApproverId    String?
+  deletedAt           DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  approvalsGiven      Approval[]
+  checkInsHosted      CheckIn[]
+  backupApprover      Employee?    @relation("BackupApprover", fields: [backupApproverId], references: [id])
+  backupFor           Employee[]   @relation("BackupApprover")
+  department          Department?  @relation(fields: [departmentId], references: [id])
+  office              Office?      @relation(fields: [officeId], references: [id])
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitations         Invitation[]
+
+  @@index([organizationId])
+  @@index([departmentId])
+}
+
+model VisitorType {
+  id               String       @id @default(cuid())
+  name             String
+  description      String?
+  badgeColor       String       @default("#6366f1")
+  requiresApproval Boolean      @default(true)
+  requiresEscort   Boolean      @default(false)
+  requiresNDA      Boolean      @default(false)
+  organizationId   String
+  deletedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  visitors         Visitor[]
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Visitor {
+  id              String       @id @default(cuid())
+  name            String
+  email           String
+  phone           String
+  company         String?
+  avatarUrl       String?
+  idProofType     String?
+  idProofNumber   String?
+  idProofUrl      String?
+  isBlacklisted   Boolean      @default(false)
+  blacklistReason String?
+  consentGiven    Boolean      @default(true)
+  consentVersion  String?      @default("v1.0")
+  organizationId  String
+  visitorTypeId   String?
+  deletedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  badges          Badge[]
+  checkIns        CheckIn[]
+  documents       Document[]
+  invitations     Invitation[]
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitorType     VisitorType? @relation(fields: [visitorTypeId], references: [id])
+
+  @@index([email])
+  @@index([phone])
+  @@index([organizationId])
+}
+
+model Invitation {
+  id               String           @id @default(cuid())
+  organizationId   String
+  hostEmployeeId   String
+  visitorId        String
+  meetingRoomId    String?
+  scheduledDate    DateTime
+  startTime        String           @default("10:00")
+  endTime          String           @default("11:00")
+  purpose          String
+  notes            String?
+  status           InvitationStatus @default(PENDING)
+  qrToken          String           @unique
+  passUrl          String?
+  calendarEventId  String?
+  calendarProvider String?
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  approvals        Approval[]
+  checkIns         CheckIn[]
+  hostEmployee     Employee         @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  meetingRoom      MeetingRoom?     @relation(fields: [meetingRoomId], references: [id])
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor          Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  qrCodes          QRCode[]
+
+  @@index([qrToken])
+  @@index([organizationId])
+  @@index([scheduledDate])
+}
+
+model CheckIn {
+  id                String        @id @default(cuid())
+  visitorId         String
+  invitationId      String?
+  hostEmployeeId    String
+  checkInTime       DateTime      @default(now())
+  expectedCheckout  DateTime?
+  photoUrl          String?
+  signatureUrl      String?
+  badgeNumber       String?
+  badgeIssued       Boolean       @default(false)
+  ndaSigned         Boolean       @default(false)
+  consentGiven      Boolean       @default(true)
+  consentVersion    String?       @default("v1.0")
+  status            CheckInStatus @default(CHECKED_IN)
+  receptionistName  String?
+  securityGuardName String?
+  deletedAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  badges            Badge[]
+  hostEmployee      Employee      @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
+  invitation        Invitation?   @relation(fields: [invitationId], references: [id])
+  visitor           Visitor       @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  checkOut          CheckOut?
+  qrCodes           QRCode[]
+
+  @@index([status])
+  @@index([badgeNumber])
+  @@index([checkInTime])
+  @@index([visitorId])
+  @@index([hostEmployeeId])
+  @@index([checkInTime, status])
+}
+
+model CheckOut {
+  id              String   @id @default(cuid())
+  checkInId       String   @unique
+  checkOutTime    DateTime @default(now())
+  durationMinutes Int      @default(0)
+  checkoutMethod  String   @default("MANUAL")
+  exitNotes       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+}
+
+model QRCode {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  token        String      @unique
+  qrType       String      @default("INVITATION")
+  invitationId String?
+  checkInId    String?
+  expiresAt    DateTime
+  isUsed       Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  checkIn      CheckIn?    @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  invitation   Invitation? @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+}
+
+model Badge {
+  id          String    @id @default(cuid())
+  badgeNumber String    @unique
+  visitorId   String
+  checkInId   String
+  printCount  Int       @default(1)
+  issuedAt    DateTime  @default(now())
+  expiresAt   DateTime?
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  checkIn     CheckIn   @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  visitor     Visitor   @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([badgeNumber])
+}
+
+model BadgeTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  layoutType     String       @default("STANDARD")
+  badgeColor     String       @default("#4f46e5")
+  showPhoto      Boolean      @default(true)
+  showQrCode     Boolean      @default(true)
+  showHost       Boolean      @default(true)
+  showCompany    Boolean      @default(true)
+  customHeader   String?
+  customFooter   String?
+  isDefault      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Approval {
+  id           String         @id @default(cuid())
+  invitationId String
+  approverId   String
+  step         String         @default("HOST")
+  status       ApprovalStatus @default(PENDING)
+  comments     String?
+  approvedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  approver     Employee       @relation(fields: [approverId], references: [id], onDelete: Cascade)
+  invitation   Invitation     @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@index([invitationId])
+  @@index([approverId])
+}
+
+model MeetingRoom {
+  id          String       @id @default(cuid())
+  name        String
+  officeId    String
+  capacity    Int          @default(6)
+  floor       String?
+  floorId     String?
+  zoneId      String?
+  amenities   String?      @default("Display, Conference Phone, Whiteboard")
+  isAvailable Boolean      @default(true)
+  deletedAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  invitations Invitation[]
+  floorRef    Floor?       @relation(fields: [floorId], references: [id])
+  office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  zoneRef     Zone?        @relation(fields: [zoneId], references: [id])
+
+  @@index([officeId])
+  @@index([floorId])
+  @@index([zoneId])
+}
+
+model Document {
+  id             String       @id @default(cuid())
+  organizationId String
+  visitorId      String
+  title          String
+  docType        String       @default("ID_PROOF")
+  fileUrl        String?
+  fileId         String?
+  fileSize       Int?
+  mimeType       String?
+  sha256         String?
+  expiryDate     DateTime?
+  status         String       @default("VALID")
+  metadata       Json?
+  verified       Boolean      @default(true)
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  file           File?        @relation(fields: [fileId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor        Visitor      @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([visitorId])
+  @@index([docType])
+  @@index([expiryDate])
+  @@index([status])
+}
+
+model NdaTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String       @default("Standard Visitor Non-Disclosure Agreement")
+  content        String
+  version        String       @default("1.0")
+  validityDays   Int          @default(365)
+  isActive       Boolean      @default(true)
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model BlacklistVisitor {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  phone          String?
+  email          String?
+  idProofNumber  String?
+  reason         String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([phone])
+  @@index([email])
+}
+
+model SecurityLog {
+  id             String           @id @default(cuid())
+  organizationId String
+  logType        String
+  description    String
+  severity       SecuritySeverity @default(LOW)
+  reportedBy     String?
+  guardName      String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  organizationId String?
+  userId         String?
+  action         String
+  entity         String
+  entityId       String?
+  details        String?
+  ipAddress      String?       @default("127.0.0.1")
+  userAgent      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?         @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, action])
+  @@index([organizationId, entity])
+}
+
+model Notification {
+  id             String              @id @default(cuid())
+  organizationId String
+  userId         String?
+  channel        NotificationChannel @default(IN_APP)
+  event          String
+  title          String
+  body           String
+  data           Json?
+  recipient      String?
+  readAt         DateTime?
+  status         NotificationStatus  @default(SENT)
+  error          String?
+  retryCount     Int                 @default(0)
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  isDeadLetter   Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([readAt])
+  @@index([createdAt])
+  @@index([organizationId, channel, status])
+  @@index([organizationId, isDeadLetter])
+}
+
+model NotificationTemplate {
+  id             String              @id @default(cuid())
+  organizationId String
+  event          String
+  channel        NotificationChannel
+  locale         String              @default("en")
+  status         String              @default("ACTIVE")
+  version        Int                 @default(1)
+  subject        String?
+  body           String
+  variables      String              @default("visitor_name,host_name,date,time,location,qr_link")
+  approvedById   String?
+  approvedAt     DateTime?
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  approvedBy     User?               @relation("TemplateApprover", fields: [approvedById], references: [id])
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, event, channel, locale])
+  @@index([organizationId, status])
+}
+
+model PushSubscription {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  endpoint       String       @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model NotificationPreference {
+  id        String              @id @default(cuid())
+  userId    String
+  channel   NotificationChannel
+  event     String
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel, event])
+  @@index([userId])
+}
+
+model Holiday {
+  id             String       @id @default(cuid())
+  organizationId String
+  branchId       String?
+  name           String
+  date           DateTime
+  endDate        DateTime?
+  isRecurring    Boolean      @default(false)
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([branchId])
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  keyHash        String       @unique
+  prefix         String
+  permissions    String       @default("read,write")
+  scopes         String       @default("visitors:read,invitations:read")
+  rateLimit      Int          @default(120)
+  isActive       Boolean      @default(true)
+  createdById    String?
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyHash])
+}
+
+model WebhookSubscription {
+  id             String            @id @default(cuid())
+  organizationId String
+  url            String
+  secret         String
+  events         String            @default("visitor.invited,invitation.cancelled,invitation.rescheduled,visitor.checked_in,visitor.checked_out,approval.requested,approval.decided,security.alert,document.expiring")
+  isActive       Boolean           @default(true)
+  failureCount   Int               @default(0)
+  lastFailureAt  DateTime?
+  lastSuccessAt  DateTime?
+  disabledReason String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  deliveries     WebhookDelivery[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id                    String              @id @default(cuid())
+  webhookSubscriptionId String
+  organizationId        String
+  event                 String
+  payload               Json
+  status                String              @default("PENDING")
+  statusCode            Int?
+  responseBody          String?
+  errorMessage          String?
+  attempts              Int                 @default(1)
+  durationMs            Int?
+  deliveredAt           DateTime?
+  createdAt             DateTime            @default(now())
+  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  webhookSubscription   WebhookSubscription @relation(fields: [webhookSubscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([webhookSubscriptionId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, status])
+}
+
+model CalendarConnection {
+  id                    String       @id @default(cuid())
+  userId                String
+  organizationId        String
+  provider              String
+  accountEmail          String
+  encryptedAccessToken  String
+  encryptedRefreshToken String?
+  expiresAt             DateTime?
+  calendarId            String?      @default("primary")
+  isActive              Boolean      @default(true)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Setting {
+  id             String       @id @default(cuid())
+  organizationId String
+  category       String       @default("GENERAL")
+  key            String
+  value          String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  reportType     String       @default("VISITOR_SUMMARY")
+  dateRange      String
+  statsJson      String
+  parameters     Json?
+  isScheduled    Boolean      @default(false)
+  scheduleCron   String?
+  recipients     String?
+  lastSentAt     DateTime?
+  generatedBy    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, isScheduled])
+}
+
+model Kiosk {
+  id               String       @id @default(cuid())
+  organizationId   String
+  name             String
+  deviceTokenHash  String?      @unique
+  pairingCodeHash  String?
+  pairingExpiresAt DateTime?
+  lastUsedAt       DateTime?
+  expiresAt        DateTime?
+  isActive         Boolean      @default(true)
+  createdById      String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([deviceTokenHash])
+  @@index([pairingCodeHash])
+}
+
+model Floor {
+  id           String        @id @default(cuid())
+  name         String
+  number       Int           @default(1)
+  officeId     String
+  deletedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  office       Office        @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  meetingRooms MeetingRoom[]
+  zones        Zone[]
+
+  @@index([officeId])
+}
+
+model Zone {
+  id           String        @id @default(cuid())
+  name         String
+  code         String?
+  floorId      String
+  deletedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  meetingRooms MeetingRoom[]
+  floor        Floor         @relation(fields: [floorId], references: [id], onDelete: Cascade)
+
+  @@index([floorId])
+}
+
+model File {
+  id             String       @id @default(cuid())
+  organizationId String
+  ownerType      String
+  ownerId        String?
+  key            String
+  mime           String
+  size           Int
+  sha256         String
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  documents      Document[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ownerType, ownerId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([email])
+  @@index([tokenHash])
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
 enum UserRole {
   SUPER_ADMIN
   ORG_ADMIN
@@ -55,867 +903,4 @@ enum SecuritySeverity {
   MEDIUM
   HIGH
   CRITICAL
-}
-
-model Organization {
-  id              String            @id @default(cuid())
-  name            String
-  slug            String            @unique
-  logo            String?
-  domain          String?
-  address         String?
-  city            String?
-  country         String?           @default("India")
-  contactEmail    String?
-  contactPhone    String?
-  checkInPolicy   String?
-  workingHours    String?           @default("08:30 - 19:30")
-  timezone        String            @default("Asia/Kolkata")
-  brandColor      String?           @default("#4f46e5")
-  locale          String?           @default("en-IN")
-  deletedAt       DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-
-  users           User[]
-  branches        Branch[]
-  departments     Department[]
-  employees       Employee[]
-  visitors        Visitor[]
-  visitorTypes    VisitorType[]
-  invitations     Invitation[]
-  blacklists      BlacklistVisitor[]
-  securityLogs    SecurityLog[]
-  auditLogs             AuditLog[]
-  notifications         Notification[]
-  notificationTemplates NotificationTemplate[]
-  pushSubscriptions     PushSubscription[]
-  badgeTemplates        BadgeTemplate[]
-  holidays        Holiday[]
-  apiKeys         ApiKey[]
-  webhooks        WebhookSubscription[]
-  settings        Setting[]
-  reports         Report[]
-  kiosks          Kiosk[]
-  files           File[]
-  documents       Document[]
-  ndaTemplates    NdaTemplate[]
-  webhookDeliveries WebhookDelivery[]
-  calendarConnections CalendarConnection[]
-
-  @@index([slug])
-}
-
-model Branch {
-  id              String       @id @default(cuid())
-  name            String
-  code            String
-  address         String?
-  workingHours    Json?
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deletedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  offices         Office[]
-  holidays        Holiday[]
-
-  @@index([organizationId])
-}
-
-model Office {
-  id          String       @id @default(cuid())
-  name        String
-  floor       String?
-  building    String?
-  workingHours Json?
-  branchId    String
-  branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  meetingRooms MeetingRoom[]
-  employees    Employee[]
-  floors       Floor[]
-
-  @@index([branchId])
-}
-
-model Department {
-  id              String       @id @default(cuid())
-  name            String
-  code            String
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deletedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-
-  employees       Employee[]
-
-  @@index([organizationId])
-}
-
-model User {
-  id                 String       @id @default(cuid())
-  email              String       @unique
-  passwordHash       String
-  name               String
-  avatar             String?
-  phone              String?
-  role               UserRole     @default(EMPLOYEE)
-  isTwoFactorEnabled Boolean      @default(false)
-  twoFactorSecret    String?
-  twoFactorBackupCodes String?    // JSON array of hashed single-use codes
-  twoFactorConfirmedAt DateTime?
-  isEmailVerified    Boolean      @default(false)
-  isActive           Boolean      @default(true)
-  organizationId     String?
-  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  mustChangePassword      Boolean                  @default(false)
-  passwordChangedAt       DateTime?
-  quietHoursEnabled       Boolean                  @default(false)
-  quietHoursStart         String?                  @default("22:00")
-  quietHoursEnd           String?                  @default("07:00")
-  termsAcceptedAt         DateTime?
-  termsVersion            String?
-  deletedAt               DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-
-  employee                Employee?
-  sessions                Session[]
-  passwordHistories       PasswordHistory[]
-  auditLogs               AuditLog[]
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  notificationPreferences NotificationPreference[]
-  approvedTemplates       NotificationTemplate[]   @relation("TemplateApprover")
-  calendarConnections     CalendarConnection[]
-
-  @@index([email])
-  @@index([organizationId])
-}
-
-model Session {
-  id             String    @id @default(cuid())
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash      String    @unique
-  device         String?
-  ipAddress      String?
-  userAgent      String?
-  lastActiveAt   DateTime  @default(now())
-  expiresAt      DateTime
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@index([userId])
-  @@index([tokenHash])
-}
-
-model MagicLinkToken {
-  id        String    @id @default(cuid())
-  email     String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([email])
-  @@index([tokenHash])
-}
-
-model PasswordResetToken {
-  id        String    @id @default(cuid())
-  email     String
-  tokenHash String    @unique
-  purpose   String    @default("RESET")
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([email])
-  @@index([tokenHash])
-}
-
-model Employee {
-  id                  String       @id @default(cuid())
-  userId              String       @unique
-  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId      String
-  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  departmentId        String?
-  department          Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  officeId            String?
-  office              Office?      @relation(fields: [officeId], references: [id], onDelete: SetNull)
-  employeeCode        String
-  designation         String?
-  phone               String?
-  status              String       @default("AVAILABLE")
-  autoApproveVisitors Boolean      @default(false)
-  backupApproverId    String?
-  backupApprover      Employee?    @relation("BackupApprover", fields: [backupApproverId], references: [id], onDelete: SetNull)
-  backupFor           Employee[]   @relation("BackupApprover")
-  deletedAt           DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-
-  invitations         Invitation[]
-  checkInsHosted      CheckIn[]
-  approvalsGiven      Approval[]
-
-  @@index([organizationId])
-  @@index([departmentId])
-}
-
-model VisitorType {
-  id               String       @id @default(cuid())
-  name             String
-  description      String?
-  badgeColor       String       @default("#6366f1")
-  requiresApproval Boolean      @default(true)
-  requiresEscort   Boolean      @default(false)
-  requiresNDA      Boolean      @default(false)
-  organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deletedAt        DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  visitors         Visitor[]
-
-  @@index([organizationId])
-}
-
-model Visitor {
-  id              String        @id @default(cuid())
-  name            String
-  email           String
-  phone           String
-  company         String?
-  avatarUrl       String?
-  idProofType     String?
-  idProofNumber   String?
-  idProofUrl      String?
-  isBlacklisted   Boolean       @default(false)
-  blacklistReason String?
-  consentGiven    Boolean       @default(true)
-  consentVersion  String?       @default("v1.0")
-  organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  visitorTypeId   String?
-  visitorType     VisitorType?  @relation(fields: [visitorTypeId], references: [id], onDelete: SetNull)
-  deletedAt       DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  invitations     Invitation[]
-  checkIns        CheckIn[]
-  documents       Document[]
-  badges          Badge[]
-
-  @@index([email])
-  @@index([phone])
-  @@index([organizationId])
-}
-
-model Invitation {
-  id             String           @id @default(cuid())
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  hostEmployeeId String
-  hostEmployee   Employee         @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
-  visitorId      String
-  visitor        Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  meetingRoomId  String?
-  meetingRoom    MeetingRoom?     @relation(fields: [meetingRoomId], references: [id], onDelete: SetNull)
-  scheduledDate  DateTime
-  startTime      String           @default("10:00")
-  endTime        String           @default("11:00")
-  purpose        String
-  notes          String?
-  status         InvitationStatus @default(PENDING)
-  qrToken        String           @unique
-  passUrl        String?
-  calendarEventId String?
-  calendarProvider String?
-  deletedAt      DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  checkIns       CheckIn[]
-  approvals      Approval[]
-  qrCodes        QRCode[]
-
-  @@index([qrToken])
-  @@index([organizationId])
-  @@index([scheduledDate])
-}
-
-model CheckIn {
-  id                 String        @id @default(cuid())
-  visitorId          String
-  visitor            Visitor       @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  invitationId       String?
-  invitation         Invitation?   @relation(fields: [invitationId], references: [id], onDelete: SetNull)
-  hostEmployeeId     String
-  hostEmployee       Employee      @relation(fields: [hostEmployeeId], references: [id], onDelete: Cascade)
-  checkInTime        DateTime      @default(now())
-  expectedCheckout   DateTime?
-  photoUrl           String?
-  signatureUrl       String?
-  badgeNumber        String?
-  badgeIssued        Boolean       @default(false)
-  ndaSigned          Boolean       @default(false)
-  consentGiven       Boolean       @default(true)
-  consentVersion     String?       @default("v1.0")
-  status             CheckInStatus @default(CHECKED_IN)
-  receptionistName   String?
-  securityGuardName  String?
-  deletedAt          DateTime?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-
-  checkOut           CheckOut?
-  badges             Badge[]
-  qrCodes            QRCode[]
-
-  @@index([status])
-  @@index([badgeNumber])
-  @@index([checkInTime])
-  @@index([visitorId])
-  @@index([hostEmployeeId])
-  @@index([checkInTime, status])
-}
-
-model CheckOut {
-  id              String    @id @default(cuid())
-  checkInId       String    @unique
-  checkIn         CheckIn   @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-  checkOutTime    DateTime  @default(now())
-  durationMinutes Int       @default(0)
-  checkoutMethod  String    @default("MANUAL")
-  exitNotes       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-}
-
-model QRCode {
-  id             String      @id @default(cuid())
-  code           String      @unique
-  token          String      @unique
-  qrType         String      @default("INVITATION")
-  invitationId   String?
-  invitation     Invitation? @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  checkInId      String?
-  checkIn        CheckIn?    @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-  expiresAt      DateTime
-  isUsed         Boolean     @default(false)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@index([token])
-}
-
-model Badge {
-  id          String    @id @default(cuid())
-  badgeNumber String    @unique
-  visitorId   String
-  visitor     Visitor   @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  checkInId   String
-  checkIn     CheckIn   @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-  printCount  Int       @default(1)
-  issuedAt    DateTime  @default(now())
-  expiresAt   DateTime?
-  status      String    @default("ACTIVE")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([badgeNumber])
-}
-
-model BadgeTemplate {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  layoutType     String       @default("STANDARD")
-  badgeColor     String       @default("#4f46e5")
-  showPhoto      Boolean      @default(true)
-  showQrCode     Boolean      @default(true)
-  showHost       Boolean      @default(true)
-  showCompany    Boolean      @default(true)
-  customHeader   String?
-  customFooter   String?
-  isDefault      Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-}
-
-model Approval {
-  id           String         @id @default(cuid())
-  invitationId String
-  invitation   Invitation     @relation(fields: [invitationId], references: [id], onDelete: Cascade)
-  approverId   String
-  approver     Employee       @relation(fields: [approverId], references: [id], onDelete: Cascade)
-  step         String         @default("HOST")
-  status       ApprovalStatus @default(PENDING)
-  comments     String?
-  approvedAt   DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  @@index([invitationId])
-  @@index([approverId])
-}
-
-model MeetingRoom {
-  id          String       @id @default(cuid())
-  name        String
-  officeId    String
-  office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
-  capacity    Int          @default(6)
-  floor       String?
-  floorId     String?
-  floorRef    Floor?       @relation(fields: [floorId], references: [id], onDelete: SetNull)
-  zoneId      String?
-  zoneRef     Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
-  amenities   String?      @default("Display, Conference Phone, Whiteboard")
-  isAvailable Boolean      @default(true)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  invitations Invitation[]
-
-  @@index([officeId])
-  @@index([floorId])
-  @@index([zoneId])
-}
-
-model Document {
-  id             String        @id @default(cuid())
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  visitorId      String
-  visitor        Visitor       @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  title          String
-  docType        String        @default("ID_PROOF") // ID_PROOF | NDA | AGREEMENT | OTHER
-  fileUrl        String?
-  fileId         String?
-  file           File?         @relation(fields: [fileId], references: [id], onDelete: SetNull)
-  fileSize       Int?
-  mimeType       String?
-  sha256         String?
-  expiryDate     DateTime?
-  status         String        @default("VALID") // VALID | EXPIRING | EXPIRED
-  metadata       Json?
-  verified       Boolean       @default(true)
-  createdById    String?
-  deletedAt      DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([organizationId])
-  @@index([visitorId])
-  @@index([docType])
-  @@index([expiryDate])
-  @@index([status])
-}
-
-model NdaTemplate {
-  id             String        @id @default(cuid())
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  title          String        @default("Standard Visitor Non-Disclosure Agreement")
-  content        String        @db.Text
-  version        String        @default("1.0")
-  validityDays   Int           @default(365)
-  isActive       Boolean       @default(true)
-  createdById    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([organizationId])
-}
-
-model BlacklistVisitor {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  phone          String?
-  email          String?
-  idProofNumber  String?
-  reason         String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-  @@index([phone])
-  @@index([email])
-}
-
-model SecurityLog {
-  id             String           @id @default(cuid())
-  organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  logType        String
-  description    String
-  severity       SecuritySeverity @default(LOW)
-  reportedBy     String?
-  guardName      String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-
-  @@index([organizationId])
-  @@index([createdAt])
-}
-
-model AuditLog {
-  id             String        @id @default(cuid())
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String?
-  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action         String
-  entity         String
-  entityId       String?
-  details        String?
-  ipAddress      String?       @default("127.0.0.1")
-  userAgent      String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  @@index([organizationId])
-  @@index([userId])
-  @@index([createdAt])
-  @@index([organizationId, createdAt])
-  @@index([organizationId, action])
-  @@index([organizationId, entity])
-}
-
-model Notification {
-  id             String              @id @default(cuid())
-  organizationId String
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String?
-  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel        NotificationChannel @default(IN_APP)
-  event          String
-  title          String
-  body           String
-  data           Json?
-  recipient      String?
-  readAt         DateTime?
-  status         NotificationStatus  @default(SENT)
-  error          String?
-  retryCount     Int                 @default(0)
-  lastAttemptAt  DateTime?
-  deliveredAt    DateTime?
-  isDeadLetter   Boolean             @default(false)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-
-  @@index([organizationId])
-  @@index([userId])
-  @@index([readAt])
-  @@index([createdAt])
-  @@index([organizationId, channel, status])
-  @@index([organizationId, isDeadLetter])
-}
-
-model NotificationTemplate {
-  id             String              @id @default(cuid())
-  organizationId String
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  event          String
-  channel        NotificationChannel
-  locale         String              @default("en")
-  status         String              @default("ACTIVE")
-  version        Int                 @default(1)
-  subject        String?
-  body           String
-  variables      String              @default("visitor_name,host_name,date,time,location,qr_link")
-  approvedById   String?
-  approvedBy     User?               @relation("TemplateApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  approvedAt     DateTime?
-  isActive       Boolean             @default(true)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-
-  @@index([organizationId])
-  @@index([organizationId, event, channel, locale])
-  @@index([organizationId, status])
-}
-
-model PushSubscription {
-  id             String       @id @default(cuid())
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  endpoint       String       @unique
-  p256dh         String
-  auth           String
-  userAgent      String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([userId])
-  @@index([organizationId])
-}
-
-model NotificationPreference {
-  id        String              @id @default(cuid())
-  userId    String
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   NotificationChannel
-  event     String
-  enabled   Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-
-  @@unique([userId, channel, event])
-  @@index([userId])
-}
-
-model Holiday {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branchId       String?
-  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  name           String
-  date           DateTime
-  endDate        DateTime?
-  isRecurring    Boolean      @default(false)
-  description    String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-  @@index([branchId])
-}
-
-model ApiKey {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  keyHash        String       @unique
-  prefix         String
-  permissions    String       @default("read,write")
-  scopes         String       @default("visitors:read,invitations:read")
-  rateLimit      Int          @default(120)
-  isActive       Boolean      @default(true)
-  createdById    String?
-  lastUsedAt     DateTime?
-  expiresAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-  @@index([keyHash])
-}
-
-model WebhookSubscription {
-  id             String            @id @default(cuid())
-  organizationId String
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  url            String
-  secret         String
-  events         String            @default("visitor.invited,invitation.cancelled,invitation.rescheduled,visitor.checked_in,visitor.checked_out,approval.requested,approval.decided,security.alert,document.expiring")
-  isActive       Boolean           @default(true)
-  failureCount   Int               @default(0)
-  lastFailureAt  DateTime?
-  lastSuccessAt  DateTime?
-  disabledReason String?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-
-  deliveries     WebhookDelivery[]
-
-  @@index([organizationId])
-}
-
-model WebhookDelivery {
-  id                    String              @id @default(cuid())
-  webhookSubscriptionId String
-  webhookSubscription   WebhookSubscription @relation(fields: [webhookSubscriptionId], references: [id], onDelete: Cascade)
-  organizationId        String
-  organization          Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  event                 String
-  payload               Json
-  status                String              @default("PENDING") // SUCCESS, FAILED, PENDING
-  statusCode            Int?
-  responseBody          String?
-  errorMessage          String?
-  attempts              Int                 @default(1)
-  durationMs            Int?
-  deliveredAt           DateTime?
-  createdAt             DateTime            @default(now())
-
-  @@index([webhookSubscriptionId, createdAt])
-  @@index([organizationId, createdAt])
-  @@index([organizationId, status])
-}
-
-model CalendarConnection {
-  id                    String       @id @default(cuid())
-  userId                String
-  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organizationId        String
-  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  provider              String       // GOOGLE, OUTLOOK
-  accountEmail          String
-  encryptedAccessToken  String
-  encryptedRefreshToken String?
-  expiresAt             DateTime?
-  calendarId            String?      @default("primary")
-  isActive              Boolean      @default(true)
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-
-  @@unique([userId, provider])
-  @@index([organizationId])
-  @@index([userId])
-}
-
-model Setting {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  category       String       @default("GENERAL")
-  key            String
-  value          String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@unique([organizationId, key])
-  @@index([organizationId])
-}
-
-model Report {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  title          String
-  reportType     String       @default("VISITOR_SUMMARY")
-  dateRange      String
-  statsJson      String
-  parameters     Json?
-  isScheduled    Boolean      @default(false)
-  scheduleCron   String?
-  recipients     String?
-  lastSentAt     DateTime?
-  generatedBy    String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  @@index([organizationId])
-  @@index([organizationId, isScheduled])
-}
-
-model Kiosk {
-  id               String       @id @default(cuid())
-  organizationId   String
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name             String
-  deviceTokenHash  String?      @unique  // SHA-256 of the paired 32-byte device token
-  pairingCodeHash  String?      // SHA-256 of the 8-digit pairing code
-  pairingExpiresAt DateTime?    // Single use, 10-minute TTL
-  lastUsedAt       DateTime?
-  expiresAt        DateTime?    // Device token expiry (180 days, rolling renewal)
-  isActive         Boolean      @default(true)
-  createdById      String?      // User ID of the admin who created the kiosk
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  @@index([organizationId])
-  @@index([deviceTokenHash])
-  @@index([pairingCodeHash])
-}
-
-model Floor {
-  id          String       @id @default(cuid())
-  name        String
-  number      Int          @default(1)
-  officeId    String
-  office      Office       @relation(fields: [officeId], references: [id], onDelete: Cascade)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  zones        Zone[]
-  meetingRooms MeetingRoom[]
-
-  @@index([officeId])
-}
-
-model Zone {
-  id          String       @id @default(cuid())
-  name        String
-  code        String?
-  floorId     String
-  floor       Floor        @relation(fields: [floorId], references: [id], onDelete: Cascade)
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  meetingRooms MeetingRoom[]
-
-  @@index([floorId])
-}
-
-model File {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  ownerType      String       // "VISITOR_PHOTO" | "ID_PROOF" | "NDA_DOCUMENT" | "ORG_LOGO" | "SIGNATURE"
-  ownerId        String?
-  key            String
-  mime           String
-  size           Int
-  sha256         String
-  createdById    String?
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  documents      Document[]
-
-  @@index([organizationId])
-  @@index([ownerType, ownerId])
-}
-
-model EmailVerificationToken {
-  id        String    @id @default(cuid())
-  email     String
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@index([email])
-  @@index([tokenHash])
-}
-
-model PasswordHistory {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  passwordHash String
-  createdAt    DateTime @default(now())
-
-  @@index([userId])
-  @@index([createdAt])
 }
