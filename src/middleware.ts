@@ -29,12 +29,20 @@ function matchesRouteSegment(pathname: string, route: string): boolean {
   return false;
 }
 
+function sanitizeCallbackUrl(urlPath: string): string {
+  if (!urlPath.startsWith("/") || urlPath.startsWith("//") || urlPath.includes("\\")) {
+    return "/";
+  }
+  return urlPath;
+}
+
 const PUBLIC_ROUTES = [
   "/login",
   "/register",
   "/forgot-password",
   "/reset-password",
   "/magic-link",
+  "/verify-email",
   "/terms",
   "/privacy",
   "/forbidden",
@@ -55,6 +63,8 @@ const PUBLIC_ROUTES = [
   "/api/auth/magic-link",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  "/api/auth/verify-email",
+  "/api/auth/resend-verification",
   "/api/auth/2fa/verify",
   // Cron endpoints (manage their own Bearer CRON_SECRET auth):
   "/api/cron",
@@ -87,7 +97,8 @@ export function middleware(request: NextRequest) {
     }
 
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    const targetPath = request.nextUrl.pathname + request.nextUrl.search;
+    loginUrl.searchParams.set("callbackUrl", sanitizeCallbackUrl(targetPath));
     const response = NextResponse.redirect(loginUrl);
     if (sessionToken) {
       response.cookies.delete("entrivo_session_token");
