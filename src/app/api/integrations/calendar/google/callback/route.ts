@@ -1,29 +1,49 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { requireUser } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 import { saveCalendarConnection } from "@/services/calendar/calendar.service";
 import { OAuth2Client } from "google-auth-library";
 import { getAppUrl } from "@/lib/app-url";
+import { CALENDAR_OAUTH_COOKIE_NAME, verifyCalendarOAuthState } from "@/services/calendar/oauth-state";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 
 export async function GET(request: Request) {
+  const appUrl = getAppUrl();
+
+  const auth = await requireUser();
+  if (auth.response) {
+    return NextResponse.redirect(`${appUrl}/login?callbackUrl=/integrations`);
+  }
+  const org = requireOrg(auth.user);
+  if (org.response) {
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Organization+required`);
+  }
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const stateStr = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = getAppUrl();
-
   if (error || !code || !stateStr) {
     return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(error || "Missing authorization code")}`);
   }
 
-  let state: { userId: string; orgId: string };
-  try {
-    state = JSON.parse(stateStr);
-  } catch {
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Invalid+state+payload`);
+  const cookieStore = await cookies();
+  const nonceCookie = cookieStore.get(CALENDAR_OAUTH_COOKIE_NAME)?.value;
+
+  const verification = verifyCalendarOAuthState({
+    stateParam: stateStr,
+    nonceCookie,
+    sessionUserId: auth.user.id,
+    sessionOrgId: org.organizationId,
+  });
+
+  if (!verification.valid) {
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(verification.error)}`);
   }
 
   try {
@@ -39,8 +59,8 @@ export async function GET(request: Request) {
     const accountEmail = userInfoRes.data.email || "user@gmail.com";
 
     await saveCalendarConnection({
-      userId: state.userId,
-      organizationId: state.orgId,
+      userId: verification.state.userId,
+      organizationId: verification.state.orgId,
       provider: "GOOGLE",
       accountEmail,
       accessToken: tokens.access_token || "",
@@ -48,10 +68,11 @@ export async function GET(request: Request) {
       expiresInSeconds: tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600,
     });
 
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_connected=GOOGLE`);
+    const response = NextResponse.redirect(`${appUrl}/integrations?calendar_connected=GOOGLE`);
+    response.cookies.delete(CALENDAR_OAUTH_COOKIE_NAME);
+    return response;
   } catch (err: any) {
     console.error("Google Calendar callback error:", err);
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(err.message || "Failed to complete Google Calendar pairing")}`);
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Failed+to+complete+Google+Calendar+pairing`);
   }
 }
-

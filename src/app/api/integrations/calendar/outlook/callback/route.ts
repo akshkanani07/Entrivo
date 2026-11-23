@@ -1,28 +1,48 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { requireUser } from "@/lib/rbac";
+import { requireOrg } from "@/lib/tenant";
 import { saveCalendarConnection } from "@/services/calendar/calendar.service";
 import { getAppUrl } from "@/lib/app-url";
+import { CALENDAR_OAUTH_COOKIE_NAME, verifyCalendarOAuthState } from "@/services/calendar/oauth-state";
 
 const OUTLOOK_CLIENT_ID = process.env.OUTLOOK_CLIENT_ID || "";
 const OUTLOOK_CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET || "";
 
 export async function GET(request: Request) {
+  const appUrl = getAppUrl();
+
+  const auth = await requireUser();
+  if (auth.response) {
+    return NextResponse.redirect(`${appUrl}/login?callbackUrl=/integrations`);
+  }
+  const org = requireOrg(auth.user);
+  if (org.response) {
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Organization+required`);
+  }
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const stateStr = searchParams.get("state");
   const error = searchParams.get("error");
 
-  const appUrl = getAppUrl();
-
   if (error || !code || !stateStr) {
     return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(error || "Missing authorization code")}`);
   }
 
-  let state: { userId: string; orgId: string };
-  try {
-    state = JSON.parse(stateStr);
-  } catch {
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Invalid+state+payload`);
+  const cookieStore = await cookies();
+  const nonceCookie = cookieStore.get(CALENDAR_OAUTH_COOKIE_NAME)?.value;
+
+  const verification = verifyCalendarOAuthState({
+    stateParam: stateStr,
+    nonceCookie,
+    sessionUserId: auth.user.id,
+    sessionOrgId: org.organizationId,
+  });
+
+  if (!verification.valid) {
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(verification.error)}`);
   }
 
   try {
@@ -53,8 +73,8 @@ export async function GET(request: Request) {
     const accountEmail = profileData.mail || profileData.userPrincipalName || "user@outlook.com";
 
     await saveCalendarConnection({
-      userId: state.userId,
-      organizationId: state.orgId,
+      userId: verification.state.userId,
+      organizationId: verification.state.orgId,
       provider: "OUTLOOK",
       accountEmail,
       accessToken: tokenData.access_token,
@@ -62,10 +82,11 @@ export async function GET(request: Request) {
       expiresInSeconds: tokenData.expires_in,
     });
 
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_connected=OUTLOOK`);
+    const response = NextResponse.redirect(`${appUrl}/integrations?calendar_connected=OUTLOOK`);
+    response.cookies.delete(CALENDAR_OAUTH_COOKIE_NAME);
+    return response;
   } catch (err: any) {
     console.error("Outlook Calendar callback error:", err);
-    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=${encodeURIComponent(err.message || "Failed to complete Outlook Calendar pairing")}`);
+    return NextResponse.redirect(`${appUrl}/integrations?calendar_error=Failed+to+complete+Outlook+Calendar+pairing`);
   }
 }
-

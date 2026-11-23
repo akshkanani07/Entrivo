@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
 import { getOutlookCalendarAuthUrl } from "@/services/calendar/calendar.service";
 import { getAppUrl } from "@/lib/app-url";
+import { generateCalendarOAuthState } from "@/services/calendar/oauth-state";
 
 export async function GET() {
   const auth = await requireUser();
@@ -13,9 +14,10 @@ export async function GET() {
 
   const appUrl = getAppUrl();
   const redirectUri = `${appUrl}/api/integrations/calendar/outlook/callback`;
-  const state = JSON.stringify({ userId: auth.user.id, orgId: org.organizationId });
+  const { state, nonce, cookieName, cookieOptions } = generateCalendarOAuthState(auth.user.id, org.organizationId);
 
   const authUrl = getOutlookCalendarAuthUrl(state, redirectUri);
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(authUrl);
+  response.cookies.set(cookieName, nonce, cookieOptions);
+  return response;
 }
-
