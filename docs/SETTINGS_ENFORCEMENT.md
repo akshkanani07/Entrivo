@@ -14,11 +14,11 @@ Every setting listed here is:
 
 | Setting Key | Type & Constraints | Default | Enforcing File & Function | Verification Test |
 | :--- | :--- | :--- | :--- | :--- |
-| `allowWalkIn` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts` (`performWalkIn`), `src/app/kiosk/KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Walk-In Disabled) |
+| `allowWalkIn` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts` (`performWalkIn`), `src/app/kiosk/KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Walk-In Disabled) |
 | `advanceBookingDays` | `z.number().min(1).max(90)` | `30` | `src/app/api/invitations/route.ts` (`POST`), `src/app/(dashboard)/invitations/new/NewInvitationForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Advance Booking Limit) |
 | `maxVisitDurationHours` | `z.number().min(1).max(24)` | `8` | `src/app/api/cron/auto-checkout/route.ts` | `scripts/verify-phase-6-acceptance.cjs` (Test 3: Auto-Checkout Overstay) |
-| `maxVisitorsPerHostPerDay` | `z.number().min(1).max(100)` | `20` | `src/services/visitors/walkin.service.ts` (`performWalkIn`) | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Daily Host Limit) |
-| `blockedVisitorTypes` | `z.array(z.string())` | `[]` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts` | Unit / Tenant Isolation Tests |
+| `maxVisitorsPerHostPerDay` | `z.number().min(1).max(100)` | `20` | `src/services/walkin/walkin.service.ts` (`performWalkIn`) | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Daily Host Limit) |
+| `blockedVisitorTypes` | `z.array(z.string())` | `[]` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts` | Unit / Tenant Isolation Tests |
 | `maxGroupInvitationSize` | `z.number().int().min(1).max(200)` | `50` | `src/app/api/invitations/group/route.ts`, `src/app/api/invitation-series/route.ts` | P10-D acceptance and invitation tests |
 | `bulkImportMaxRows` | `z.number().int().min(1).max(10000)` | `1000` | `src/services/invitations/bulk-csv.ts`, `src/app/api/invitations/bulk/route.ts` | Bulk CSV unit tests |
 | `bulkImportMaxSizeMb` | `z.number().int().min(1).max(25)` | `5` | `src/app/api/invitations/bulk/route.ts` | P10-D acceptance checks |
@@ -33,12 +33,12 @@ These settings dynamically control form rendering on staff dashboards and self-s
 
 | Setting Key | Type & Constraints | Default | Enforcing File & Function | Verification Test |
 | :--- | :--- | :--- | :--- | :--- |
-| `requireCompany` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
-| `requireEmail` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
-| `requirePhone` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
-| `requirePurpose` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
-| `requireIdNumber` | `z.boolean()` | `false` | `src/services/visitors/walkin.service.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
-| `requireHost` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requireCompany` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requireEmail` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requirePhone` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requirePurpose` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requireIdNumber` | `z.boolean()` | `false` | `src/services/walkin/walkin.service.ts`, `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
+| `requireHost` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/app/api/invitations/route.ts`, `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Dynamic Required Fields) |
 
 ---
 
@@ -46,10 +46,10 @@ These settings dynamically control form rendering on staff dashboards and self-s
 
 | Setting Key | Type & Constraints | Default | Enforcing File & Function | Verification Test |
 | :--- | :--- | :--- | :--- | :--- |
-| `requirePhoto` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts` (`performWalkIn`), `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Photo Requirement) |
-| `requireIdProof` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts` (`performWalkIn`), `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: ID Proof Requirement) |
-| `requireNda` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/services/documents/nda.service.ts` | `scripts/verify-phase-3-acceptance.cjs` & Acceptance Suite |
-| `ndaReuseEnabled` | `z.boolean()` | `true` | `src/services/visitors/walkin.service.ts`, `src/services/documents/nda.service.ts` (`getVisitorValidNda`) | `scripts/verify-phase-3-acceptance.cjs` |
+| `requirePhoto` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts` (`performWalkIn`), `WalkinForm.tsx`, `KioskClientView.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: Photo Requirement) |
+| `requireIdProof` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts` (`performWalkIn`), `WalkinForm.tsx` | `scripts/verify-phase-6-acceptance.cjs` (Test 2: ID Proof Requirement) |
+| `requireNda` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/services/documents/nda.service.ts` | `scripts/verify-phase-3-acceptance.cjs` & Acceptance Suite |
+| `ndaReuseEnabled` | `z.boolean()` | `true` | `src/services/walkin/walkin.service.ts`, `src/services/documents/nda.service.ts` (`getVisitorValidNda`) | `scripts/verify-phase-3-acceptance.cjs` |
 | `ndaValidityDays` | `z.number().min(1).max(730)` | `365` | `src/services/documents/nda.service.ts` (`getVisitorValidNda`) | `scripts/verify-phase-3-acceptance.cjs` |
 
 ---
@@ -61,8 +61,10 @@ These settings dynamically control form rendering on staff dashboards and self-s
 | `autoApprovalEnabled` | `z.boolean()` | `false` | `src/app/api/invitations/route.ts` (`POST`), `src/services/invitations/approval.service.ts` | Acceptance Suite |
 | `approvalTimeoutMinutes` | `z.number().min(5).max(1440)` | `60` | `src/services/invitations/approval.service.ts` (`checkApprovalTimeouts`) | Acceptance Suite |
 | `escalateToAdminOnTimeout` | `z.boolean()` | `true` | `src/services/invitations/approval.service.ts` (`checkApprovalTimeouts`) | Acceptance Suite |
-| `workingHoursEnforcement` | `z.enum(["ALLOW", "WARN", "BLOCK"])` | `"WARN"` | `src/lib/settings-registry.ts` (`checkScheduleAndHolidayPolicy`), `src/services/visitors/walkin.service.ts` | `scripts/verify-phase-2-acceptance.cjs` |
-| `holidayEnforcement` | `z.enum(["ALLOW", "WARN", "BLOCK"])` | `"WARN"` | `src/lib/settings-registry.ts` (`checkScheduleAndHolidayPolicy`), `src/services/visitors/walkin.service.ts` | `scripts/verify-phase-2-acceptance.cjs` |
+| `walkinApprovalMode` | `z.enum(["REQUIRE_HOST", "AUTO_APPROVE", "DESK_OVERRIDE"])` | `"REQUIRE_HOST"` | `src/services/walkin/walkin.service.ts`; desk override requires `walkin.override` and a reason of 10–500 characters | Walk-in approval unit tests |
+| `walkinApprovalEscalationMinutes` | `z.number().int().min(1).max(1440)` | `10` | `src/services/walkin/walkin.service.ts` (`escalatePendingWalkinApprovals`); notifies reception through in-app and Web Push | Walk-in escalation timing unit tests |
+| `workingHoursEnforcement` | `z.enum(["ALLOW", "WARN", "BLOCK"])` | `"WARN"` | `src/lib/settings-registry.ts` (`checkScheduleAndHolidayPolicy`), `src/services/walkin/walkin.service.ts` | `scripts/verify-phase-2-acceptance.cjs` |
+| `holidayEnforcement` | `z.enum(["ALLOW", "WARN", "BLOCK"])` | `"WARN"` | `src/lib/settings-registry.ts` (`checkScheduleAndHolidayPolicy`), `src/services/walkin/walkin.service.ts` | `scripts/verify-phase-2-acceptance.cjs` |
 
 ---
 

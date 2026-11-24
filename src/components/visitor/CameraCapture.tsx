@@ -10,13 +10,11 @@ import {
   Upload,
   Sparkles,
   Timer,
-  User,
-  ShieldCheck,
   SwitchCamera,
   Loader2,
-  CheckCircle2,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 interface CameraCaptureProps {
   onCapture: (imageDataUrl: string) => void;
@@ -256,10 +254,10 @@ export function CameraCapture({
   };
 
   return (
-    <div className="w-full flex flex-col items-center">
+    <div className="flex w-full flex-col items-center">
       {/* Mode Switcher Tabs (when not captured yet) */}
       {!capturedImage && (
-        <div className="flex p-1 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-semibold mb-4 w-full max-w-xs">
+        <div className="mb-4 flex w-full max-w-xs rounded-xl border border-surface-border bg-surface p-1 text-xs font-semibold">
           <button
             type="button"
             onClick={() => {
@@ -268,8 +266,8 @@ export function CameraCapture({
             }}
             className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "CAMERA"
-                ? "bg-indigo-600 text-white shadow-glow-sm"
-                : "text-slate-400 hover:text-white"
+                ? "bg-brand text-white shadow-glow-sm"
+                : "text-text-muted hover:text-text"
             }`}
           >
             <Camera className="w-3.5 h-3.5" />
@@ -283,8 +281,8 @@ export function CameraCapture({
             }}
             className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "UPLOAD"
-                ? "bg-indigo-600 text-white shadow-glow-sm"
-                : "text-slate-400 hover:text-white"
+                ? "bg-brand text-white shadow-glow-sm"
+                : "text-text-muted hover:text-text"
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
@@ -298,8 +296,8 @@ export function CameraCapture({
             }}
             className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
               activeTab === "PRESET"
-                ? "bg-indigo-600 text-white shadow-glow-sm"
-                : "text-slate-400 hover:text-white"
+                ? "bg-brand text-white shadow-glow-sm"
+                : "text-text-muted hover:text-text"
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
@@ -309,7 +307,7 @@ export function CameraCapture({
       )}
 
       {/* Main Viewport Container */}
-      <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-3xl overflow-hidden bg-slate-950 border-2 border-indigo-500/30 flex items-center justify-center shadow-2xl group">
+      <div className="group relative flex h-64 w-64 items-center justify-center overflow-hidden rounded-3xl border-2 border-brand/30 bg-surface shadow-card sm:h-72 sm:w-72">
         {/* Shutter Flash Animation Overlay */}
         {isFlashing && (
           <div className="absolute inset-0 bg-white z-40 animate-out fade-out duration-300" />
@@ -324,9 +322,8 @@ export function CameraCapture({
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
-            <div className="absolute top-3 left-3 bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              {t("photoVerified")}
+            <div className="absolute left-3 top-3">
+              <StatusPill tone="success">{t("photoVerified")}</StatusPill>
             </div>
           </div>
         ) : activeTab === "CAMERA" ? (
@@ -407,22 +404,27 @@ export function CameraCapture({
           </div>
         ) : activeTab === "UPLOAD" ? (
           /* 3. Upload File Mode */
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full h-full flex flex-col items-center justify-center p-6 text-center cursor-pointer hover:bg-slate-900/60 transition-colors"
-          >
+          <div className="flex h-full w-full flex-col items-center justify-center p-4 text-center">
             <input
               ref={fileInputRef}
               type="file"
               accept="image/*"
               className="hidden"
+              aria-label={t("uploadPhoto")}
               onChange={handleFileUpload}
             />
-            <div className="w-14 h-14 rounded-2xl bg-indigo-950/80 border border-indigo-700/50 flex items-center justify-center text-indigo-400 mb-3 group-hover:scale-105 transition-transform">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand/40 bg-brand/15 text-brand-300">
               <Upload className="w-7 h-7" />
             </div>
             <h4 className="text-xs font-bold text-white">{t("uploadPhoto")}</h4>
             <p className="text-[11px] text-slate-400 mt-1">{t("supportedImageTypes")}</p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-3 min-h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300"
+            >
+              Choose a photo
+            </button>
           </div>
         ) : (
           /* 4. Preset Portraits Mode */

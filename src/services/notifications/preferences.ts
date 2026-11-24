@@ -5,6 +5,7 @@ import { NotificationEvent } from "./events";
 // Security-critical events bypass quiet hours and user opt-outs
 export const SECURITY_CRITICAL_EVENTS: string[] = [
   NotificationEvent.SECURITY_ALERT,
+  NotificationEvent.WALKIN_APPROVAL_ESCALATED,
   "PASSWORD_RESET",
   "MAGIC_LINK",
   "TWO_FACTOR_CHALLENGE",

@@ -2,6 +2,8 @@ import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
 import { SecurityGateClient } from "./SecurityGateClient";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { NextStepHint } from "@/components/ui/NextStepHint";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +39,13 @@ export default async function SecurityPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          Security Gate & Access Control
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Gate verification, blacklist enforcement, entry/exit scanning, and security incident log.
-        </p>
-      </div>
+      <PageHeader
+        title="Security gate"
+        description="Verify visitor passes, review watchlist matches, and monitor gate activity."
+      />
+      <NextStepHint href="/checkin" actionLabel="Open check-in desk">
+        Scan a pass, review the access result and its reason, then issue a badge only when entry is allowed.
+      </NextStepHint>
 
       <SecurityGateClient
         blacklists={blacklists}

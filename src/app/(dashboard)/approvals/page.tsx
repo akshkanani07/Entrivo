@@ -48,6 +48,8 @@ export default async function ApprovalsPage() {
     invitationId: app.invitationId,
     status: app.status,
     step: app.step,
+    isWalkIn: app.invitation.isWalkIn,
+    escalatedAt: app.escalatedAt?.toISOString() ?? null,
     visitorName: app.invitation.visitor.name,
     visitorNames: app.invitation.visitors.map((member) => member.visitor.name),
     visitorCompany: app.invitation.visitor.company,

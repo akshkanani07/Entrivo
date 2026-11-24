@@ -151,6 +151,8 @@ export function SettingsClientView({
     preRegistrationTokenTtlHours: initialPolicy?.preRegistrationTokenTtlHours ?? 24,
     selfCheckinMode: initialPolicy?.selfCheckinMode ?? "OFF",
     selfCheckinEscalationMinutes: initialPolicy?.selfCheckinEscalationMinutes ?? 5,
+    walkinApprovalMode: initialPolicy?.walkinApprovalMode ?? "REQUIRE_HOST",
+    walkinApprovalEscalationMinutes: initialPolicy?.walkinApprovalEscalationMinutes ?? 10,
 
     // 4. Approval Rules
     autoApprovalEnabled: initialPolicy?.autoApprovalEnabled ?? false,
@@ -1094,6 +1096,71 @@ export function SettingsClientView({
               Save Rules
             </button>
           </div>
+
+          <section aria-labelledby="walkin-approval-heading" className="space-y-3 border-b border-slate-800 pb-5">
+            <div>
+              <h4 id="walkin-approval-heading" className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+                Walk-in approval
+              </h4>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Choose whether reception waits for the host or can complete check-in immediately.
+              </p>
+            </div>
+            <fieldset className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <legend className="sr-only">Walk-in approval mode</legend>
+              {([
+                {
+                  value: "REQUIRE_HOST",
+                  title: "Require host approval",
+                  description: "Keep the visitor waiting until the host approves.",
+                },
+                {
+                  value: "AUTO_APPROVE",
+                  title: "Automatically approve",
+                  description: "Run standard entry checks, then issue the badge without host approval.",
+                },
+                {
+                  value: "DESK_OVERRIDE",
+                  title: "Allow desk override",
+                  description: "Require host approval unless authorized staff record a reason.",
+                },
+              ] as const).map((option) => (
+                <label key={option.value} className="flex min-h-28 cursor-pointer gap-3 rounded-xl border border-slate-800 bg-slate-950 p-4 hover:border-indigo-700">
+                  <input
+                    type="radio"
+                    name="walkinApprovalMode"
+                    value={option.value}
+                    checked={policyData.walkinApprovalMode === option.value}
+                    onChange={() => setPolicyData({ ...policyData, walkinApprovalMode: option.value })}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-500"
+                  />
+                  <span>
+                    <span className="block text-xs font-semibold text-white">{option.title}</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-slate-400">{option.description}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="max-w-xs">
+              <label htmlFor="walkin-escalation-minutes" className="mb-1 block text-xs font-medium text-slate-300">
+                Escalate pending approvals after (minutes)
+              </label>
+              <input
+                id="walkin-escalation-minutes"
+                type="number"
+                min={1}
+                max={1440}
+                value={policyData.walkinApprovalEscalationMinutes}
+                onChange={(event) =>
+                  setPolicyData({
+                    ...policyData,
+                    walkinApprovalEscalationMinutes: Math.min(1440, Math.max(1, Number(event.target.value) || 10)),
+                  })
+                }
+                className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">

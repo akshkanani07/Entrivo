@@ -6,7 +6,7 @@ import { decrypt } from "@/lib/encryption";
 import { getClientIp } from "@/lib/auth";
 import { audit } from "@/services/audit/audit.service";
 import { performCheckin } from "@/services/visitors/checkin.service";
-import { performWalkIn } from "@/services/visitors/walkin.service";
+import { performWalkIn } from "@/services/walkin/walkin.service";
 import {
   createSelfCheckinCredential,
   hashSelfCheckinIdentifier,
@@ -244,7 +244,6 @@ export async function completeSelfCheckin(
       await writeSelfCheckinAudit(session.organizationId, "SELFCHECKIN_REJECTED", session.id, actor.userId);
       return { success: false, status: result.status, error: "Check-in could not be completed under current workplace policy." };
     }
-
     await saveSelfCheckinVehicle(session.organizationId, result.checkIn.visitor.id, payload.vehicle);
     await prisma.selfCheckinSession.updateMany({
       where: { id: session.id, status: "CONFIRMED", checkInId: null },
@@ -287,6 +286,14 @@ export async function completeSelfCheckin(
     });
     await writeSelfCheckinAudit(session.organizationId, "SELFCHECKIN_REJECTED", session.id, actor.userId);
     return { success: false, status: result.status, error: "Check-in could not be completed under current workplace policy." };
+  }
+  if (result.approvalRequired) {
+    await prisma.selfCheckinSession.updateMany({
+      where: { id: session.id, status: "CONFIRMED", checkInId: null },
+      data: { status: "REJECTED", payloadCiphertext: null, emailCiphertext: null },
+    });
+    await writeSelfCheckinAudit(session.organizationId, "SELFCHECKIN_REJECTED", session.id, actor.userId);
+    return { success: false, status: 409, error: "Host approval is required before check-in can be completed." };
   }
 
   await saveSelfCheckinVehicle(session.organizationId, result.checkIn.visitor.id, payload.vehicle);

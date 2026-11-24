@@ -4,12 +4,15 @@ import React, { useState } from "react";
 import { CheckCircle2, XCircle, Clock, Calendar, User, ShieldAlert, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 interface ApprovalItem {
   id: string;
   invitationId: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   step: string;
+  isWalkIn: boolean;
+  escalatedAt: string | null;
   visitorName: string;
   visitorNames: string[];
   visitorCompany?: string | null;
@@ -84,6 +87,8 @@ export function ApprovalsClient({ initialApprovals }: { initialApprovals: Approv
                     >
                       {app.visitorType}
                     </span>
+                    {app.isWalkIn && <StatusPill tone="info">Walk-in</StatusPill>}
+                    {app.escalatedAt && <StatusPill tone="danger">Escalated</StatusPill>}
                     <span className="text-xs text-slate-400">({app.visitorCompany})</span>
                   </div>
                   <p className="text-xs text-slate-300">

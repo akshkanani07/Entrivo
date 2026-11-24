@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, CarFront, ClipboardList, Download, FileText, ShieldAlert, ShieldCheck, Star, UserRound } from "lucide-react";
 import { getVisitorDocumentExpiryState } from "@/lib/visitor-profile";
+import { NextStepHint } from "@/components/ui/NextStepHint";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 type VisitorProfile = {
   id: string;
@@ -291,9 +293,9 @@ export function VisitorProfileClient({
               <span className="rounded-full border border-indigo-700 bg-indigo-950 px-2.5 py-1 text-xs font-semibold text-indigo-200">
                 {visitor.visitorType?.name || "General"}
               </span>
-              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${currentlyInside ? "border-emerald-800 bg-emerald-950 text-emerald-300" : "border-slate-700 bg-slate-800 text-slate-300"}`}>
+              <StatusPill tone={currentlyInside ? "success" : "neutral"}>
                 {currentlyInside ? "Checked in" : "Not on site"}
-              </span>
+              </StatusPill>
               {visitor.isVip && <span className="inline-flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950 px-2.5 py-1 text-xs font-semibold text-amber-200"><Star className="h-3 w-3" /> VIP</span>}
               {visitor.isBlacklisted && <span className="inline-flex items-center gap-1 rounded-full border border-rose-800 bg-rose-950 px-2.5 py-1 text-xs font-semibold text-rose-200"><ShieldAlert className="h-3 w-3" /> Blacklisted</span>}
               {visitor.isRegularVendor && <span className="rounded-full border border-sky-800 bg-sky-950 px-2.5 py-1 text-xs font-semibold text-sky-200">Regular vendor</span>}
@@ -327,6 +329,23 @@ export function VisitorProfileClient({
           )}
         </div>
       </Panel>
+
+      {currentlyInside ? (
+        <NextStepHint href="/checkin" actionLabel="Open check-in desk">
+          The visitor is on site. Check them out at reception when their meeting is over.
+        </NextStepHint>
+      ) : permissions.canInvite ? (
+        <NextStepHint
+          href={`/invitations/new?visitorId=${encodeURIComponent(visitor.id)}`}
+          actionLabel="Create invitation"
+        >
+          Invite this visitor before their next visit so they can complete pre-registration in advance.
+        </NextStepHint>
+      ) : (
+        <NextStepHint>
+          If this visitor is expected, ask a host to send them an invitation before they arrive.
+        </NextStepHint>
+      )}
 
       <div role="tablist" aria-label="Visitor profile sections" className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 p-1">
         {tabs.filter((tab) => tab.id !== "audit" || permissions.canReadAudit).map((tab) => (
@@ -456,9 +475,9 @@ export function VisitorProfileClient({
                           <p className="mt-1 text-xs text-slate-500">{document.expiryDate ? `Expires ${displayDate(document.expiryDate)}` : "No expiry date"}</p>
                         </div>
                       </div>
-                      <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${expiryState === "EXPIRED" ? "border-rose-800 bg-rose-950 text-rose-200" : expiryState === "EXPIRING" ? "border-amber-800 bg-amber-950 text-amber-200" : "border-emerald-800 bg-emerald-950 text-emerald-200"}`}>
+                      <StatusPill tone={expiryState === "EXPIRED" ? "danger" : expiryState === "EXPIRING" ? "warning" : "success"}>
                         {expiryState === "EXPIRED" ? "Expired" : expiryState === "EXPIRING" ? "Expiring soon" : document.status}
-                      </span>
+                      </StatusPill>
                     </li>
                   );
                 })}

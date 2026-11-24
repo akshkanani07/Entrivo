@@ -23,8 +23,6 @@ const heartbeatInterval = setInterval(updateHeartbeat, 15000);
 import {
   getRedisConnection,
   runAutoCheckoutWorker,
-  invitationSeriesQueue,
-  bulkImportQueue,
 } from "../src/lib/queue";
 import { processNotificationJob } from "../src/services/jobs/notification.job";
 import { processReportJob } from "../src/services/jobs/report.job";
@@ -42,6 +40,7 @@ import { markPastInvitationMembersNoShow } from "../src/services/invitations/no-
 import { runParkingSweep } from "../src/services/parking/parking.service";
 import { processFeedbackJob } from "../src/services/feedback/feedback.service";
 import { sweepSelfCheckinSessions } from "../src/services/self-checkin/self-checkin-sweep.service";
+import { escalatePendingWalkinApprovals } from "../src/services/walkin/walkin.service";
 
 const workers: Worker[] = [];
 let autoCheckoutInterval: NodeJS.Timeout | null = null;
@@ -49,6 +48,7 @@ let invitationSeriesInterval: NodeJS.Timeout | null = null;
 let invitationNoShowInterval: NodeJS.Timeout | null = null;
 let parkingSweepInterval: NodeJS.Timeout | null = null;
 let selfCheckinSweepInterval: NodeJS.Timeout | null = null;
+let walkinApprovalEscalationInterval: NodeJS.Timeout | null = null;
 
 async function startWorker() {
   logger.info("Starting Entrivo Background Worker Daemon...");
@@ -166,8 +166,11 @@ async function startWorker() {
       if (res.overstayedCount > 0) {
         logger.info({ count: res.overstayedCount }, "[Worker] Auto-checkout marked overstayed visitors");
       }
-    } catch (err: any) {
-      logger.error({ error: err.message }, "[Worker] Error in auto-checkout task");
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : "Unknown error" },
+        "[Worker] Error in auto-checkout task"
+      );
     }
   }, 5 * 60 * 1000);
 
@@ -225,6 +228,20 @@ async function startWorker() {
     }
   }, 60 * 1000);
 
+  walkinApprovalEscalationInterval = setInterval(async () => {
+    try {
+      const result = await escalatePendingWalkinApprovals();
+      if (result.escalated > 0) {
+        logger.info({ count: result.escalated }, "[Worker] Walk-in approvals escalated");
+      }
+    } catch (error) {
+      logger.error(
+        { errorType: error instanceof Error ? error.name : "UnknownError" },
+        "[Worker] Walk-in approval escalation failed"
+      );
+    }
+  }, 60 * 1000);
+
   logger.info("Entrivo Background Worker is listening for jobs.");
 }
 
@@ -245,6 +262,9 @@ async function gracefulShutdown(signal: string) {
   }
   if (selfCheckinSweepInterval) {
     clearInterval(selfCheckinSweepInterval);
+  }
+  if (walkinApprovalEscalationInterval) {
+    clearInterval(walkinApprovalEscalationInterval);
   }
   clearInterval(heartbeatInterval);
   try {

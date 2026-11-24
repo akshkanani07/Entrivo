@@ -5,6 +5,11 @@ import {
   WeekdayScheduleSchema,
   EnforcementModeSchema,
 } from "@/lib/settings-schema";
+import { walkinDeskOverrideSchema } from "@/services/walkin/walkin.validation";
+import {
+  shouldEscalateWalkinApproval,
+  walkinRequiresHostApproval,
+} from "@/lib/walkin-approval";
 
 describe("Organizational Settings & Policy Schemas", () => {
   it("enforces default working hours (Mon-Fri 08:30-19:30, Sat-Sun closed)", () => {
@@ -43,7 +48,51 @@ describe("Organizational Settings & Policy Schemas", () => {
     expect(policy.workingHoursEnforcement).toBe("WARN");
     expect(policy.holidayEnforcement).toBe("WARN");
     expect(policy.preRegistrationRequired).toBe("WARN");
+    expect(policy.walkinApprovalMode).toBe("REQUIRE_HOST");
+    expect(policy.walkinApprovalEscalationMinutes).toBe(10);
     expect(OrgPolicySchema.parse({ preRegistrationRequired: "OFF" }).preRegistrationRequired).toBe("OFF");
+  });
+
+  it("supports all walk-in approval modes with host approval required by default", () => {
+    expect(walkinRequiresHostApproval("REQUIRE_HOST")).toBe(true);
+    expect(walkinRequiresHostApproval("AUTO_APPROVE")).toBe(false);
+    expect(walkinRequiresHostApproval("DESK_OVERRIDE")).toBe(true);
+    expect(() => OrgPolicySchema.parse({ walkinApprovalMode: "INVALID" })).toThrow();
+    expect(() => OrgPolicySchema.parse({ walkinApprovalEscalationMinutes: 0 })).toThrow();
+  });
+
+  it("requires a trimmed desk-override reason with at least 10 characters", () => {
+    expect(() => walkinDeskOverrideSchema.parse({ invitationId: "inv-1", reason: "  too short " })).toThrow();
+    expect(walkinDeskOverrideSchema.parse({
+      invitationId: " inv-1 ",
+      reason: "  Host unavailable  ",
+    })).toEqual({ invitationId: "inv-1", reason: "Host unavailable" });
+    expect(() => walkinDeskOverrideSchema.parse({
+      invitationId: "inv-1",
+      reason: "x".repeat(501),
+    })).toThrow();
+  });
+
+  it("escalates only once the configured wait has elapsed", () => {
+    const now = new Date("2026-11-24T12:10:00.000Z");
+    expect(shouldEscalateWalkinApproval(
+      new Date("2026-11-24T12:00:01.000Z"),
+      null,
+      now,
+      10
+    )).toBe(false);
+    expect(shouldEscalateWalkinApproval(
+      new Date("2026-11-24T12:00:00.000Z"),
+      null,
+      now,
+      10
+    )).toBe(true);
+    expect(shouldEscalateWalkinApproval(
+      new Date("2026-11-24T11:00:00.000Z"),
+      new Date("2026-11-24T12:01:00.000Z"),
+      now,
+      10
+    )).toBe(false);
   });
 
   it("rejects out-of-range numerical bounds", () => {

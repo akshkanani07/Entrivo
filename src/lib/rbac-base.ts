@@ -13,6 +13,7 @@ export type Permission =
   | "preregistration.read"
   | "preregistration.manage"
   | "walkin.create"
+  | "walkin.override"
   | "checkin.perform"
   | "checkout.perform"
   | "qr.verify"
@@ -77,6 +78,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "preregistration.read",
   "preregistration.manage",
   "walkin.create",
+  "walkin.override",
   "checkin.perform",
   "checkout.perform",
   "qr.verify",
@@ -149,6 +151,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "preregistration.read",
     "preregistration.manage",
     "walkin.create",
+    "walkin.override",
     "checkin.perform",
     "checkout.perform",
     "qr.verify",
@@ -211,6 +214,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "preregistration.read",
     "preregistration.manage",
     "walkin.create",
+    "walkin.override",
     "checkin.perform",
     "checkout.perform",
     "selfcheckin.confirm",
@@ -237,6 +241,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "visitors.read",
     "invitations.read.all",
     "walkin.create",
+    "walkin.override",
     "checkin.perform",
     "checkout.perform",
     "selfcheckin.confirm",

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { optionalString, optionalEmail } from "@/lib/zod-helpers";
 import { audit } from "@/services/audit/audit.service";
 import { invalidateOrgPolicyCache } from "@/lib/settings-registry";
+import { OrgPolicySchema } from "@/lib/settings-schema";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const updateOrgSchema = z.object({
   name: optionalString(),
@@ -20,7 +22,7 @@ const updateOrgSchema = z.object({
   contactEmail: optionalEmail(),
   contactPhone: optionalString(),
   checkInPolicy: optionalString(),
-  policies: z.record(z.any()).optional().nullable(),
+  policies: OrgPolicySchema.partial().optional().nullable(),
 });
 
 export async function GET() {
@@ -72,6 +74,13 @@ export async function PUT(request: Request) {
     const org = requireOrg(auth.user);
     if (org.response) return org.response;
     const organizationId = org.organizationId;
+    const limit = checkRateLimit(`organization-settings:${auth.user.id}`, {
+      maxRequests: 30,
+      windowMs: 60_000,
+    });
+    if (!limit.allowed) {
+      return NextResponse.json({ success: false, error: "Too many settings updates." }, { status: 429 });
+    }
 
     const body = await request.json();
     const parsed = updateOrgSchema.safeParse(body);
@@ -129,7 +138,6 @@ export async function PUT(request: Request) {
     });
 
     // 2. If security policies provided, update Settings table
-    const updatedSettingsMap: Record<string, any> = { ...existingSettingsMap };
     if (policies && typeof policies === "object") {
       for (const [key, val] of Object.entries(policies)) {
         const valStr = typeof val === "object" && val !== null ? JSON.stringify(val) : String(val);
@@ -151,10 +159,20 @@ export async function PUT(request: Request) {
             value: valStr,
           },
         });
-        updatedSettingsMap[settingKey] = valStr;
       }
       invalidateOrgPolicyCache(organizationId);
     }
+    const changedPolicies = policies
+      ? Object.fromEntries(
+          Object.entries(policies).map(([key, value]) => [
+            key,
+            {
+              before: existingSettingsMap[`policy_${key}`],
+              after: value,
+            },
+          ])
+        )
+      : {};
 
     // 3. Log Audit with before/after state diff
     audit({
@@ -168,17 +186,16 @@ export async function PUT(request: Request) {
         brandColor: existingOrg?.brandColor,
         timezone: existingOrg?.timezone,
         locale: existingOrg?.locale,
-        settings: existingSettingsMap,
       },
       after: {
         name: updatedOrg.name,
         brandColor: updatedOrg.brandColor,
         timezone: updatedOrg.timezone,
         locale: updatedOrg.locale,
-        settings: updatedSettingsMap,
+        policies: changedPolicies,
       },
-      details: { summary: `Organization profile and compliance policies updated by ${auth.user.name}` },
-    }).catch(console.error);
+      details: { summary: "Organization profile and policy settings updated." },
+    }).catch(() => console.error("Organization settings audit write failed."));
 
     return NextResponse.json({ success: true, data: updatedOrg });
   } catch (error: any) {

@@ -46,6 +46,12 @@ export const SelfCheckinModeSchema = z.enum([
   "AUTO_IF_PREREGISTERED",
 ]);
 export type SelfCheckinMode = z.infer<typeof SelfCheckinModeSchema>;
+export const WalkinApprovalModeSchema = z.enum([
+  "REQUIRE_HOST",
+  "AUTO_APPROVE",
+  "DESK_OVERRIDE",
+]);
+export type WalkinApprovalMode = z.infer<typeof WalkinApprovalModeSchema>;
 
 export const OrgPolicySchema = z.object({
   // 1. Visitor Policies & Limits
@@ -81,6 +87,8 @@ export const OrgPolicySchema = z.object({
   preRegistrationTokenTtlHours: z.number().int().min(1).max(720).default(getDefaultPreRegistrationTtlHours()),
   selfCheckinMode: SelfCheckinModeSchema.default("OFF"),
   selfCheckinEscalationMinutes: z.number().int().min(1).max(60).default(getEnvInt("SELF_CHECKIN_ESCALATE_MINUTES", 5, 1, 60)),
+  walkinApprovalMode: WalkinApprovalModeSchema.default("REQUIRE_HOST"),
+  walkinApprovalEscalationMinutes: z.number().int().min(1).max(1440).default(10),
 
   // 4. Approval Rules
   autoApprovalEnabled: z.boolean().default(false),

@@ -12,6 +12,7 @@
     "prisma:seed": "node prisma/seed.js",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:7a": "playwright test tests/e2e/module-workflow-7a.spec.ts tests/e2e/visitor-profile.spec.ts tests/e2e/invitation-detail.spec.ts",
     "i18n:check": "tsx scripts/check-i18n.ts",
     "test:tenant": "node --experimental-strip-types scripts/verify-tenant-isolation.ts",
     "test:tenants": "node --experimental-strip-types scripts/verify-tenant-isolation.ts",
@@ -66,6 +67,7 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/canvas-confetti": "^1.9.0",

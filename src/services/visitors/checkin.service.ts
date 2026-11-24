@@ -44,6 +44,11 @@ export interface CheckInInput {
   complianceOverrideReason?: string;
   complianceOverrideAuthorized?: boolean;
   complianceOverrideActorId?: string;
+  walkinApprovalOverride?: {
+    approvalId: string;
+    actorUserId: string;
+    reason: string;
+  };
 }
 
 export interface CheckInResult {
@@ -133,6 +138,28 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
   if (!invitationRecord) {
     return { success: false, error: "Invitation not found in organization.", status: 404 };
   }
+  if (
+    input.walkinApprovalOverride &&
+    (input.walkinApprovalOverride.reason.trim().length < 10 ||
+      !invitationRecord.isWalkIn ||
+      invitationRecord.status !== "PENDING")
+  ) {
+    return { success: false, error: "This walk-in is not eligible for a desk approval.", status: 409 };
+  }
+  const pendingWalkinApproval = input.walkinApprovalOverride
+    ? await prisma.approval.findFirst({
+        where: {
+          id: input.walkinApprovalOverride.approvalId,
+          invitationId,
+          status: "PENDING",
+          invitation: { organizationId: orgId, isWalkIn: true },
+        },
+        select: { id: true },
+      })
+    : null;
+  if (input.walkinApprovalOverride && !pendingWalkinApproval) {
+    return { success: false, error: "This walk-in approval is no longer pending.", status: 409 };
+  }
   const membership = invitationRecord.visitors.find(
     (item) => item.visitorId === (input.visitorId || invitationRecord.visitorId)
   );
@@ -153,7 +180,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     return { success: false, error: "Invitation references records outside the organization.", status: 404 };
   }
 
-  if (invitation.status !== "APPROVED") {
+  if (invitation.status !== "APPROVED" && !input.walkinApprovalOverride) {
     return {
       success: false,
       error: `Cannot check in visitor: Invitation is currently ${invitation.status}. Only APPROVED invitations can be checked in.`,
@@ -514,6 +541,45 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
             });
           }
 
+          if (input.walkinApprovalOverride) {
+            const approvalUpdate = await tx.approval.updateMany({
+              where: {
+                id: input.walkinApprovalOverride.approvalId,
+                invitationId: invitation.id,
+                status: "PENDING",
+                invitation: { organizationId: orgId, isWalkIn: true },
+              },
+              data: {
+                status: "APPROVED",
+                approvedAt: checkInTime,
+                approvedById: input.walkinApprovalOverride.actorUserId,
+                overrideReason: input.walkinApprovalOverride.reason.trim(),
+              },
+            });
+            const invitationUpdate = await tx.invitation.updateMany({
+              where: {
+                id: invitation.id,
+                organizationId: orgId,
+                isWalkIn: true,
+                status: "PENDING",
+              },
+              data: { status: "APPROVED" },
+            });
+            if (approvalUpdate.count !== 1 || invitationUpdate.count !== 1) {
+              throw new Error("WALKIN_OVERRIDE_CONFLICT");
+            }
+            await tx.auditLog.create({
+              data: {
+                organizationId: orgId,
+                userId: input.walkinApprovalOverride.actorUserId,
+                action: "WALKIN_OVERRIDE_APPROVED",
+                entity: "INVITATION",
+                entityId: invitation.id,
+                details: JSON.stringify({ walkIn: true, hostApprovalOverridden: true }),
+              },
+            });
+          }
+
           const created = await tx.checkIn.create({
             data: {
               visitorId: selectedVisitorId,
@@ -647,7 +713,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
             data: {
               organizationId: orgId,
               logType: "VISITOR_CHECKIN",
-              description: `Visitor ${invitation.visitor.name} checked in (Badge ${badgeNumber}) for host ${invitation.hostEmployee.user.name}.`,
+              description: "A visitor completed check-in.",
               severity: "LOW",
               guardName: input.actorName,
             },
@@ -677,6 +743,9 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
           error: `Visitor ${err.visitorName || "Guest"} is already checked in with Badge ${err.badgeNumber || ""}. Please check them out first.`,
           status: 400,
         };
+      }
+      if (err.message === "WALKIN_OVERRIDE_CONFLICT") {
+        return { success: false, error: "This walk-in approval was updated by another user.", status: 409 };
       }
       if (
         (err.code === "P2034" ||
@@ -730,7 +799,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
     action: "CHECKIN_SUCCESS",
     entity: "CHECKIN",
     entityId: checkIn.id,
-    details: { badgeNumber, visitorName: invitation.visitor?.name, hostName: invitation.hostEmployee?.user?.name },
+    details: { badgeNumber },
   }).catch(console.error);
 
   // Notify host (fire-and-forget)

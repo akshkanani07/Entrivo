@@ -2,6 +2,7 @@ import React from "react";
 import prisma from "@/lib/db";
 import { generateQRCodeDataUrl } from "@/lib/qr";
 import { formatDate } from "@/lib/utils";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { getTranslations } from "next-intl/server";
 import {
   ShieldCheck,
@@ -64,6 +65,7 @@ export default async function PublicPassPage({
       invitation.status === "REJECTED" ||
       membership?.status === "CANCELLED"
     : false;
+  const isApprovalPending = invitation?.status === "PENDING";
 
   if (isInvalid || isExpired || isCancelled) {
     return (
@@ -198,15 +200,22 @@ export default async function PublicPassPage({
             )}
           </div>
 
-          <div className="text-[11px] text-center text-slate-400 space-y-1">
-            <p className="flex items-center justify-center gap-1 text-emerald-400 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {t("fastTrack")}
-            </p>
-            <p className="text-slate-500">
-              {t("presentPass")}
-            </p>
-          </div>
+          {isApprovalPending ? (
+            <div role="status" className="rounded-xl border border-amber-500/30 bg-amber-950/50 p-3 text-center text-xs text-amber-200">
+              <StatusPill tone="warning">WARN · host approval pending</StatusPill>
+              <p className="mt-1 text-amber-100/80">
+                This pass cannot be used for entry until the host approves the visit.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1 text-center text-[11px] text-slate-400">
+              <p className="flex items-center justify-center gap-1 font-medium text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {t("fastTrack")}
+              </p>
+              <p className="text-slate-500">{t("presentPass")}</p>
+            </div>
+          )}
         </div>
 
         <div className="text-center text-[11px] text-slate-500 space-y-1">

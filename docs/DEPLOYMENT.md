@@ -114,6 +114,10 @@ When deploying to Vercel:
            "schedule": "0 20 * * *"
          },
          {
+           "path": "/api/cron/walkin-approval-escalation",
+           "schedule": "* * * * *"
+         },
+         {
            "path": "/api/cron/data-retention",
            "schedule": "0 2 * * 0"
          }
@@ -121,6 +125,7 @@ When deploying to Vercel:
      }
      ```
    - All cron endpoints require `Authorization: Bearer <CRON_SECRET>` headers.
+   - In worker deployments, walk-in escalation is also swept every minute by `scripts/worker.ts`.
 
 ---
 

@@ -2,6 +2,7 @@ import React from "react";
 import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
 import { getOrgPolicy } from "@/lib/settings-registry";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { WalkinForm } from "./WalkinForm";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -11,14 +12,24 @@ export const dynamic = "force-dynamic";
 export default async function NewWalkinPage({
   searchParams,
 }: {
-  searchParams: Promise<{ visitorId?: string | string[] }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const user = await requirePagePermission("visitors.write");
   const orgId = user.organizationId;
   const params = await searchParams;
-  const rawVisitorId = Array.isArray(params.visitorId) ? params.visitorId[0] : params.visitorId;
-  const visitorId = rawVisitorId === undefined ? undefined : z.string().trim().min(1).max(100).safeParse(rawVisitorId);
-  if (visitorId && !visitorId.success) notFound();
+  const firstValue = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] : value;
+  const parsedParams = z.object({
+    visitorId: z.string().trim().min(1).max(100).optional(),
+    name: z.string().trim().max(200).optional(),
+    phone: z.string().trim().max(40).optional(),
+    company: z.string().trim().max(200).optional(),
+  }).safeParse({
+    visitorId: firstValue(params.visitorId),
+    name: firstValue(params.name),
+    phone: firstValue(params.phone),
+    company: firstValue(params.company),
+  });
+  if (!parsedParams.success) notFound();
 
   if (!orgId) {
     return (
@@ -43,30 +54,33 @@ export default async function NewWalkinPage({
       where: { organizationId: orgId },
       orderBy: { createdAt: "asc" },
     }),
-    visitorId?.success
+    parsedParams.data.visitorId
       ? prisma.visitor.findFirst({
-          where: { id: visitorId.data, organizationId: orgId, deletedAt: null },
+          where: { id: parsedParams.data.visitorId, organizationId: orgId, deletedAt: null },
           select: { name: true, email: true, phone: true, company: true, visitorTypeId: true },
         })
       : Promise.resolve(null),
   ]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">
-          Walk-in Visitor Registration
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Register unscheduled visitors at reception, capture verification photo, sign NDA, and issue instant access badges.
-        </p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        title="Register a walk-in"
+        description="Add the visitor, choose who they are meeting, then capture their photo and any required agreement."
+        breadcrumbs={[{ label: "Visitors", href: "/visitors" }, { label: "Walk-in" }]}
+      />
 
       <WalkinForm
         employees={employees}
         visitorTypes={visitorTypes}
         policy={policy}
-        initialVisitor={visitor}
+        initialVisitor={{
+          name: visitor?.name ?? parsedParams.data.name ?? "",
+          email: visitor?.email ?? "",
+          phone: visitor?.phone ?? parsedParams.data.phone ?? "",
+          company: visitor?.company ?? parsedParams.data.company ?? "",
+          visitorTypeId: visitor?.visitorTypeId ?? null,
+        }}
       />
     </div>
   );

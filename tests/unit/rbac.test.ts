@@ -30,6 +30,7 @@ describe("RBAC Permissions & Roles Matrix", () => {
       "muster.broadcast",
       "muster.manage",
       "muster.account",
+      "walkin.override",
     ];
 
     for (const p of corePermissions) {
@@ -67,6 +68,7 @@ describe("RBAC Permissions & Roles Matrix", () => {
     expect(can(receptionist, "checkin.perform")).toBe(true);
     expect(can(receptionist, "checkout.perform")).toBe(true);
     expect(can(receptionist, "walkin.create")).toBe(true);
+    expect(can(receptionist, "walkin.override")).toBe(true);
     expect(can(receptionist, "visitors.read")).toBe(true);
 
     // Receptionist denied
@@ -77,6 +79,14 @@ describe("RBAC Permissions & Roles Matrix", () => {
     expect(can(receptionist, "muster.broadcast")).toBe(false);
     expect(can(receptionist, "muster.manage")).toBe(false);
     expect(can(receptionist, "muster.account")).toBe(false);
+  });
+
+  it("grants walk-in desk overrides only to authorized organization staff roles", () => {
+    expect(can({ role: "SUPER_ADMIN" }, "walkin.override")).toBe(true);
+    expect(can({ role: "ORG_ADMIN" }, "walkin.override")).toBe(true);
+    expect(can({ role: "RECEPTIONIST" }, "walkin.override")).toBe(true);
+    expect(can({ role: "SECURITY_GUARD" }, "walkin.override")).toBe(true);
+    expect(can({ role: "EMPLOYEE" }, "walkin.override")).toBe(false);
   });
 
   it("grants muster controls to security wardens without granting point management", () => {

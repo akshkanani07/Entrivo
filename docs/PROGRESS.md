@@ -175,4 +175,25 @@ The P11-U6.1 implementation and unit/type/lint checks are complete. Browser exec
 
 P11-U6.2 has static and unit-test coverage. Browser execution requires an authenticated Playwright context and `E2E_INVITATION_ID`; the local app configuration blocker recorded for P11-U6.1 is still unresolved.
 
+---
+
+# Entrivo — P11-U7a Walk-In Approval Closeout
+
+The walk-in approval policy is enforced in the shared walk-in service. `REQUIRE_HOST` is the secure default; `AUTO_APPROVE` delegates entry to the standard check-in gates; `DESK_OVERRIDE` keeps host approval pending while allowing authorized reception/security staff to approve with a required reason. The override is audited and cannot bypass blacklist or compliance blocks. Pending walk-ins escalate to reception in-app and through Web Push after the organization-configured delay (10 minutes by default).
+
+The authenticated Playwright setup now refuses databases unless `DATABASE_URL` is PostgreSQL and the database name includes `test` or `e2e`. After the guard, it applies migrations and seeds a deterministic organization and admin/receptionist/guard/employee accounts with random per-run passwords only in process environment variables. The 7a specs cover 390×844 mobile and 1440×900 desktop with axe critical-issue and browser-console checks.
+
+Windows PowerShell command (first set `DATABASE_URL` to a dedicated, disposable PostgreSQL test database):
+```powershell
+$env:DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
+$env:E2E = '1'
+pnpm test:e2e:7a
+```
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P11-U7a** | Responsive visitor, walk-in, reception and security workflows; organization-scoped approval policy, audited desk override, escalation, guarded authenticated E2E setup, unit coverage, and documentation. | PARTIAL: TYPE/UNIT/BUILD PASS; TENANT/E2E NOT ACCEPTED | 2026-11-24 | — |
+
+Validation: `tsc --noEmit` passed; Vitest passed (36 files, 155 tests); `pnpm build` exited successfully from an env-isolated copy and emitted existing Edge Runtime/lint warnings. `pnpm lint` exited with 0 errors and 391 warnings. `pnpm test:tenant` detected the new override route as secure but failed on the existing `/api/locale` route. Playwright stopped at the database safety guard because no process-level `DATABASE_URL` was available. No Playwright pass is claimed; run the command above against the dedicated test database before accepting browser coverage.
+
 

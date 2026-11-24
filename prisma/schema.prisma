@@ -179,6 +179,7 @@ model User {
   approvedInvitationSeries InvitationSeries[]       @relation("InvitationSeriesApprover")
   createdBulkImportJobs    BulkImportJob[]          @relation("BulkImportJobCreator")
   confirmedSelfCheckinSessions SelfCheckinSession[] @relation("SelfCheckinConfirmedBy")
+  walkinApprovalOverrides    Approval[]               @relation("WalkinApprovalOverride")
   organization             Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([email])
@@ -367,6 +368,7 @@ model Invitation {
   seriesId           String?
   occurrenceDate     DateTime?
   isException        Boolean             @default(false)
+  isWalkIn           Boolean             @default(false)
   deletedAt          DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
@@ -386,6 +388,7 @@ model Invitation {
   @@unique([seriesId, occurrenceDate])
   @@index([qrToken])
   @@index([organizationId])
+  @@index([organizationId, status, isWalkIn])
   @@index([scheduledDate])
 }
 
@@ -624,13 +627,18 @@ model Approval {
   status       ApprovalStatus @default(PENDING)
   comments     String?
   approvedAt   DateTime?
+  approvedById String?
+  overrideReason String?
+  escalatedAt  DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  approvedBy   User?          @relation("WalkinApprovalOverride", fields: [approvedById], references: [id], onDelete: SetNull)
   approver     Employee       @relation(fields: [approverId], references: [id], onDelete: Cascade)
   invitation   Invitation     @relation(fields: [invitationId], references: [id], onDelete: Cascade)
 
   @@index([invitationId])
   @@index([approverId])
+  @@index([status, escalatedAt])
 }
 
 model MeetingRoom {

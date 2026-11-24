@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
-
-const visitorId = process.env.E2E_VISITOR_ID;
+import { loginAsE2EAdmin } from "./auth";
 
 test.describe("Visitor profile responsive layout", () => {
-  for (const width of [390, 1440]) {
+  for (const width of [360, 1440]) {
     test(`shows profile sections without page overflow at ${width}px`, async ({ page }) => {
-      test.skip(!visitorId, "Set E2E_VISITOR_ID and provide an authenticated Playwright context.");
+      test.skip(process.env.E2E !== "1", "Run with E2E=1 and a guarded test database.");
+      const visitorId = process.env.E2E_VISITOR_ID;
+      if (!visitorId) throw new Error("E2E visitor was not seeded by Playwright global setup.");
 
       await page.setViewportSize({ width, height: 900 });
+      await loginAsE2EAdmin(page);
       await page.goto(`/visitors/${encodeURIComponent(visitorId!)}`);
 
       await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();

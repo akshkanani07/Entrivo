@@ -17,7 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { validateAndProcessUpload } from "../src/services/storage/validation";
 import { generateSignedNdaPdf, getOrSeedNdaTemplate, signNda, getVisitorValidNda } from "../src/services/documents/nda.service";
 import { computeDocumentStatus, checkExpiringDocuments } from "../src/services/documents/document.service";
-import { performWalkIn } from "../src/services/visitors/walkin.service";
+import { performWalkIn } from "../src/services/walkin/walkin.service";
 
 const prisma = new PrismaClient();
 

@@ -186,6 +186,8 @@ Entrivo is built to comply with modern digital privacy frameworks, including Ind
 | PII Redaction in Logging | `src/lib/logger.ts` | **VERIFIED** |
 | Rate Limiting & Brute-Force Guards | `src/lib/rate-limiter.ts`, `src/lib/auth.ts` | **VERIFIED** |
 | Parking slot/vehicle assignment controls | `src/services/parking/parking.service.ts`, `src/app/api/parking/` | **VERIFIED (unit and static acceptance checks)** |
+| Walk-in desk override | `src/app/api/visitors/walkin/override/route.ts`, `src/services/visitors/checkin.service.ts` | Permission-gated, tenant-scoped, Zod-validated, rate-limited, audited; blacklist and compliance blocks remain enforced |
+| E2E test database safety | `tests/e2e/e2e-safety.ts`, `tests/e2e/global-setup.ts` | Refuses non-PostgreSQL databases unless the database name contains `test` or `e2e`; 7a browser run pending a supplied test database |
 | Healthcheck Endpoint | `src/app/api/health/route.ts` | **VERIFIED** |
-| Playwright E2E Security Flows | `tests/e2e/*.spec.ts` | **VERIFIED (15/15 Tests Pass)** |
+| Playwright E2E Security Flows | `tests/e2e/*.spec.ts` | Existing suite status unchanged; P11-U7a browser run requires the guarded test database and is not yet verified |
 

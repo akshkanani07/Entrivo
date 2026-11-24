@@ -2,19 +2,16 @@ import React from "react";
 import prisma from "@/lib/db";
 import { can, requirePagePermission } from "@/lib/rbac";
 import Link from "next/link";
-import { UserPlus, Search, Filter, ShieldCheck, ShieldAlert, ArrowRight, Clock, CheckCircle2, QrCode } from "lucide-react";
-import { formatTime, formatDate } from "@/lib/utils";
+import { UserPlus, QrCode } from "lucide-react";
+import { formatTime } from "@/lib/utils";
 import { VisitorsClientList } from "./VisitorsClientList";
 import { maskIdNumber } from "@/lib/preregistration";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { NextStepHint } from "@/components/ui/NextStepHint";
 
 export const dynamic = "force-dynamic";
 
-export default async function VisitorsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const resolvedParams = await searchParams;
+export default async function VisitorsPage() {
   const user = await requirePagePermission("visitors.read");
   const orgId = user.organizationId;
 
@@ -82,40 +79,37 @@ export default async function VisitorsPage({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-            Visitor Directory
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Manage registered workplace guests, track active badges, and inspect security records.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="Visitor directory"
+        description="Find guests, check who is on site, and review their visit history."
+        actions={
+          <>
           <Link
             href="/checkin"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-surface-border bg-surface px-4 py-2 text-sm font-semibold text-text hover:bg-surface-hover"
           >
-            <QrCode className="w-3.5 h-3.5 text-indigo-400" />
-            Check-In Desk
+            <QrCode aria-hidden="true" className="h-4 w-4 text-brand-300" />
+            Check-in desk
           </Link>
           <Link
             href="/visitors/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-glow transition-all"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-glow-sm hover:bg-brand-500"
           >
-            <UserPlus className="w-4 h-4" />
-            Register Walk-in
+            <UserPlus aria-hidden="true" className="h-4 w-4" />
+            Register walk-in
           </Link>
-        </div>
-      </div>
+          </>
+        }
+      />
+      <NextStepHint href="/invitations/new" actionLabel="Invite a visitor">
+        Send a visitor an invitation; they can complete their details before arriving.
+      </NextStepHint>
 
-      {/* Interactive Client Search & Filter List */}
       <VisitorsClientList
         initialVisitors={formattedVisitors}
         visitorTypes={visitorTypes}
         canManageVisitors={can(user, "visitors.write")}
+        canDeleteVisitors={can(user, "visitors.delete")}
       />
     </div>
   );

@@ -123,6 +123,14 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
       subject: "Visitor still waiting",
       body: "{{visitor_name}} needs reception confirmation at {{location}}.",
     },
+    [`${NotificationEvent.WALKIN_APPROVAL_ESCALATED}:${NotificationChannel.IN_APP}`]: {
+      subject: "Walk-in approval needs reception",
+      body: "{{visitor_name}} is still waiting for {{host_name}} at {{location}}.",
+    },
+    [`${NotificationEvent.WALKIN_APPROVAL_ESCALATED}:${NotificationChannel.WEB_PUSH}`]: {
+      subject: "Walk-in visitor still waiting",
+      body: "{{visitor_name}} needs reception assistance at {{location}}.",
+    },
     [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.SLACK}`]: {
       subject: "Visitor self check-in escalated",
       body: "{{visitor_name}} is still waiting at {{location}}. Review: {{action_url}}",

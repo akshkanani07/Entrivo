@@ -152,9 +152,9 @@ Every event in the system is mapped to concrete code paths:
 | `VISITOR_INVITED` | `src/app/api/invitations/route.ts:301` | Visitor (Email) |
 | `INVITATION_RESCHEDULED` | `src/app/api/invitations/route.ts:404` | Visitor + Host (ICS attachment) |
 | `INVITATION_CANCELLED` | `src/app/api/invitations/route.ts:423,474` | Visitor + Host (Cancellation notice) |
-| `VISITOR_WAITING` | `src/services/visitors/checkin.service.ts:367`, `src/services/visitors/walkin.service.ts:318` | Host + Receptionist |
-| `VISITOR_ARRIVED` | `src/services/visitors/checkin.service.ts:353`, `src/services/visitors/walkin.service.ts:305` | Host + Backup Approver + Slack/Teams |
-| `CHECKIN_CONFIRMATION` | `src/services/visitors/checkin.service.ts:380`, `src/services/visitors/walkin.service.ts:331` | Visitor (Badge # confirmation) |
+| `VISITOR_WAITING` | `src/services/visitors/checkin.service.ts:367`, `src/services/walkin/walkin.service.ts` | Host + Receptionist |
+| `VISITOR_ARRIVED` | `src/services/visitors/checkin.service.ts:353`, `src/services/walkin/walkin.service.ts` | Host + Backup Approver + Slack/Teams |
+| `CHECKIN_CONFIRMATION` | `src/services/visitors/checkin.service.ts:380`, `src/services/walkin/walkin.service.ts` | Visitor (Badge # confirmation) |
 | `CHECKOUT_THANKS` | `src/app/api/visitors/checkout/route.ts:129` | Visitor (Exit confirmation) |
 | `VISITOR_CHECKED_OUT` | `src/app/api/visitors/checkout/route.ts:115` | Host + Security Guard |
 | `VISITOR_OVERSTAYED` | `src/lib/queue.ts:133` | Org Admins + Security Guards |

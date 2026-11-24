@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKiosk, renewKioskCookie } from "@/lib/kiosk-auth";
-import { performWalkIn } from "@/services/visitors/walkin.service";
+import { performWalkIn } from "@/services/walkin/walkin.service";
 import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
 import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 
@@ -80,6 +80,16 @@ export async function POST(request: Request) {
         },
         { status: result.status }
       );
+    }
+
+    if (result.approvalRequired) {
+      const response = NextResponse.json({
+        success: true,
+        approvalRequired: true,
+        data: result.invitation,
+        message: `${result.invitation.visitor.name} is waiting for host approval.`,
+      });
+      return renewKioskCookie(response, kioskAuth.rawToken);
     }
 
     const { checkIn } = result;

@@ -28,6 +28,7 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `preregistration.read` | ✅ | ✅ | ✅ | ❌ | ✅ (own invitations) |
 | `preregistration.manage` | ✅ | ✅ | ✅ | ❌ | ✅ (own invitations) |
 | `walkin.create` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `walkin.override` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `checkin.perform` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `checkout.perform` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `qr.verify` | ✅ | ✅ | ✅ | ✅ | ❌ |
@@ -98,6 +99,7 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/visitors/checkin` | POST | `checkin.perform` | API `requirePermission` |
 | `/api/visitors/checkout` | POST | `checkout.perform` | API `requirePermission` |
 | `/api/visitors/walkin` | POST | `walkin.create` | API `requirePermission` |
+| `/api/visitors/walkin/override` | POST | `walkin.override` | API permission + organization scope + Zod + rate limit; atomic standard check-in checks and audit |
 | `/api/invitations` | GET | `invitations.read.all` or `invitations.read.own` | API `requireAnyPermission` |
 | `/api/invitations` | POST | `invitations.create` | API `requirePermission` |
 | `/api/invitations` | PATCH, DELETE | `invitations.create` (EMPLOYEE scoped to own) | API `requirePermission` |
@@ -168,6 +170,7 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/cron/daily-report` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
 | `/api/auth/sessions` | GET, DELETE | `sessions.self` | API `requireUser` (scoped to user.id) |
 | `/api/cron/auto-checkout` | POST | Constant-time `Authorization: Bearer CRON_SECRET` | Header Bearer Guard |
+| `/api/cron/walkin-approval-escalation` | GET, POST | Constant-time `Authorization: Bearer CRON_SECRET` | Rate-limited system sweep; escalation records are tenant-scoped and audited |
 | `/api/kiosk` | GET, POST | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |
 | `/api/kiosk/:id` | DELETE | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |
 | `/api/kiosk/:id/repair` | POST | `kiosks.manage` or `settings.manage` | API `requireAnyPermission` |

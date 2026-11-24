@@ -300,6 +300,45 @@ function verifySelfCheckinTenantBoundary(routes: RouteAuditInfo[]) {
   console.log(`  [P10-H] ${selfCheckinRoutes.length} self-check-in routes include token, tenant, RBAC, rate-limit, and audit controls.`);
 }
 
+function verifyWalkinOverrideBoundary(routes: RouteAuditInfo[]) {
+  const route = routes.find((candidate) => candidate.routePath === "/api/visitors/walkin/override");
+  if (!route || route.methods.indexOf("POST") === -1) {
+    throw new Error("Walk-in override API route was not discovered.");
+  }
+  const source = fs.readFileSync(route.filePath, "utf8");
+  for (const guard of [
+    'requirePermission("walkin.override")',
+    "requireOrg",
+    "checkRateLimit",
+    "walkinDeskOverrideSchema.safeParse",
+    "approveWalkInOnDesk",
+  ]) {
+    if (!source.includes(guard)) throw new Error(`Walk-in override route is missing ${guard}.`);
+  }
+
+  const servicePath = path.join(ROOT, "src", "services", "walkin", "walkin.service.ts");
+  const service = fs.readFileSync(servicePath, "utf8");
+  for (const guard of [
+    'policy.walkinApprovalMode !== "DESK_OVERRIDE"',
+    "organizationId: input.organizationId",
+    "isWalkIn: true",
+    "walkinApprovalOverride:",
+  ]) {
+    if (!service.includes(guard)) throw new Error(`Walk-in override service is missing ${guard}.`);
+  }
+  if (service.includes("complianceOverride:")) {
+    throw new Error("Walk-in override must not pass a contractor compliance override.");
+  }
+  const checkinService = fs.readFileSync(
+    path.join(ROOT, "src", "services", "visitors", "checkin.service.ts"),
+    "utf8"
+  );
+  if (!checkinService.includes('action: "WALKIN_OVERRIDE_APPROVED"')) {
+    throw new Error("Walk-in override check-in transaction is missing its audit action.");
+  }
+  console.log("  [WALK-IN] Desk override route includes tenant, permission, rate, validation, audit, and check-in enforcement.");
+}
+
 function verifyContractorTenantBoundary(routes: RouteAuditInfo[]) {
   const contractorRoutes = routes.filter((route) =>
     route.routePath.startsWith("/api/contractors/")
@@ -606,6 +645,7 @@ async function main() {
   verifyContractorTenantBoundary(routes);
   verifyFeedbackTenantBoundary(routes);
   verifySelfCheckinTenantBoundary(routes);
+  verifyWalkinOverrideBoundary(routes);
 
   // Probe live target server if accessible
   let isServerRunning = false;

@@ -196,6 +196,15 @@ Launches headless Chromium testing critical user journeys (login with 2FA, visit
 pnpm test:e2e
 ```
 
+#### P11-U7a authenticated smoke tests (Windows PowerShell)
+Set `DATABASE_URL` to a dedicated PostgreSQL database whose name contains `test` or `e2e`; never point this at a production or shared non-test database. The setup refuses unsafe database names, applies migrations only after that guard, and seeds deterministic test accounts with per-run random passwords held only in process environment variables.
+```powershell
+$env:DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
+$env:E2E = '1'
+pnpm test:e2e:7a
+```
+The smoke specs exercise 390×844 mobile and 1440×900 desktop layouts and fail on critical axe findings or browser console errors.
+
 ### 4. Full Quality Regression
 Run TypeScript type-checking, production build, and security audits:
 ```bash

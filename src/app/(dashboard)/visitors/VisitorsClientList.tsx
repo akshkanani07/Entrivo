@@ -3,12 +3,8 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import {
-  Search,
-  Filter,
   ShieldCheck,
   ShieldAlert,
-  CheckCircle2,
-  Clock,
   Printer,
   LogOut,
   Loader2,
@@ -19,14 +15,14 @@ import {
   X,
   Phone,
   Mail,
-  Building,
-  UserPlus,
   FileText,
   Download,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { StatusPill } from "@/components/ui/StatusPill";
 
 interface VisitorItem {
   id: string;
@@ -50,14 +46,24 @@ interface VisitorItem {
   hostName: string;
 }
 
+interface VisitorDocument {
+  id: string;
+  title: string;
+  docType: string;
+  status?: string | null;
+  expiryDate?: string | null;
+}
+
 export function VisitorsClientList({
   initialVisitors,
   visitorTypes,
   canManageVisitors,
+  canDeleteVisitors,
 }: {
   initialVisitors: VisitorItem[];
   visitorTypes: { id: string; name: string; badgeColor: string }[];
   canManageVisitors: boolean;
+  canDeleteVisitors: boolean;
 }) {
   const router = useRouter();
   const [visitors, setVisitors] = useState<VisitorItem[]>(initialVisitors);
@@ -69,21 +75,25 @@ export function VisitorsClientList({
   // Profile Modal State
   const [inspectVisitor, setInspectVisitor] = useState<VisitorItem | null>(null);
   const [inspectTab, setInspectTab] = useState<"profile" | "documents">("profile");
-  const [visitorDocs, setVisitorDocs] = useState<any[]>([]);
+  const [visitorDocs, setVisitorDocs] = useState<VisitorDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
+  const [visitorDocsError, setVisitorDocsError] = useState<string | null>(null);
 
   const fetchVisitorDocuments = async (visitorId: string) => {
     setLoadingDocs(true);
+    setVisitorDocsError(null);
     try {
       const res = await fetch(`/api/documents?visitorId=${visitorId}`);
       const data = await res.json();
-      if (data?.success && Array.isArray(data?.data)) {
-        setVisitorDocs(data.data);
-      } else {
-        setVisitorDocs([]);
+      if (!res.ok || !data?.success || !Array.isArray(data?.data)) {
+        throw new Error(data?.error || "Could not load this visitor's documents.");
       }
-    } catch {
+      if (Array.isArray(data.data)) {
+        setVisitorDocs(data.data);
+      }
+    } catch (error) {
       setVisitorDocs([]);
+      setVisitorDocsError(error instanceof Error ? error.message : "Could not load this visitor's documents.");
     } finally {
       setLoadingDocs(false);
     }
@@ -222,291 +232,277 @@ export function VisitorsClientList({
     }
   };
 
+  const renderActions = (visitor: VisitorItem, compact = false) => (
+    <div className={`flex gap-2 ${compact ? "flex-wrap" : "items-center justify-end"}`}>
+      {visitor.isCheckedIn && visitor.activeCheckInId ? (
+        <>
+          <Link
+            href={`/badge/${visitor.activeCheckInId}`}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-brand/40 bg-brand/15 px-2.5 text-xs font-semibold text-brand-200 hover:bg-brand/30"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Badge
+          </Link>
+          <button
+            type="button"
+            onClick={() => handleCheckout(visitor.activeCheckInId!, visitor.name)}
+            disabled={checkingOutId === visitor.activeCheckInId}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-rose-800/60 bg-rose-950/60 px-2.5 text-xs font-semibold text-rose-200 hover:bg-rose-900 disabled:opacity-50"
+          >
+            {checkingOutId === visitor.activeCheckInId ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <LogOut className="h-3.5 w-3.5" />
+            )}
+            Check out
+          </button>
+        </>
+      ) : (
+        <>
+          <Link
+            href={`/visitors/new?name=${encodeURIComponent(visitor.name)}&phone=${encodeURIComponent(visitor.phone)}&company=${encodeURIComponent(visitor.company)}`}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-brand/40 bg-brand/15 px-2.5 text-xs font-semibold text-brand-200 hover:bg-brand/30"
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Check in
+          </Link>
+          <Link
+            href={`/invitations?visitorEmail=${encodeURIComponent(visitor.email)}`}
+            aria-label={`Schedule a visit for ${visitor.name}`}
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-surface-border bg-surface px-2.5 text-xs font-semibold text-text hover:bg-surface-hover"
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            Invite
+          </Link>
+        </>
+      )}
+      <Link
+        href={`/visitors/${visitor.id}`}
+        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-surface-border bg-surface px-2.5 text-xs font-semibold text-text hover:bg-surface-hover"
+      >
+        <Eye className="h-3.5 w-3.5" />
+        Profile
+      </Link>
+      <button
+        type="button"
+        onClick={() => handleOpenInspect(visitor)}
+        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-surface-border bg-surface px-2.5 text-xs font-semibold text-text-muted hover:text-text"
+      >
+        <Eye className="h-3.5 w-3.5" />
+        Quick view
+      </button>
+      <button
+        type="button"
+        onClick={() => toggleBlacklist(visitor)}
+        aria-label={visitor.isBlacklisted ? `Remove ${visitor.name} from watchlist` : `Add ${visitor.name} to watchlist`}
+        className={`inline-flex min-h-9 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold ${
+          visitor.isBlacklisted
+            ? "border-rose-800 bg-rose-950 text-rose-200 hover:bg-rose-900"
+            : "border-surface-border bg-surface text-text-muted hover:text-amber-300"
+        }`}
+      >
+        {visitor.isBlacklisted ? <ShieldAlert className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+        {visitor.isBlacklisted ? "Watchlisted" : "Watchlist"}
+      </button>
+      {canManageVisitors && (
+        <button
+          type="button"
+          onClick={() => toggleRegularVendor(visitor)}
+          className="min-h-9 rounded-lg border border-surface-border bg-surface px-2.5 text-xs font-semibold text-text-muted hover:text-text"
+        >
+          {visitor.isRegularVendor ? "Regular vendor" : "Mark vendor"}
+        </button>
+      )}
+      {canDeleteVisitors && (
+        <button
+          type="button"
+          onClick={() =>
+            setDeleteDialog({
+              isOpen: true,
+              visitorId: visitor.id,
+              visitorName: visitor.name,
+              loading: false,
+            })
+          }
+          aria-label={`Delete ${visitor.name}`}
+          className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-rose-900/70 px-2.5 text-xs font-semibold text-rose-300 hover:bg-rose-950"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      )}
+    </div>
+  );
+
+  const columns: DataTableColumn<VisitorItem>[] = [
+    {
+      key: "visitor",
+      label: "Visitor",
+      render: (visitor) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-surface-border bg-surface text-sm font-bold text-brand-300">
+            {visitor.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={visitor.avatarUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              visitor.name.charAt(0).toUpperCase()
+            )}
+          </div>
+          <div className="min-w-0">
+            <Link href={`/visitors/${visitor.id}`} className="font-semibold text-text hover:text-brand-300">
+              {visitor.name}
+            </Link>
+            <p className="text-xs text-text-muted">{visitor.company}</p>
+            <p className="break-all text-xs text-text-muted">{visitor.phone}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (visitor) => <span className="font-medium text-text">{visitor.typeName}</span>,
+    },
+    {
+      key: "host",
+      label: "Host",
+      render: (visitor) => (
+        <div>
+          <span className="font-medium text-text">{visitor.hostName}</span>
+          {visitor.checkInTime && <p className="mt-1 text-xs text-text-muted">Arrived {visitor.checkInTime}</p>}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (visitor) => (
+        <div className="space-y-1">
+          <StatusPill tone={visitor.isCheckedIn ? "success" : "neutral"}>
+            {visitor.isCheckedIn ? "Inside" : "Checked out"}
+          </StatusPill>
+          {visitor.isCheckedIn && visitor.activeBadgeNumber && (
+            <p className="font-mono text-xs text-text-muted">{visitor.activeBadgeNumber}</p>
+          )}
+          {visitor.isBlacklisted && <StatusPill tone="danger">Watchlisted</StatusPill>}
+        </div>
+      ),
+    },
+    {
+      key: "id-proof",
+      label: "ID proof",
+      render: (visitor) => (
+        <span className="text-xs text-text-muted">
+          {visitor.idProofType
+            ? `${visitor.idProofType}: ${visitor.idProofNumber || "Verified"}`
+            : "Not on file"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      className: "text-right",
+      render: (visitor) => renderActions(visitor),
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      {/* Controls Bar */}
-      <div className="glass-card p-4 rounded-2xl border border-indigo-950/70 flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Search */}
-        <div className="relative w-full md:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search visitor, phone, company, badge..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-          />
-        </div>
-
-        {/* Tabs & Type Filter */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Tabs */}
-          <div className="flex p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-            <button
-              onClick={() => setActiveTab("ALL")}
-              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                activeTab === "ALL" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              All ({visitors.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("INSIDE")}
-              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                activeTab === "INSIDE" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Inside ({visitors.filter((v) => v.isCheckedIn).length})
-            </button>
-            <button
-              onClick={() => setActiveTab("BLACKLISTED")}
-              className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                activeTab === "BLACKLISTED" ? "bg-rose-600 text-white" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Watchlist ({visitors.filter((v) => v.isBlacklisted).length})
-            </button>
-          </div>
-
-          {/* Type Filter */}
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="ALL">All Visitor Types</option>
-            {visitorTypes.map((t) => (
-              <option key={t.id} value={t.name}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Visitors Table */}
-      <div className="glass-card rounded-2xl border border-indigo-950/70 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Visitor</th>
-                <th className="py-3 px-4">Type</th>
-                <th className="py-3 px-4">Host / Department</th>
-                <th className="py-3 px-4">Status & Badge</th>
-                <th className="py-3 px-4">ID Proof</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredVisitors.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    No visitor records found matching your filters.
-                  </td>
-                </tr>
-              ) : (
-                filteredVisitors.map((v) => (
-                  <tr key={v.id} className="hover:bg-slate-900/40 transition-colors">
-                    {/* Visitor Info */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex-shrink-0 flex items-center justify-center font-bold text-indigo-300">
-                          {v.avatarUrl ? (
-                            <img src={v.avatarUrl} alt={v.name} className="w-full h-full object-cover" />
-                          ) : (
-                            v.name.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <Link href={`/visitors/${v.id}`} className="font-bold text-white text-xs hover:text-indigo-300">
-                              {v.name}
-                            </Link>
-                            {v.isVip && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
-                                VIP
-                              </span>
-                            )}
-                            {v.isBlacklisted && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-950 text-rose-400 border border-rose-800">
-                                Watchlisted
-                              </span>
-                            )}
-                            {v.isRegularVendor && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
-                                Regular vendor
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-slate-400 block">{v.company}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">{v.phone}</span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Visitor Type */}
-                    <td className="py-3.5 px-4">
-                      <span
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase text-white shadow-sm"
-                        style={{ backgroundColor: v.typeColor }}
-                      >
-                        {v.typeName}
-                      </span>
-                    </td>
-
-                    {/* Host & Checkin time */}
-                    <td className="py-3.5 px-4">
-                      <span className="font-semibold text-slate-200 block">{v.hostName}</span>
-                      {v.checkInTime && (
-                        <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3 text-indigo-400" />
-                          In: {v.checkInTime}
-                        </p>
-                      )}
-                    </td>
-
-                    {/* Status & Badge */}
-                    <td className="py-3.5 px-4">
-                      {v.isCheckedIn ? (
-                        <div className="space-y-1">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Inside
-                          </span>
-                          <span className="block font-mono text-[10px] font-bold text-indigo-300">
-                            {v.activeBadgeNumber}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-500 font-medium">Checked Out / Idle</span>
-                      )}
-                    </td>
-
-                    {/* ID Proof */}
-                    <td className="py-3.5 px-4">
-                      {v.idProofType ? (
-                        <div>
-                          <span className="text-[11px] text-slate-300 block">{v.idProofType}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">{v.idProofNumber || "Verified"}</span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-600">Standard Pass</span>
-                      )}
-                    </td>
-
-                    {/* Actions (Fully Loaded for All Visitors!) */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {v.isCheckedIn && v.activeCheckInId ? (
-                          <>
-                            <Link
-                              href={`/badge/${v.activeCheckInId}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold border border-indigo-500/30 transition-colors"
-                              title="Print / View Badge"
-                            >
-                              <Printer className="w-3 h-3" />
-                              Badge
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleCheckout(v.activeCheckInId!, v.name)}
-                              disabled={checkingOutId === v.activeCheckInId}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-semibold border border-rose-800/60 transition-colors"
-                              title="Check Out"
-                            >
-                              {checkingOutId === v.activeCheckInId ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <LogOut className="w-3 h-3" />
-                              )}
-                              Exit
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <Link
-                              href={`/visitors/new?name=${encodeURIComponent(v.name)}&phone=${encodeURIComponent(v.phone)}&company=${encodeURIComponent(v.company)}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold border border-indigo-500/30 transition-colors"
-                              title="New Check-In for Visitor"
-                            >
-                              <UserCheck className="w-3 h-3" />
-                              Check-In
-                            </Link>
-                            <Link
-                              href={`/invitations?visitorEmail=${encodeURIComponent(v.email)}`}
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors"
-                              title="Pre-schedule Visit"
-                            >
-                              <Calendar className="w-3 h-3" />
-                            </Link>
-                          </>
-                        )}
-
-                        {/* Details Modal Trigger */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenInspect(v)}
-                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors"
-                          title="Inspect Visitor Profile"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Watchlist Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => toggleBlacklist(v)}
-                          className={`p-1.5 rounded-lg border transition-colors ${
-                            v.isBlacklisted
-                              ? "bg-rose-950 text-rose-400 border-rose-800 hover:bg-rose-900"
-                              : "bg-slate-900 text-slate-500 hover:text-amber-400 border-slate-800"
-                          }`}
-                          title={v.isBlacklisted ? "Remove from Watchlist" : "Add to Security Watchlist"}
-                        >
-                          {v.isBlacklisted ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                        </button>
-
-                        {canManageVisitors && (
-                          <button
-                            type="button"
-                            onClick={() => toggleRegularVendor(v)}
-                            className={`rounded-lg border px-2 py-1 text-[10px] transition-colors ${
-                              v.isRegularVendor
-                                ? "border-indigo-700 bg-indigo-950 text-indigo-200"
-                                : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                            }`}
-                            title={v.isRegularVendor ? "Remove regular vendor status" : "Mark as regular vendor"}
-                          >
-                            {v.isRegularVendor ? "Vendor" : "Mark vendor"}
-                          </button>
-                        )}
-
-                        {/* Delete Visitor */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDeleteDialog({
-                              isOpen: true,
-                              visitorId: v.id,
-                              visitorName: v.name,
-                              loading: false,
-                            })
-                          }
-                          className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 text-slate-500 hover:text-rose-400 border border-slate-800 hover:border-rose-800 transition-colors"
-                          title="Delete Visitor"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+      <DataTable
+        key={`${activeTab}:${selectedType}`}
+        rows={filteredVisitors}
+        columns={columns}
+        getRowKey={(visitor) => visitor.id}
+        renderMobileCard={(visitor) => (
+          <div className="space-y-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-surface-border bg-surface text-sm font-bold text-brand-300">
+                {visitor.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={visitor.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  visitor.name.charAt(0).toUpperCase()
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <Link href={`/visitors/${visitor.id}`} className="font-semibold text-text hover:text-brand-300">
+                  {visitor.name}
+                </Link>
+                <p className="break-words text-sm text-text-muted">{visitor.company}</p>
+                <p className="break-all text-xs text-text-muted">{visitor.phone}</p>
+              </div>
+              <StatusPill tone={visitor.isCheckedIn ? "success" : "neutral"}>
+                {visitor.isCheckedIn ? "Inside" : "Out"}
+              </StatusPill>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-xs text-text-muted">Host</dt>
+                <dd className="mt-0.5 break-words text-text">{visitor.hostName}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-text-muted">Visitor type</dt>
+                <dd className="mt-0.5 break-words text-text">{visitor.typeName}</dd>
+              </div>
+              {visitor.idProofType && (
+                <div className="col-span-2">
+                  <dt className="text-xs text-text-muted">ID proof</dt>
+                  <dd className="mt-0.5 break-words text-text">{visitor.idProofType}: {visitor.idProofNumber || "Verified"}</dd>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </dl>
+            <div className="flex flex-wrap gap-2">
+              {visitor.isVip && <StatusPill tone="warning">VIP</StatusPill>}
+              {visitor.isBlacklisted && <StatusPill tone="danger">Watchlisted</StatusPill>}
+              {visitor.isRegularVendor && <StatusPill tone="info">Regular vendor</StatusPill>}
+            </div>
+            {renderActions(visitor, true)}
+          </div>
+        )}
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search visitor, phone, company, email, or badge"
+        filters={
+          <>
+            <div className="flex flex-wrap gap-1 rounded-lg border border-surface-border bg-surface p-1" aria-label="Filter visitors by presence or watchlist">
+              {([
+                ["ALL", `All (${visitors.length})`],
+                ["INSIDE", `Inside (${visitors.filter((visitor) => visitor.isCheckedIn).length})`],
+                ["BLACKLISTED", `Watchlist (${visitors.filter((visitor) => visitor.isBlacklisted).length})`],
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  aria-pressed={activeTab === tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`min-h-9 rounded-md px-2.5 text-xs font-semibold ${
+                    activeTab === tab ? "bg-brand text-white" : "text-text-muted hover:text-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <label className="sr-only" htmlFor="visitor-type-filter">Filter by visitor type</label>
+            <select
+              id="visitor-type-filter"
+              value={selectedType}
+              onChange={(event) => setSelectedType(event.target.value)}
+              className="min-h-11 max-w-full rounded-lg border border-surface-border bg-surface px-3 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <option value="ALL">All visitor types</option>
+              {visitorTypes.map((type) => <option key={type.id} value={type.name}>{type.name}</option>)}
+            </select>
+          </>
+        }
+        emptyTitle={visitors.length === 0 ? "No visitors yet" : "No visitors match these filters"}
+        emptyDescription={
+          visitors.length === 0
+            ? "Register a walk-in or invite a visitor to get started."
+            : "Try another name, visitor type, or status filter."
+        }
+      />
 
       {/* Inspect Visitor Modal */}
       {inspectVisitor && (
@@ -609,6 +605,17 @@ export function VisitorsClientList({
                     <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
                     <span>Loading vault documents...</span>
                   </div>
+                ) : visitorDocsError ? (
+                  <div role="alert" className="space-y-3 rounded-xl border border-rose-800 bg-rose-950/30 p-4 text-sm text-rose-200">
+                    <p>{visitorDocsError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void fetchVisitorDocuments(inspectVisitor.id)}
+                      className="min-h-10 rounded-lg border border-rose-700 px-3 font-semibold hover:bg-rose-900/50"
+                    >
+                      Try again
+                    </button>
+                  </div>
                 ) : visitorDocs.length === 0 ? (
                   <div className="py-8 text-center text-slate-400">
                     <FileText className="w-8 h-8 text-slate-600 mx-auto mb-2" />
@@ -617,7 +624,7 @@ export function VisitorsClientList({
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                    {visitorDocs.map((doc: any) => (
+                    {visitorDocs.map((doc) => (
                       <div
                         key={doc.id}
                         className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between gap-2"

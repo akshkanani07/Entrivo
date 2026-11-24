@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
-import { performWalkIn } from "@/services/visitors/walkin.service";
+import { performWalkIn } from "@/services/walkin/walkin.service";
 import { requiredString, optionalString, optionalEmail } from "@/lib/zod-helpers";
 import { getIdempotencyResult, saveIdempotencyResult } from "@/lib/idempotency";
 
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       consentGiven: parsed.data.consentGiven ?? true,
       consentVersion: parsed.data.consentVersion || "v1.0",
       organizationId: orgId,
+      actorId: user.id,
       actorName: user.name,
     });
 
@@ -78,12 +79,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const responsePayload = {
-      success: true,
-      data: result.checkIn,
-      checkIn: result.checkIn,
-      message: `Walk-in visitor ${result.checkIn?.visitor?.name || "Guest"} checked in successfully. Badge #${result.checkIn?.badgeNumber || ""}`,
-    };
+    const responsePayload = result.approvalRequired
+      ? {
+          success: true,
+          approvalRequired: true,
+          data: result.invitation,
+          invitation: result.invitation,
+          message: `${result.invitation.visitor.name} is waiting for host approval before a badge can be issued.`,
+        }
+      : {
+          success: true,
+          approvalRequired: false,
+          data: result.checkIn,
+          checkIn: result.checkIn,
+          message: `Walk-in visitor ${result.checkIn.visitor.name || "Guest"} checked in successfully. Badge #${result.checkIn.badgeNumber || ""}`,
+        };
 
     if (idempotencyKey) {
       await saveIdempotencyResult(idempotencyKey, responsePayload);

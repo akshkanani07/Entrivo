@@ -113,6 +113,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   if (
     event === NotificationEvent.SELF_CHECKIN_PENDING ||
     event === NotificationEvent.SELF_CHECKIN_ESCALATED ||
+    event === NotificationEvent.WALKIN_APPROVAL_ESCALATED ||
     event === NotificationEvent.SECURITY_ALERT ||
     event === NotificationEvent.VISITOR_OVERSTAYED ||
     event === NotificationEvent.APPROVAL_ESCALATED ||
@@ -121,7 +122,8 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   ) {
     try {
       const recipientRoles = event === NotificationEvent.SELF_CHECKIN_PENDING ||
-        event === NotificationEvent.SELF_CHECKIN_ESCALATED
+        event === NotificationEvent.SELF_CHECKIN_ESCALATED ||
+        event === NotificationEvent.WALKIN_APPROVAL_ESCALATED
         ? [UserRole.RECEPTIONIST, UserRole.SECURITY_GUARD, UserRole.ORG_ADMIN]
         : event === NotificationEvent.DOCUMENT_EXPIRING
         ? [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN]
@@ -134,7 +136,8 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
         },
         select: { id: true, email: true },
         take: event === NotificationEvent.SELF_CHECKIN_PENDING ||
-          event === NotificationEvent.SELF_CHECKIN_ESCALATED ? 50 : 20,
+          event === NotificationEvent.SELF_CHECKIN_ESCALATED ||
+          event === NotificationEvent.WALKIN_APPROVAL_ESCALATED ? 50 : 20,
       });
       staffUsers.forEach((u) => targetUserIds.add(u.id));
       if (
@@ -151,7 +154,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
 
   // 2. DISPATCH CHANNELS
   // A. In-App Notifications
-  for (const userId of emailOnlyVisitorLink ? [] : targetUserIds) {
+  for (const userId of targetUserIds) {
     const allowed = await isChannelAllowedForUser({
       userId,
       channel: NotificationChannel.IN_APP,
@@ -173,7 +176,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   }
 
   // B. Web Push Notifications
-  for (const userId of emailOnlyVisitorLink ? [] : targetUserIds) {
+  for (const userId of targetUserIds) {
     const allowed = await isChannelAllowedForUser({
       userId,
       channel: NotificationChannel.WEB_PUSH,
@@ -192,13 +195,15 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   }
 
   // C. Email Notification
-  dispatches.push(sendEmailNotification(event, {
-    ...payload,
-    ...(recipientEmails ? { recipientEmails } : {}),
-  }));
+  if (event !== NotificationEvent.WALKIN_APPROVAL_ESCALATED) {
+    dispatches.push(sendEmailNotification(event, {
+      ...payload,
+      ...(recipientEmails ? { recipientEmails } : {}),
+    }));
+  }
 
   // D. Slack Integration (Workspace Channel)
-  if (!emailOnlyVisitorLink) {
+  if (!emailOnlyVisitorLink && event !== NotificationEvent.WALKIN_APPROVAL_ESCALATED) {
     dispatches.push(
       sendSlackNotification(event, nonEmailPayload, {
         title: slackContent.subject,
@@ -209,7 +214,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   }
 
   // E. Microsoft Teams Integration (Webhook Channel)
-  if (!emailOnlyVisitorLink) {
+  if (!emailOnlyVisitorLink && event !== NotificationEvent.WALKIN_APPROVAL_ESCALATED) {
     dispatches.push(
       sendTeamsNotification(event, nonEmailPayload, {
         title: teamsContent.subject,

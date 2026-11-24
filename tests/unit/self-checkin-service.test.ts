@@ -19,7 +19,7 @@ vi.mock("@/lib/auth", () => ({ getClientIp: () => "" }));
 vi.mock("@/lib/parking", () => ({ normalizePlateNumber: (value: string) => value }));
 vi.mock("@/services/audit/audit.service", () => ({ audit: mocks.audit }));
 vi.mock("@/services/visitors/checkin.service", () => ({ performCheckin: mocks.performCheckin }));
-vi.mock("@/services/visitors/walkin.service", () => ({ performWalkIn: mocks.performWalkIn }));
+vi.mock("@/services/walkin/walkin.service", () => ({ performWalkIn: mocks.performWalkIn }));
 
 import { completeSelfCheckin } from "@/services/self-checkin/self-checkin.service";
 

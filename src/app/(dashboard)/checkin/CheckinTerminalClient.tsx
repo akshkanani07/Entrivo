@@ -1,26 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   QrCode,
   Search,
   CheckCircle2,
-  Clock,
-  Printer,
-  ShieldCheck,
-  ShieldAlert,
   LogOut,
   Loader2,
-  Calendar,
-  UserCheck,
-  Sparkles,
 } from "lucide-react";
 import { BadgeCard, BadgeData } from "@/components/visitor/BadgeCard";
 import { QRScannerModal } from "@/components/visitor/QRScannerModal";
 import confetti from "canvas-confetti";
 import { formatTime, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { StatusPill } from "@/components/ui/StatusPill";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { NextStepHint } from "@/components/ui/NextStepHint";
 
 interface ScheduledItem {
   id: string;
@@ -37,6 +34,7 @@ interface ScheduledItem {
   time: string;
   purpose: string;
   isBlacklisted: boolean;
+  blacklistReason?: string | null;
   vehicleId?: string | null;
   vehicleType?: string | null;
 }
@@ -45,6 +43,15 @@ interface ParkingSlotOption {
   id: string;
   label: string;
   type: string;
+}
+
+interface PendingWalkinItem {
+  id: string;
+  visitorName: string;
+  company: string;
+  hostName: string;
+  createdAt: string;
+  escalatedAt: string | null;
 }
 
 interface ActiveItem {
@@ -59,13 +66,21 @@ interface ActiveItem {
 export function CheckinTerminalClient({
   scheduledInvitations,
   activeCheckIns,
+  pendingWalkins,
   parkingSlots,
   initialToken,
+  canOverrideCompliance,
+  canOverrideWalkin,
+  walkinApprovalMode,
 }: {
   scheduledInvitations: ScheduledItem[];
   activeCheckIns: ActiveItem[];
+  pendingWalkins: PendingWalkinItem[];
   parkingSlots: ParkingSlotOption[];
   initialToken?: string;
+  canOverrideCompliance: boolean;
+  canOverrideWalkin: boolean;
+  walkinApprovalMode: "REQUIRE_HOST" | "AUTO_APPROVE" | "DESK_OVERRIDE";
 }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"SCHEDULED" | "SCAN" | "CHECKOUT">("SCHEDULED");
@@ -74,23 +89,25 @@ export function CheckinTerminalClient({
   const [activeList, setActiveList] = useState<ActiveItem[]>(activeCheckIns);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [checkoutBadgeInput, setCheckoutBadgeInput] = useState("");
+  const [checkoutSearch, setCheckoutSearch] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState<string | null>(null);
   const [issuedBadge, setIssuedBadge] = useState<BadgeData | null>(null);
   const [parkingSlotByInvitation, setParkingSlotByInvitation] = useState<Record<string, string>>({});
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [gateResult, setGateResult] = useState<{
+    status: "PASS" | "WARN" | "BLOCK";
+    reason: string;
+    invitationId?: string;
+  } | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [pendingWalkinList, setPendingWalkinList] = useState(pendingWalkins);
+  const [walkinOverrideTarget, setWalkinOverrideTarget] = useState<PendingWalkinItem | null>(null);
+  const [walkinOverrideReason, setWalkinOverrideReason] = useState("");
+  const [walkinOverrideLoading, setWalkinOverrideLoading] = useState(false);
+  const initialTokenProcessed = useRef(false);
 
-  useEffect(() => {
-    if (initialToken) {
-      // Find matching invitation and trigger check-in
-      const match = scheduledList.find((s) => s.id === initialToken || s.token === initialToken);
-      if (match) {
-        void handleCheckIn(match.id);
-      }
-    }
-  }, [initialToken]);
-
-  const handleCheckIn = async (invitationId: string) => {
+  const handleCheckIn = async (invitationId: string, complianceOverrideReason?: string) => {
     setLoadingId(invitationId);
     try {
       const res = await fetch("/api/visitors/checkin", {
@@ -101,14 +118,34 @@ export function CheckinTerminalClient({
           consentGiven: true,
           consentVersion: "v1.0",
           parkingSlotId: parkingSlotByInvitation[invitationId] || undefined,
+          ...(complianceOverrideReason
+            ? { complianceOverride: true, complianceOverrideReason }
+            : {}),
         }),
       });
-
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Check-in failed");
+        const reason = data.error || "Check-in failed";
+        const canOverride = reason.startsWith("Contractor access denied:");
+        setGateResult({
+          status: canOverride && canOverrideCompliance ? "WARN" : "BLOCK",
+          reason,
+          invitationId,
+        });
+        setOverrideReason("");
+        if (!canOverride || !canOverrideCompliance) toast.error(reason);
+        return;
       }
-      if (data.warnings?.length) toast.warning(data.warnings.join(" "));
+      const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+      if (warnings.length) toast.warning(warnings.join(" "));
+      setGateResult({
+        status: warnings.length ? "WARN" : "PASS",
+        reason: warnings.length
+          ? warnings.join(" ")
+          : complianceOverrideReason
+            ? "Compliance override recorded with your reason. Entry approved."
+            : "Pass verified and entry approved. Badge issued.",
+      });
 
       try {
         void confetti({
@@ -154,10 +191,55 @@ export function CheckinTerminalClient({
         },
         ...prev,
       ]);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to check in");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Failed to check in";
+      setGateResult({ status: "BLOCK", reason, invitationId });
+      toast.error(reason);
     } finally {
       setLoadingId(null);
+    }
+  };
+
+  const handleCheckInRef = useRef(handleCheckIn);
+  handleCheckInRef.current = handleCheckIn;
+
+  useEffect(() => {
+    if (!initialToken || initialTokenProcessed.current) return;
+    const match = scheduledList.find((item) => item.id === initialToken || item.token === initialToken);
+    if (!match) return;
+    initialTokenProcessed.current = true;
+    void handleCheckInRef.current(match.id);
+  }, [initialToken, scheduledList]);
+
+  const submitComplianceOverride = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!gateResult?.invitationId || !overrideReason.trim()) return;
+    void handleCheckIn(gateResult.invitationId, overrideReason.trim());
+  };
+
+  const submitWalkinOverride = async () => {
+    if (!walkinOverrideTarget || walkinOverrideReason.trim().length < 10) return;
+    setWalkinOverrideLoading(true);
+    try {
+      const response = await fetch("/api/visitors/walkin/override", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invitationId: walkinOverrideTarget.id,
+          reason: walkinOverrideReason.trim(),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Walk-in approval failed.");
+      toast.success(`${walkinOverrideTarget.visitorName} approved and checked in.`);
+      setPendingWalkinList((current) => current.filter((item) => item.id !== walkinOverrideTarget.id));
+      setWalkinOverrideTarget(null);
+      setWalkinOverrideReason("");
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Walk-in approval failed.");
+    } finally {
+      setWalkinOverrideLoading(false);
     }
   };
 
@@ -187,11 +269,12 @@ export function CheckinTerminalClient({
       toast.success(
         `Visitor ${checkedOutVisitor} (Badge: ${checkedOutBadge}) checked out. Duration: ${checkoutDuration}`
       );
+      setCheckoutSuccess(`${checkedOutVisitor} has checked out. They were on site for ${checkoutDuration}.`);
       setCheckoutBadgeInput("");
       setActiveList((prev) => prev.filter((a) => a.badgeNumber !== badgeOrId.trim() && a.id !== badgeOrId.trim()));
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Checkout failed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Checkout failed");
     } finally {
       setCheckoutLoading(false);
     }
@@ -206,6 +289,49 @@ export function CheckinTerminalClient({
       (s.token || "").toLowerCase().includes(q)
     );
   });
+  const filteredPendingWalkins = pendingWalkinList.filter((item) => {
+    const query = searchFilter.trim().toLowerCase();
+    return !query || [item.visitorName, item.company, item.hostName].some((value) => value.toLowerCase().includes(query));
+  });
+  const filteredActive = activeList.filter((visitor) => {
+    const query = checkoutSearch.trim().toLowerCase();
+    return !query || [
+      visitor.visitorName,
+      visitor.company,
+      visitor.hostName,
+      visitor.badgeNumber,
+    ].some((value) => value.toLowerCase().includes(query));
+  });
+  const activeColumns: DataTableColumn<ActiveItem>[] = [
+    { key: "badge", label: "Badge", render: (visitor) => <span className="font-mono font-semibold text-brand-300">{visitor.badgeNumber}</span> },
+    {
+      key: "visitor",
+      label: "Visitor",
+      render: (visitor) => (
+        <div>
+          <p className="font-semibold text-text">{visitor.visitorName}</p>
+          <p className="text-xs text-text-muted">{visitor.company}</p>
+        </div>
+      ),
+    },
+    { key: "host", label: "Host", render: (visitor) => <span className="text-text-muted">{visitor.hostName}</span> },
+    { key: "arrived", label: "Arrived", render: (visitor) => <span className="text-xs text-text-muted">{formatTime(visitor.checkInTime)}</span> },
+    { key: "status", label: "Status", render: () => <StatusPill tone="success">Inside</StatusPill> },
+    {
+      key: "action",
+      label: "Action",
+      render: (visitor) => (
+        <button
+          type="button"
+          onClick={() => handleQuickCheckout(visitor.badgeNumber)}
+          disabled={checkoutLoading}
+          className="min-h-10 rounded-lg border border-rose-800/60 bg-rose-950 px-3 text-sm font-semibold text-rose-200 hover:bg-rose-900 disabled:opacity-50"
+        >
+          Check out
+        </button>
+      ),
+    },
+  ];
 
   if (issuedBadge) {
     return (
@@ -218,6 +344,12 @@ export function CheckinTerminalClient({
           <p className="text-xs text-slate-400 mt-1">
             Access badge printed. Arrival notification dispatched to host.
           </p>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <StatusPill tone={gateResult?.status === "WARN" ? "warning" : "success"}>
+              {gateResult?.status || "PASS"}
+            </StatusPill>
+            {gateResult?.reason && <span className="text-sm text-text-muted">{gateResult.reason}</span>}
+          </div>
         </div>
 
         <BadgeCard data={issuedBadge} />
@@ -236,10 +368,61 @@ export function CheckinTerminalClient({
 
   return (
     <div className="space-y-5">
+    {gateResult && (
+      <section
+        aria-live="polite"
+        className={`space-y-3 rounded-xl border p-4 ${
+          gateResult.status === "BLOCK"
+            ? "border-rose-700 bg-rose-950/30"
+            : gateResult.status === "WARN"
+              ? "border-amber-700 bg-amber-950/30"
+              : "border-emerald-700 bg-emerald-950/30"
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <StatusPill tone={gateResult.status === "BLOCK" ? "danger" : gateResult.status === "WARN" ? "warning" : "success"}>
+            {gateResult.status}
+          </StatusPill>
+          <p className="min-w-0 break-words text-sm text-text">{gateResult.reason}</p>
+        </div>
+        {gateResult.status === "WARN" &&
+          canOverrideCompliance &&
+          gateResult.invitationId &&
+          gateResult.reason.startsWith("Contractor access denied:") && (
+            <form onSubmit={submitComplianceOverride} className="space-y-3 border-t border-amber-800/60 pt-3">
+              <p className="text-sm text-amber-200">
+                Only continue if you are authorized to override contractor compliance. Your reason will be recorded in the audit log.
+              </p>
+              <label htmlFor="compliance-override-reason" className="block text-sm font-medium text-text">
+                Reason for override *
+              </label>
+              <textarea
+                id="compliance-override-reason"
+                required
+                minLength={5}
+                maxLength={1000}
+                value={overrideReason}
+                onChange={(event) => setOverrideReason(event.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              />
+              <button
+                type="submit"
+                disabled={loadingId === gateResult.invitationId || overrideReason.trim().length < 5}
+                className="min-h-11 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingId === gateResult.invitationId ? "Recording override…" : "Record reason and continue"}
+              </button>
+            </form>
+          )}
+      </section>
+    )}
       {/* Navigation Mode Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800">
-        <div className="flex gap-1">
+        <div aria-label="Choose check-in desk task" className="flex flex-wrap gap-1">
           <button
+            type="button"
+            aria-pressed={activeTab === "SCHEDULED"}
             onClick={() => setActiveTab("SCHEDULED")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === "SCHEDULED"
@@ -247,9 +430,11 @@ export function CheckinTerminalClient({
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            Today&apos;s Scheduled Arrivals ({scheduledList.length})
+            Arrivals ({scheduledList.length})
           </button>
           <button
+            type="button"
+            aria-pressed={activeTab === "CHECKOUT"}
             onClick={() => setActiveTab("CHECKOUT")}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === "CHECKOUT"
@@ -257,11 +442,12 @@ export function CheckinTerminalClient({
                 : "text-slate-400 hover:text-white"
             }`}
           >
-            Express Check-Out ({activeList.length} Active)
+            Check out ({activeList.length})
           </button>
         </div>
 
         <button
+          type="button"
           onClick={() => setIsScannerOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/50 text-indigo-200 text-xs font-bold transition-all"
         >
@@ -273,6 +459,63 @@ export function CheckinTerminalClient({
       {/* Mode 1: Scheduled Arrivals */}
       {activeTab === "SCHEDULED" && (
         <div className="space-y-4">
+          <section aria-labelledby="pending-walkins-heading" className="space-y-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 id="pending-walkins-heading" className="text-sm font-bold text-text">Walk-ins waiting for host approval</h2>
+                <p className="mt-1 text-sm text-text-muted">
+                  These visitors cannot enter until approval is resolved. Entry checks still apply to every approval.
+                </p>
+              </div>
+              <StatusPill tone={pendingWalkinList.length ? "warning" : "neutral"}>
+                {pendingWalkinList.length} waiting
+              </StatusPill>
+            </div>
+            <NextStepHint>
+              {walkinApprovalMode === "DESK_OVERRIDE" && canOverrideWalkin
+                ? "Ask the host to approve, or record a reason to approve on their behalf. Standard entry checks still apply."
+                : "Ask the host to approve. Visitors remain unauthorized until the host approves the request."}
+            </NextStepHint>
+            {pendingWalkinList.length === 0 ? (
+              <p className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text-muted">
+                No walk-ins are waiting for host approval.
+              </p>
+            ) : filteredPendingWalkins.length === 0 ? (
+              <p className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text-muted">
+                No pending walk-ins match this search. Try another visitor, company, or host.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {filteredPendingWalkins.map((item) => (
+                  <article key={item.id} className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="break-words font-semibold text-text">{item.visitorName}</p>
+                        <p className="break-words text-sm text-text-muted">{item.company} · Host: {item.hostName}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusPill tone="warning">Pending host</StatusPill>
+                        {item.escalatedAt && <StatusPill tone="danger">Escalated</StatusPill>}
+                      </div>
+                    </div>
+                    {walkinApprovalMode === "DESK_OVERRIDE" && canOverrideWalkin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWalkinOverrideTarget(item);
+                          setWalkinOverrideReason("");
+                        }}
+                        className="min-h-11 w-full rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 sm:w-auto"
+                      >
+                        Approve on host&apos;s behalf
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
           <div className="glass-card p-4 rounded-2xl border border-indigo-950/70 flex items-center justify-between">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -304,6 +547,9 @@ export function CheckinTerminalClient({
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-bold text-white">{item.visitorName}</h3>
+                        <StatusPill tone={item.isBlacklisted ? "danger" : "success"}>
+                          {item.isBlacklisted ? "BLOCK" : "PASS"}
+                        </StatusPill>
                         <span
                           className="text-[9px] font-bold px-2 py-0.5 rounded uppercase text-white"
                           style={{ backgroundColor: item.typeColor }}
@@ -318,6 +564,12 @@ export function CheckinTerminalClient({
                       {item.time}
                     </span>
                   </div>
+
+                  {item.isBlacklisted && (
+                    <p role="alert" className="break-words rounded-lg border border-rose-800 bg-rose-950/40 p-2 text-sm text-rose-200">
+                      Entry blocked: {item.blacklistReason || "This visitor is on the security watchlist."}
+                    </p>
+                  )}
 
                   <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs space-y-1">
                     <div className="flex justify-between">
@@ -354,7 +606,7 @@ export function CheckinTerminalClient({
                     )}
                     <button
                       onClick={() => handleCheckIn(item.id)}
-                      disabled={loadingId === item.id}
+                      disabled={loadingId === item.id || item.isBlacklisted}
                       className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-glow-sm flex items-center gap-1.5 transition-all disabled:opacity-50"
                     >
                       {loadingId === item.id ? (
@@ -412,46 +664,45 @@ export function CheckinTerminalClient({
           </div>
 
           {/* Active Badges List */}
-          <div className="glass-card rounded-2xl border border-slate-800 overflow-hidden">
-            <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center text-xs font-bold text-slate-400 uppercase">
-              <span>Visitors Currently In Facility</span>
-              <span>{activeList.length} Active Badges</span>
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-bold text-text">Visitors currently in the facility</h3>
+              <p className="mt-1 text-sm text-text-muted">{activeList.length} active badges</p>
             </div>
-            <div className="divide-y divide-slate-800/60">
-              {activeList.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">
-                  No visitors currently checked in.
-                </div>
-              ) : (
-                activeList.map((act) => (
-                  <div key={act.id} className="p-4 flex items-center justify-between hover:bg-slate-900/40">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs font-bold text-indigo-400 bg-indigo-950/80 px-2 py-1 rounded border border-indigo-800/40">
-                        {act.badgeNumber}
-                      </span>
-                      <div>
-                        <h4 className="text-xs font-bold text-white">{act.visitorName}</h4>
-                        <p className="text-[11px] text-slate-400">
-                          {act.company} • Host: {act.hostName}
-                        </p>
-                      </div>
+            <DataTable
+              rows={filteredActive}
+              columns={activeColumns}
+              getRowKey={(visitor) => visitor.id}
+              renderMobileCard={(visitor) => (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-text">{visitor.visitorName}</p>
+                      <p className="break-words text-sm text-text-muted">{visitor.company} · Host: {visitor.hostName}</p>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="text-[11px] text-slate-500 font-mono">
-                        In {formatTime(act.checkInTime)}
-                      </span>
-                      <button
-                        onClick={() => handleQuickCheckout(act.badgeNumber)}
-                        className="px-3 py-1.5 rounded-lg bg-rose-950 hover:bg-rose-900 text-rose-300 text-xs font-semibold border border-rose-800/60 transition-colors"
-                      >
-                        Exit Facility
-                      </button>
-                    </div>
+                    <StatusPill tone="success">Inside</StatusPill>
                   </div>
-                ))
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-mono text-sm text-brand-300">{visitor.badgeNumber}</span>
+                    <span className="text-xs text-text-muted">Arrived {formatTime(visitor.checkInTime)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickCheckout(visitor.badgeNumber)}
+                    disabled={checkoutLoading}
+                    className="min-h-11 w-full rounded-lg border border-rose-800/60 bg-rose-950 px-4 text-sm font-semibold text-rose-200 hover:bg-rose-900 disabled:opacity-50"
+                  >
+                    Check out visitor
+                  </button>
+                </div>
               )}
-            </div>
+              searchValue={checkoutSearch}
+              onSearchChange={setCheckoutSearch}
+              searchPlaceholder="Search by visitor, host, or badge"
+              pageSize={8}
+              emptyTitle={activeList.length ? "No active visitors match" : "No visitors are checked in"}
+              emptyDescription={activeList.length ? "Try another name, host, or badge number." : "Visitors who have checked in will appear here."}
+            />
           </div>
         </div>
       )}
@@ -461,9 +712,43 @@ export function CheckinTerminalClient({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onVerified={(data) => {
+          setGateResult({
+            status: data.isPreRegistered ? "PASS" : "WARN",
+            reason: data.isPreRegistered
+              ? "Pass verified. Checking entry requirements."
+              : "Pre-registration is incomplete. Checking workplace requirements before issuing a badge.",
+          });
           void handleCheckIn(data.invitationId);
         }}
       />
+      <ConfirmDialog
+        isOpen={Boolean(walkinOverrideTarget)}
+        onClose={() => {
+          setWalkinOverrideTarget(null);
+          setWalkinOverrideReason("");
+        }}
+        onConfirm={submitWalkinOverride}
+        title="Approve this walk-in on the host's behalf?"
+        description="This will approve the pending visit and check the visitor in. The visitor must still pass blacklist, working-hours, and compliance checks. Your reason is retained with the approval and an audit entry is recorded."
+        confirmLabel="Approve and check in"
+        variant="warning"
+        isLoading={walkinOverrideLoading}
+        confirmDisabled={walkinOverrideReason.trim().length < 10}
+      >
+        <label htmlFor="walkin-override-reason" className="mb-1 block text-sm font-medium text-text">
+          Reason (at least 10 characters)
+        </label>
+        <textarea
+          id="walkin-override-reason"
+          required
+          minLength={10}
+          maxLength={500}
+          rows={4}
+          value={walkinOverrideReason}
+          onChange={(event) => setWalkinOverrideReason(event.target.value)}
+          className="w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+        />
+      </ConfirmDialog>
     </div>
   );
 }
