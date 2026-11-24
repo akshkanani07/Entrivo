@@ -3,12 +3,22 @@ import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
 import { getOrgPolicy } from "@/lib/settings-registry";
 import { WalkinForm } from "./WalkinForm";
+import { notFound } from "next/navigation";
+import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewWalkinPage() {
+export default async function NewWalkinPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ visitorId?: string | string[] }>;
+}) {
   const user = await requirePagePermission("visitors.write");
   const orgId = user.organizationId;
+  const params = await searchParams;
+  const rawVisitorId = Array.isArray(params.visitorId) ? params.visitorId[0] : params.visitorId;
+  const visitorId = rawVisitorId === undefined ? undefined : z.string().trim().min(1).max(100).safeParse(rawVisitorId);
+  if (visitorId && !visitorId.success) notFound();
 
   if (!orgId) {
     return (
@@ -18,25 +28,28 @@ export default async function NewWalkinPage() {
     );
   }
 
-  // Fetch policy
-  const { policy } = await getOrgPolicy(orgId);
-
-  // Fetch host employees
-  const employees = await prisma.employee.findMany({
-    where: { organizationId: orgId },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-      department: true,
-      office: true,
-    },
-    orderBy: { user: { name: "asc" } },
-  });
-
-  // Fetch visitor types
-  const visitorTypes = await prisma.visitorType.findMany({
-    where: { organizationId: orgId },
-    orderBy: { createdAt: "asc" },
-  });
+  const [{ policy }, employees, visitorTypes, visitor] = await Promise.all([
+    getOrgPolicy(orgId),
+    prisma.employee.findMany({
+      where: { organizationId: orgId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        department: true,
+        office: true,
+      },
+      orderBy: { user: { name: "asc" } },
+    }),
+    prisma.visitorType.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: "asc" },
+    }),
+    visitorId?.success
+      ? prisma.visitor.findFirst({
+          where: { id: visitorId.data, organizationId: orgId, deletedAt: null },
+          select: { name: true, email: true, phone: true, company: true, visitorTypeId: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -53,6 +66,7 @@ export default async function NewWalkinPage() {
         employees={employees}
         visitorTypes={visitorTypes}
         policy={policy}
+        initialVisitor={visitor}
       />
     </div>
   );

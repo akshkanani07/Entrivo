@@ -41,19 +41,27 @@ export function WalkinForm({
   visitorTypes,
   policy,
   requireNda = false,
+  initialVisitor,
 }: {
   employees: EmployeeOption[];
   visitorTypes: VisitorTypeOption[];
   policy?: OrgPolicy;
   requireNda?: boolean;
+  initialVisitor?: {
+    name: string;
+    email: string;
+    phone: string;
+    company: string | null;
+    visitorTypeId: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    company: "",
-    visitorTypeId: visitorTypes[0]?.id || "",
+    name: initialVisitor?.name || "",
+    phone: initialVisitor?.phone || "",
+    email: initialVisitor?.email || "",
+    company: initialVisitor?.company || "",
+    visitorTypeId: initialVisitor?.visitorTypeId || visitorTypes[0]?.id || "",
     hostEmployeeId: employees[0]?.id || "",
     purpose: "Business Discussion & Strategy Meeting",
     idProofType: "Aadhaar / National ID",

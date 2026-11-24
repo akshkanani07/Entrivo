@@ -162,6 +162,17 @@ Status `PARTIAL` denotes implemented groundwork that does not cover the full pha
 | **P10-H2** | Mobile visitor flow with personal pass camera scan, Email OTP walk-in flow, live status polling, host/reception approval queue, notifications, expiry/escalation worker, and shared check-in service enforcement. | [x] | 2026-11-24 | — |
 | **P10-H3** | Focused unit and mobile E2E tests, tenant/acceptance verification, migration checks, and README/ENV/settings/security/RBAC/schema/progress documentation. | [x] | 2026-11-24 | — |
 
+---
 
+# Entrivo — P11-U6 Implementation Progress
+
+The P11-U6.1 implementation and unit/type/lint checks are complete. Browser execution remains pending: the local app cannot start with the current invalid `APP_ENCRYPTION_KEY`, and viewport tests require an authenticated context plus `E2E_VISITOR_ID`.
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P11-U6.1** | Shared page header and visitor profile with responsive tabs, visit/invitation/document/vehicle/feedback/note/audit sections, VIP and blacklist management, duplicate merge, data export/erasure, tenant-scoped actions, migration, unit tests, and viewport-configurable Playwright coverage. | PARTIAL | 2026-11-24 | — |
+| **P11-U6.2** | Invitation detail with lifecycle stepper, pass QR/link, pre-registration review, approval history, parking/group details, reminder history, activity timeline, edit/cancel/reschedule, pass resend, list-row links, tenant/RBAC/rate/audit controls, migration, unit tests, and responsive Playwright coverage. | PARTIAL | 2026-11-24 | — |
+
+P11-U6.2 has static and unit-test coverage. Browser execution requires an authenticated Playwright context and `E2E_INVITATION_ID`; the local app configuration blocker recorded for P11-U6.1 is still unresolved.
 
 

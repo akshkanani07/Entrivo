@@ -115,6 +115,10 @@ export async function POST(request: Request) {
         },
       });
 
+      await tx.visitorNote.deleteMany({
+        where: { visitorId, organizationId },
+      });
+
       return updated;
     });
 

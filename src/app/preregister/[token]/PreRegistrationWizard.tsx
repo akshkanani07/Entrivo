@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { DEFAULT_LOCALE, normalizeLocale, type Locale } from "@/i18n/locale";
+import { persistLocalePreference } from "@/i18n/client";
 import { CameraCapture } from "@/components/visitor/CameraCapture";
 import { SignatureCanvas } from "@/components/visitor/SignatureCanvas";
 
@@ -58,22 +62,14 @@ interface PageData {
 }
 
 const steps: Step[] = ["LANGUAGE", "PERSONAL", "ID", "PHOTO", "VEHICLE", "PRIVACY", "NDA", "REVIEW"];
-const stepNames: Record<Step, string> = {
-  LANGUAGE: "Language",
-  PERSONAL: "Personal details",
-  ID: "ID details",
-  PHOTO: "Photo",
-  VEHICLE: "Vehicle",
-  PRIVACY: "Privacy",
-  NDA: "NDA",
-  REVIEW: "Review",
-};
-
 function stepKey(step: Step): StepKey | null {
   return step === "REVIEW" ? null : step;
 }
 
 export function PreRegistrationWizard({ token }: { token: string }) {
+  const router = useRouter();
+  const requestLocale = normalizeLocale(useLocale()) ?? DEFAULT_LOCALE;
+  const t = useTranslations("preregistration");
   const [pageData, setPageData] = useState<PageData | null>(null);
   const [step, setStep] = useState<Step>("LANGUAGE");
   const [loading, setLoading] = useState(true);
@@ -93,7 +89,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
     color: "",
     foreignPlate: false,
   });
-  const [locale, setLocale] = useState("en");
+  const [locale, setLocale] = useState<Locale>(requestLocale);
   const [consent, setConsent] = useState(false);
   const [signatureSaved, setSignatureSaved] = useState(false);
   const [signatureData, setSignatureData] = useState("");
@@ -102,6 +98,33 @@ export function PreRegistrationWizard({ token }: { token: string }) {
     () => steps.filter((item) => item !== "NDA" || pageData?.requirements.requiresNda),
     [pageData]
   );
+  const stepNames: Record<Step, string> = {
+    LANGUAGE: t("stepLanguage"),
+    PERSONAL: t("stepPersonal"),
+    ID: t("stepId"),
+    PHOTO: t("stepPhoto"),
+    VEHICLE: t("stepVehicle"),
+    PRIVACY: t("stepPrivacy"),
+    NDA: t("stepNda"),
+    REVIEW: t("stepReview"),
+  };
+
+  async function changeLocale(value: string) {
+    const nextLocale = normalizeLocale(value);
+    if (!nextLocale) {
+      setError(t("invalidLocale"));
+      return;
+    }
+    try {
+      await persistLocalePreference(nextLocale);
+      setLocale(nextLocale);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message !== "LOCALE_CHANGE_FAILED"
+        ? cause.message
+        : t("localeSaveFailed"));
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -111,7 +134,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
     })
       .then(async (res) => {
         const result = await res.json();
-        if (!res.ok || !result.success) throw new Error(result.error || "This link is unavailable.");
+        if (!res.ok || !result.success) throw new Error(result.error || t("linkUnavailable"));
         if (!active) return;
         const data = result.data as PageData;
         setPageData(data);
@@ -131,7 +154,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
           color: data.draft.vehicle?.color || data.priorVehicle?.color || "",
           foreignPlate: data.draft.vehicle?.foreignPlate ?? data.priorVehicle?.foreignPlate ?? false,
         });
-        setLocale(data.draft.locale || "en");
+        setLocale(requestLocale);
         setConsent(data.draft.consent === true);
         setSignatureSaved(Boolean(data.draft.signatureFileId));
         if (data.status === "SUBMITTED" || data.status === "APPROVED") setSubmitted(true);
@@ -145,7 +168,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [requestLocale, router, t, token]);
 
   async function save(stepName: StepKey, data: Record<string, unknown>) {
     const res = await fetch(`/api/public/preregister/${encodeURIComponent(token)}`, {
@@ -154,7 +177,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
       body: JSON.stringify({ step: stepName, data }),
     });
     const result = await res.json();
-    if (!res.ok || !result.success) throw new Error(result.error || "Unable to save this step.");
+    if (!res.ok || !result.success) throw new Error(result.error || t("saveFailed"));
   }
 
   async function continueStep() {
@@ -165,13 +188,13 @@ export function PreRegistrationWizard({ token }: { token: string }) {
         await save(currentKey, { locale });
       } else if (currentKey === "PERSONAL") {
         if (!personal.name.trim() || (pageData?.requirements.requirePhone && !personal.phone.trim())) {
-          setError("Enter the required personal details.");
+          setError(t("personalRequired"));
           return;
         }
         await save(currentKey, personal);
       } else if (currentKey === "ID") {
         if (pageData?.requirements.requireIdProof && !idProofType) {
-          setError("Select an ID type.");
+          setError(t("idTypeRequired"));
           return;
         }
         if (
@@ -179,7 +202,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
           !idProofNumber.trim() &&
           (!idProofNumberMasked || pageData.draft.idNumberNeedsReentry)
         ) {
-          setError("Enter your ID number again. For privacy, the full number is not retained in this draft.");
+          setError(t("idNumberReentry"));
           return;
         }
         if (idProofNumber.trim()) {
@@ -196,20 +219,20 @@ export function PreRegistrationWizard({ token }: { token: string }) {
             setPhoto(result.data.photoPreview);
           }
         } else if (pageData?.requirements.requirePhoto && !pageData.draft.photoFileId) {
-          setError("Capture a photo before continuing.");
+          setError(t("photoRequired"));
           return;
         }
       } else if (currentKey === "VEHICLE") {
         await save(currentKey, vehicle);
       } else if (currentKey === "PRIVACY") {
         if (!consent) {
-          setError("Please review and accept the privacy notice to continue.");
+          setError(t("consentRequired"));
           return;
         }
         await save(currentKey, { locale, consent: true });
       } else if (currentKey === "NDA" && !pageData?.requirements.ndaAlreadyValid) {
         if (!signatureSaved) {
-          setError("Sign the NDA before continuing.");
+          setError(t("ndaSignatureRequired"));
           return;
         }
         if (signatureData) await save(currentKey, { dataUrl: signatureData });
@@ -230,10 +253,10 @@ export function PreRegistrationWizard({ token }: { token: string }) {
         body: JSON.stringify({ website: honeypot, idProofNumber }),
       });
       const result = await res.json();
-      if (!res.ok || !result.success) throw new Error(result.error || "Unable to submit.");
+      if (!res.ok || !result.success) throw new Error(result.error || t("submitFailed"));
       setSubmitted(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to submit.");
+      setError(cause instanceof Error ? cause.message : t("submitFailed"));
     } finally {
       setBusy(false);
     }
@@ -246,14 +269,14 @@ export function PreRegistrationWizard({ token }: { token: string }) {
   }
 
   if (loading) {
-    return <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-6">Loading secure form...</main>;
+    return <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-6">{t("loading")}</main>;
   }
   if (!pageData || error && !pageData) {
     return (
       <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-6">
         <section className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center">
-          <h1 className="text-xl font-bold">This link is unavailable</h1>
-          <p className="mt-2 text-sm text-slate-300">{error || "Contact your host for a new link."}</p>
+          <h1 className="text-xl font-bold">{t("linkUnavailable")}</h1>
+          <p className="mt-2 text-sm text-slate-300">{error || t("contactHost")}</p>
         </section>
       </main>
     );
@@ -262,9 +285,9 @@ export function PreRegistrationWizard({ token }: { token: string }) {
     return (
       <main className="min-h-screen bg-slate-950 text-white grid place-items-center p-6">
         <section className="max-w-md rounded-2xl border border-emerald-800 bg-slate-900 p-6 text-center">
-          <h1 className="text-xl font-bold">Pre-registration submitted</h1>
+          <h1 className="text-xl font-bold">{t("submittedTitle")}</h1>
           <p className="mt-2 text-sm text-slate-300">
-            Your information has been sent to {pageData.invitation.hostName} for review.
+            {t("submittedDescription", { host: pageData.invitation.hostName })}
           </p>
         </section>
       </main>
@@ -281,13 +304,13 @@ export function PreRegistrationWizard({ token }: { token: string }) {
           <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">
             {pageData.invitation.organizationName}
           </p>
-          <h1 className="mt-2 text-2xl font-bold">Visitor pre-registration</h1>
+          <h1 className="mt-2 text-2xl font-bold">{t("title")}</h1>
           <p className="mt-1 text-sm text-slate-300">
-            Visit with {pageData.invitation.hostName} · {new Date(pageData.invitation.date).toLocaleDateString()}
+            {t("visitWith", { host: pageData.invitation.hostName, date: new Date(pageData.invitation.date).toLocaleDateString() })}
           </p>
         </header>
 
-        <nav aria-label="Form progress" className="mb-6">
+        <nav aria-label={t("formProgress")} className="mb-6">
           <div className="mb-2 flex justify-between text-xs text-slate-300">
             <span>{stepNames[step]}</span><span>{progress}%</span>
           </div>
@@ -304,65 +327,64 @@ export function PreRegistrationWizard({ token }: { token: string }) {
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl sm:p-7">
           {pageData.status === "REJECTED" && pageData.rejectionReason && (
             <p role="status" className="mb-5 rounded-lg border border-amber-800 bg-amber-950/30 p-3 text-sm text-amber-200">
-              Please update your information: {pageData.rejectionReason}
+              {t("updateInformation", { reason: pageData.rejectionReason })}
             </p>
           )}
           {step === "LANGUAGE" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Choose a language</h2>
-              <label className="block text-sm" htmlFor="locale">Language</label>
-              <select id="locale" value={locale} onChange={(e) => setLocale(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
+              <h2 className="text-lg font-semibold">{t("chooseLanguage")}</h2>
+              <label className="block text-sm" htmlFor="locale">{t("language")}</label>
+              <select id="locale" value={locale} onChange={(e) => changeLocale(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
                 <option value="en">English</option><option value="hi">Hindi</option><option value="gu">Gujarati</option>
               </select>
-              <p className="text-xs text-slate-400">Localized instructions will be available in a later language rollout.</p>
             </div>
           )}
 
           {step === "PERSONAL" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Personal details</h2>
-              <label className="block text-sm" htmlFor="name">Name *</label>
+              <h2 className="text-lg font-semibold">{t("personalDetails")}</h2>
+              <label className="block text-sm" htmlFor="name">{t("nameRequired")}</label>
               <input id="name" autoComplete="name" value={personal.name} onChange={(e) => setPersonal({ ...personal, name: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
-              <label className="block text-sm" htmlFor="phone">Phone{pageData.requirements.requirePhone ? " *" : ""}</label>
+              <label className="block text-sm" htmlFor="phone">{t("phone")}{pageData.requirements.requirePhone ? " *" : ""}</label>
               <input id="phone" type="tel" autoComplete="tel" value={personal.phone} onChange={(e) => setPersonal({ ...personal, phone: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
-              <label className="block text-sm" htmlFor="company">Company{pageData.requirements.requireCompany ? " *" : ""}</label>
+              <label className="block text-sm" htmlFor="company">{t("company")}{pageData.requirements.requireCompany ? " *" : ""}</label>
               <input id="company" autoComplete="organization" value={personal.company} onChange={(e) => setPersonal({ ...personal, company: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
-              <p className="text-xs text-slate-400">Email: {pageData.visitor.email}</p>
+              <p className="text-xs text-slate-400">{t("email")}: {pageData.visitor.email}</p>
             </div>
           )}
 
           {step === "ID" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Government ID details</h2>
-              <label className="block text-sm" htmlFor="idType">ID type{pageData.requirements.requireIdProof ? " *" : ""}</label>
+              <h2 className="text-lg font-semibold">{t("governmentIdDetails")}</h2>
+              <label className="block text-sm" htmlFor="idType">{t("idType")}{pageData.requirements.requireIdProof ? " *" : ""}</label>
               <select id="idType" value={idProofType} onChange={(e) => { setIdProofType(e.target.value); setIdProofNumber(""); }} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
-                <option value="">Select ID type</option><option>Aadhaar</option><option>Passport</option><option>Driver License</option><option>National ID</option><option>Other</option>
+                <option value="">{t("selectIdType")}</option><option>{t("aadhaar")}</option><option>{t("passport")}</option><option>{t("driverLicense")}</option><option>{t("nationalId")}</option><option>{t("other")}</option>
               </select>
-              <label className="block text-sm" htmlFor="idNumber">ID number{pageData.requirements.requireIdNumber ? " *" : ""}</label>
+              <label className="block text-sm" htmlFor="idNumber">{t("idNumber")}{pageData.requirements.requireIdNumber ? " *" : ""}</label>
               <input id="idNumber" type="password" inputMode="text" autoComplete="off" value={idProofNumber} onChange={(e) => setIdProofNumber(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
-              {idProofNumberMasked && !idProofNumber && <p className="text-xs text-slate-400">{pageData.draft.idNumberNeedsReentry ? `Saved masked ID: ${idProofNumberMasked}. Re-enter the full number to continue.` : `Saved ID on file: ${idProofNumberMasked}. Leave blank to keep it, or enter a replacement.`}</p>}
-              <p className="text-xs text-slate-400">Your ID number is protected. Aadhaar-like numbers are stored only as a masked value with the last four digits.</p>
+              {idProofNumberMasked && !idProofNumber && <p className="text-xs text-slate-400">{pageData.draft.idNumberNeedsReentry ? t("maskedIdReentry", { id: idProofNumberMasked }) : t("maskedIdSaved", { id: idProofNumberMasked })}</p>}
+              <p className="text-xs text-slate-400">{t("idProtection")}</p>
             </div>
           )}
 
           {step === "PHOTO" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Visitor photo</h2>
-              <p className="text-sm text-slate-300">Use your camera or upload a clear face photo. Image metadata is removed before storage.</p>
+              <h2 className="text-lg font-semibold">{t("visitorPhoto")}</h2>
+              <p className="text-sm text-slate-300">{t("photoInstructions")}</p>
               <CameraCapture
                 autoStart={false}
                 initialImage={photo}
                 onCapture={(dataUrl) => { setPhoto(dataUrl); }}
                 onClear={() => setPhoto(null)}
               />
-              {!pageData.requirements.requirePhoto && <p className="text-xs text-slate-400">Photo is optional under your host&apos;s policy.</p>}
+              {!pageData.requirements.requirePhoto && <p className="text-xs text-slate-400">{t("photoOptional")}</p>}
             </div>
           )}
 
           {step === "VEHICLE" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Vehicle (optional)</h2>
-              <label className="block text-sm" htmlFor="plate">Vehicle plate</label>
+              <h2 className="text-lg font-semibold">{t("vehicleOptional")}</h2>
+              <label className="block text-sm" htmlFor="plate">{t("vehiclePlate")}</label>
               <input id="plate" autoComplete="off" value={vehicle.plateDisplay} onChange={(e) => setVehicle({ ...vehicle, plateDisplay: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -370,32 +392,32 @@ export function PreRegistrationWizard({ token }: { token: string }) {
                   checked={vehicle.foreignPlate}
                   onChange={(e) => setVehicle({ ...vehicle, foreignPlate: e.target.checked })}
                 />
-                Other or foreign registration
+                {t("foreignRegistration")}
               </label>
-              <label className="block text-sm" htmlFor="vehicleType">Vehicle type</label>
+              <label className="block text-sm" htmlFor="vehicleType">{t("vehicleType")}</label>
               <select id="vehicleType" value={vehicle.type} onChange={(e) => setVehicle({ ...vehicle, type: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
-                <option value="CAR">Car</option><option value="BIKE">Bike</option><option value="EV">Electric vehicle</option><option value="OTHER">Other</option>
+                <option value="CAR">{t("car")}</option><option value="BIKE">{t("bike")}</option><option value="EV">{t("electricVehicle")}</option><option value="OTHER">{t("other")}</option>
               </select>
-              <label className="block text-sm" htmlFor="vehicleMake">Make (optional)</label>
+              <label className="block text-sm" htmlFor="vehicleMake">{t("makeOptional")}</label>
               <input id="vehicleMake" maxLength={80} value={vehicle.make} onChange={(e) => setVehicle({ ...vehicle, make: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
-              <label className="block text-sm" htmlFor="vehicleColor">Color (optional)</label>
+              <label className="block text-sm" htmlFor="vehicleColor">{t("colorOptional")}</label>
               <input id="vehicleColor" maxLength={40} value={vehicle.color} onChange={(e) => setVehicle({ ...vehicle, color: e.target.value })} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3" />
             </div>
           )}
 
           {step === "PRIVACY" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Privacy notice and consent</h2>
+              <h2 className="text-lg font-semibold">{t("privacyConsentTitle")}</h2>
               <p className="text-sm leading-6 text-slate-300">
-                The organization uses the information you provide to verify your identity, prepare visitor access, and administer this visit. Your consent is recorded with notice version {pageData.legalVersion}.
+                {t("privacyNotice", { version: pageData.legalVersion })}
               </p>
               <p className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm">{pageData.bringIdChecklist}</p>
               <label className="flex items-start gap-3 text-sm">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1 h-4 w-4" />
-                <span>I have read the privacy notice and consent to the use of my information for this visit.</span>
+                <span>{t("privacyConsent")}</span>
               </label>
-              <label className="block text-sm" htmlFor="localePrivacy">Preferred language</label>
-              <select id="localePrivacy" value={locale} onChange={(e) => setLocale(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
+              <label className="block text-sm" htmlFor="localePrivacy">{t("preferredLanguage")}</label>
+              <select id="localePrivacy" value={locale} onChange={(e) => changeLocale(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3">
                 <option value="en">English</option><option value="hi">Hindi</option><option value="gu">Gujarati</option>
               </select>
             </div>
@@ -403,20 +425,20 @@ export function PreRegistrationWizard({ token }: { token: string }) {
 
           {step === "NDA" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Non-disclosure agreement</h2>
+              <h2 className="text-lg font-semibold">{t("ndaTitle")}</h2>
               {pageData.requirements.ndaAlreadyValid ? (
-                <p className="rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-200">A valid NDA is already on file. No new signature is required.</p>
+                <p className="rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-200">{t("ndaAlreadyValid")}</p>
               ) : (
                 <>
-                  <article className="max-h-60 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm leading-6 whitespace-pre-wrap" aria-label="NDA terms">
+                  <article className="max-h-60 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 text-sm leading-6 whitespace-pre-wrap" aria-label={t("ndaTerms")}>
                     {pageData.ndaContent}
                   </article>
-                  <p className="text-xs text-slate-400">Agreement version {pageData.ndaVersion || "current"}</p>
+                  <p className="text-xs text-slate-400">{t("agreementVersion", { version: pageData.ndaVersion || "current" })}</p>
                   <SignatureCanvas
                     onSave={(dataUrl) => { setSignatureData(dataUrl); setSignatureSaved(true); }}
                     onClear={() => { setSignatureData(""); setSignatureSaved(false); }}
                   />
-                  {signatureSaved && <p className="text-xs text-emerald-300">Signature saved.</p>}
+                  {signatureSaved && <p className="text-xs text-emerald-300">{t("signatureSaved")}</p>}
                 </>
               )}
             </div>
@@ -424,16 +446,16 @@ export function PreRegistrationWizard({ token }: { token: string }) {
 
           {step === "REVIEW" && (
             <div className="space-y-4">
-              <h2 className="text-lg font-semibold">Review and submit</h2>
+              <h2 className="text-lg font-semibold">{t("reviewSubmit")}</h2>
               <dl className="grid grid-cols-1 gap-3 text-sm">
-                <div><dt className="text-slate-400">Name</dt><dd>{personal.name}</dd></div>
-                <div><dt className="text-slate-400">Phone</dt><dd>{personal.phone}</dd></div>
-                <div><dt className="text-slate-400">Company</dt><dd>{personal.company || "Not provided"}</dd></div>
-                <div><dt className="text-slate-400">ID</dt><dd>{idProofType || "Not provided"} {idProofNumber || idProofNumberMasked ? "·••••" : ""}</dd></div>
-                <div><dt className="text-slate-400">Vehicle</dt><dd>{vehicle.plateDisplay || "None"}</dd></div>
-                <div><dt className="text-slate-400">Privacy consent</dt><dd>{consent ? `Accepted (${pageData.legalVersion})` : "Not accepted"}</dd></div>
+                <div><dt className="text-slate-400">{t("name")}</dt><dd>{personal.name}</dd></div>
+                <div><dt className="text-slate-400">{t("phone")}</dt><dd>{personal.phone}</dd></div>
+                <div><dt className="text-slate-400">{t("company")}</dt><dd>{personal.company || t("notProvided")}</dd></div>
+                <div><dt className="text-slate-400">{t("id")}</dt><dd>{idProofType || t("notProvided")} {idProofNumber || idProofNumberMasked ? "·••••" : ""}</dd></div>
+                <div><dt className="text-slate-400">{t("vehicle")}</dt><dd>{vehicle.plateDisplay || t("none")}</dd></div>
+                <div><dt className="text-slate-400">{t("privacyConsent")}</dt><dd>{consent ? t("acceptedVersion", { version: pageData.legalVersion }) : t("notAccepted")}</dd></div>
               </dl>
-              <label className="sr-only" htmlFor="website">Website</label>
+              <label className="sr-only" htmlFor="website">{t("website")}</label>
               <input id="website" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} className="absolute -left-[10000px] h-px w-px" aria-hidden="true" />
             </div>
           )}
@@ -442,7 +464,7 @@ export function PreRegistrationWizard({ token }: { token: string }) {
 
           <div className="mt-6 flex justify-between gap-3">
             {stepIndex > 0 ? (
-              <button type="button" onClick={previousStep} disabled={busy} className="rounded-lg border border-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">Back</button>
+              <button type="button" onClick={previousStep} disabled={busy} className="rounded-lg border border-slate-700 px-4 py-3 text-sm font-semibold hover:bg-slate-800 disabled:opacity-50">{t("back")}</button>
             ) : <span />}
             {step === "REVIEW" ? (
               <button type="button" onClick={submit} disabled={busy} className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold hover:bg-indigo-500 disabled:opacity-50">
@@ -460,13 +482,13 @@ export function PreRegistrationWizard({ token }: { token: string }) {
                 }}
                 className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold hover:bg-indigo-500 disabled:opacity-50"
               >
-                {busy ? "Saving..." : "Save and continue"}
+                {busy ? t("saving") : t("saveContinue")}
               </button>
             )}
           </div>
         </section>
 
-        <p className="mt-4 text-center text-xs text-slate-500">Your progress is saved securely as you continue. This page is private; avoid sharing its link.</p>
+        <p className="mt-4 text-center text-xs text-slate-500">{t("progressNotice")}</p>
       </div>
     </main>
   );

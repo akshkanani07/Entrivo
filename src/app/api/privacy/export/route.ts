@@ -235,6 +235,7 @@ export async function GET(request: Request) {
         phone: visitor.phone,
         company: visitor.company,
         visitorType: visitor.visitorType?.name || "General",
+        isVip: visitor.isVip,
         idProofType: visitor.idProofType,
         consentGiven: visitor.consentGiven,
         consentVersion: visitor.consentVersion,

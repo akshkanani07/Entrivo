@@ -6,6 +6,7 @@ import { ShieldCheck, FileText, CheckCircle2, Lock, ArrowRight, LogOut } from "l
 import Link from "next/link";
 import { toast } from "sonner";
 import { clearOfflineStorage } from "@/lib/offline-db";
+import { getRoleHomeFromSession } from "@/lib/role-home";
 
 export function AcceptTermsClient({
   userName,
@@ -31,7 +32,7 @@ export function AcceptTermsClient({
         return;
       }
       toast.success("Terms accepted. Welcome to Entrivo!");
-      router.push("/");
+      router.push(await getRoleHomeFromSession());
       router.refresh();
     } catch {
       toast.error("Network error while accepting terms");

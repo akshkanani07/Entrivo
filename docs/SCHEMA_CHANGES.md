@@ -1,3 +1,19 @@
+# Entrivo Schema Changes (P11-U6 Visitor Profile)
+
+## P11-U6.2 Invitation Detail Reminder History
+
+- Added nullable `Invitation.visitorReminder24hSentAt` and `Invitation.visitorReminder1hSentAt` timestamps.
+- The reminder worker atomically claims each reminder before dispatch, preventing repeated 24-hour/1-hour reminders and exposing the queue time in invitation detail.
+- Migration: `prisma/migrations/20261124134500_p11_u6_invitation_reminders/migration.sql`.
+
+## P11-U6.1 Visitor Profile Notes and VIP Flag
+
+- Added `VisitorNote` with tenant, visitor, and optional author relations; notes are retained in the profile and removed by the existing personal-data erasure transaction.
+- Added `Visitor.isVip` with a false default.
+- Migration: `prisma/migrations/20261124131500_p11_u6_visitor_notes/migration.sql`.
+
+---
+
 # Entrivo Schema Changes (P10-H Self Check-In)
 
 ## P10-H.1 Front-Desk Check-In

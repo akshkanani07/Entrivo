@@ -2,6 +2,7 @@ import React from "react";
 import prisma from "@/lib/db";
 import { generateQRCodeDataUrl } from "@/lib/qr";
 import { formatDate } from "@/lib/utils";
+import { getTranslations } from "next-intl/server";
 import {
   ShieldCheck,
   Building2,
@@ -21,6 +22,7 @@ export default async function PublicPassPage({
 }: {
   params: Promise<{ token: string }>;
 }) {
+  const t = await getTranslations("pass");
   const { token } = await params;
 
   // Strict lookup by qrToken ONLY (no raw ID fallback)
@@ -74,26 +76,26 @@ export default async function PublicPassPage({
 
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold uppercase tracking-wider">
-              {isCancelled ? "Invitation Revoked" : isExpired ? "Pass Expired" : "Invalid Pass"}
+              {isCancelled ? t("invitationRevoked") : isExpired ? t("passExpired") : t("invalidPass")}
             </div>
             <h1 className="text-xl font-bold text-white tracking-tight">
               {isCancelled
-                ? "This Visitor Pass Has Been Cancelled"
+                ? t("cancelledTitle")
                 : isExpired
-                ? "This Visitor Pass Has Expired"
-                : "Pass Not Found"}
+                ? t("expiredTitle")
+                : t("notFoundTitle")}
             </h1>
             <p className="text-xs text-slate-400 leading-relaxed">
               {isCancelled
-                ? "The workplace host or security team has cancelled this entry pass. Please contact your host to request a new invitation."
+                ? t("cancelledDescription")
                 : isExpired
-                ? "The scheduled date or validity window for this workplace pass has elapsed. Please request a new pass from your host."
-                : "The access token provided does not match any active visitor pass record."}
+                ? t("expiredDescription")
+                : t("notFoundDescription")}
             </p>
           </div>
 
           <div className="text-[11px] text-slate-500 pt-2 border-t border-slate-800/80">
-            Entrivo Zero-Trust Workplace Visitor Management
+            {t("platformName")}
           </div>
         </div>
       </div>
@@ -113,10 +115,10 @@ export default async function PublicPassPage({
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-800/40 text-indigo-300 text-xs font-semibold mb-2">
             <ShieldCheck className="w-4 h-4 text-indigo-400" />
-            Official Workplace Express Pass
+            {t("officialPass")}
           </div>
           <h1 className="text-xl font-bold text-white">{invitation.organization.name}</h1>
-          <p className="text-xs text-slate-400">Scan at Turnstile or Concierge Desk</p>
+          <p className="text-xs text-slate-400">{t("scanAt")}</p>
         </div>
 
         {/* Digital Pass Card */}
@@ -125,7 +127,7 @@ export default async function PublicPassPage({
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
-                Visitor Pass
+                {t("visitorPass")}
               </span>
               <h2 className="text-base font-bold text-white">{membership!.visitor.name}</h2>
               <p className="text-xs text-indigo-300">{membership!.visitor.company}</p>
@@ -134,13 +136,13 @@ export default async function PublicPassPage({
               className="text-[10px] font-bold px-2.5 py-1 rounded-full text-white uppercase tracking-wider"
               style={{ backgroundColor: membership!.visitor.visitorType?.badgeColor || "#6366f1" }}
             >
-              {membership!.visitor.visitorType?.name || "GUEST"}
+              {membership!.visitor.visitorType?.name || t("guest")}
             </span>
           </div>
 
           {/* QR Code Presentation Box */}
           <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner">
-            <img src={qrDataUrl} alt="Visitor QR Pass" className="w-56 h-56 object-contain" />
+            <img src={qrDataUrl} alt={t("qrAlt")} className="w-56 h-56 object-contain" />
             <span className="mt-2 text-xs font-mono font-bold text-black tracking-widest">
               {token}
             </span>
@@ -150,21 +152,21 @@ export default async function PublicPassPage({
           <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Host
+                <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> {t("host")}
               </span>
               <span className="font-semibold text-white">{invitation.hostEmployee.user.name}</span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Date
+                <Calendar className="w-3.5 h-3.5 text-indigo-400" /> {t("date")}
               </span>
               <span className="font-semibold text-white">{formatDate(invitation.scheduledDate)}</span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" /> Time Window
+                <Clock className="w-3.5 h-3.5 text-indigo-400" /> {t("timeWindow")}
               </span>
               <span className="font-mono text-cyan-400 font-semibold">
                 {invitation.startTime} - {invitation.endTime}
@@ -173,22 +175,22 @@ export default async function PublicPassPage({
 
             <div className="flex items-center justify-between">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-indigo-400" /> Room / Area
+                <Building2 className="w-3.5 h-3.5 text-indigo-400" /> {t("roomArea")}
               </span>
-              <span className="text-slate-200">{invitation.meetingRoom?.name || "Executive Suite"}</span>
+              <span className="text-slate-200">{invitation.meetingRoom?.name || t("defaultRoom")}</span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-slate-400 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-indigo-400" /> Facility
+                <MapPin className="w-3.5 h-3.5 text-indigo-400" /> {t("facility")}
               </span>
               <span className="text-slate-300 truncate max-w-[190px]">
-                {invitation.organization.address || "Main Tech Campus"}
+                {invitation.organization.address || t("defaultFacility")}
               </span>
             </div>
             {parkingAssignment && (
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Parking</span>
+                <span className="text-slate-400">{t("parking")}</span>
                 <span className="font-semibold text-cyan-300">
                   {parkingAssignment.slot.lot.name} / {parkingAssignment.slot.code}
                 </span>
@@ -199,20 +201,20 @@ export default async function PublicPassPage({
           <div className="text-[11px] text-center text-slate-400 space-y-1">
             <p className="flex items-center justify-center gap-1 text-emerald-400 font-medium">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Pre-approved for fast-track entry
+              {t("fastTrack")}
             </p>
             <p className="text-slate-500">
-              Please present this pass upon entering security gates.
+              {t("presentPass")}
             </p>
           </div>
         </div>
 
         <div className="text-center text-[11px] text-slate-500 space-y-1">
-          <div>Powered by Entrivo Workplace Access Platform • Modern Touchless Entry</div>
+          <div>{t("poweredBy")}</div>
           <div className="flex justify-center gap-3 text-[10px] text-slate-400">
-            <a href="/terms" target="_blank" className="hover:text-indigo-400 underline">Terms of Service</a>
+            <a href="/terms" target="_blank" className="hover:text-indigo-400 underline">{t("terms")}</a>
             <span>•</span>
-            <a href="/privacy" target="_blank" className="hover:text-indigo-400 underline">Privacy Policy (DPDP Act 2023)</a>
+            <a href="/privacy" target="_blank" className="hover:text-indigo-400 underline">{t("privacy")}</a>
           </div>
         </div>
       </div>

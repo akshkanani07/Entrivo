@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { getRoleHomeFromSession } from "@/lib/role-home";
+import { useTranslations } from "next-intl";
 
 interface GoogleSignInButtonProps {
   onStart?: () => void;
@@ -47,6 +49,7 @@ declare global {
 }
 
 export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps) {
+  const t = useTranslations("auth");
   const router = useRouter();
   const btnContainerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
@@ -72,9 +75,9 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
     toast.error(message);
   };
 
-  const completeSignIn = () => {
-    toast.success("Google authentication successful!");
-    router.push("/");
+  const completeSignIn = async () => {
+    toast.success(t("google.authSuccess"));
+    router.push(await getRoleHomeFromSession());
     router.refresh();
   };
 
@@ -90,7 +93,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Google authentication failed");
+        throw new Error(data.error || t("google.authFailed"));
       }
 
       if (data.needsOnboarding && data.onboardingToken) {
@@ -104,13 +107,13 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       }
       if (data.requires2FA && data.challengeToken) {
         setChallengeToken(data.challengeToken);
-        toast.info("Enter your authenticator or backup code to continue.");
+        toast.info(t("google.enterAuthenticator"));
         return;
       }
 
-      completeSignIn();
+      await completeSignIn();
     } catch (error: unknown) {
-      showError(error, "Google authentication failed");
+      showError(error, t("google.authFailed"));
     } finally {
       setLoading(false);
     }
@@ -139,11 +142,11 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Google signup failed");
+        throw new Error(data.error || t("google.signupFailed"));
       }
-      completeSignIn();
+      await completeSignIn();
     } catch (error: unknown) {
-      showError(error, "Google signup failed");
+      showError(error, t("google.signupFailed"));
     } finally {
       setLoading(false);
     }
@@ -163,11 +166,11 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Two-factor verification failed");
+        throw new Error(data.error || t("google.twoFactorFailed"));
       }
-      completeSignIn();
+      await completeSignIn();
     } catch (error: unknown) {
-      showError(error, "Two-factor verification failed");
+      showError(error, t("google.twoFactorFailed"));
     } finally {
       setLoading(false);
     }
@@ -219,14 +222,14 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       {!onboarding && !challengeToken && (
         <div className="mb-5 flex w-full items-center gap-3 text-[11px] font-medium text-slate-500">
           <span className="h-px flex-1 bg-white/[0.09]" />
-          <span>or continue with</span>
+          <span>{t("google.orContinueWith")}</span>
           <span className="h-px flex-1 bg-white/[0.09]" />
         </div>
       )}
       {loading && (
         <div className="flex items-center gap-2 text-xs text-indigo-400 py-2">
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Verifying Google Identity...</span>
+          <span>{t("google.verifyingIdentity")}</span>
         </div>
       )}
       {!onboarding && !challengeToken && (
@@ -244,10 +247,10 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
 
       {onboarding && (
         <form onSubmit={handleOnboardingSubmit} className="w-full mt-4 space-y-3">
-          <p className="text-sm font-semibold text-white">Set up your Entrivo workplace</p>
+          <p className="text-sm font-semibold text-white">{t("google.setupWorkplace")}</p>
           <p className="text-xs text-slate-400">{onboarding.email}</p>
           <label className="block text-xs text-slate-300">
-            Company / organization name
+            {t("register.companyName")}
             <input
               required
               minLength={2}
@@ -257,7 +260,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
             />
           </label>
           <label className="block text-xs text-slate-300">
-            Full name
+            {t("google.fullName")}
             <input
               required
               minLength={2}
@@ -267,7 +270,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
             />
           </label>
           <label className="block text-xs text-slate-300">
-            Phone
+            {t("register.contactPhone")}
             <input
               required
               minLength={7}
@@ -286,15 +289,15 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
               className="mt-0.5 accent-indigo-500"
             />
             <span>
-              I agree to the{" "}
+              {t("google.agreePrefix")}{" "}
               <Link href="/terms" target="_blank" className="text-indigo-400 hover:underline">
-                Terms of Service
+                {t("termsOfService")}
               </Link>{" "}
-              and{" "}
+              {t("and")}{" "}
               <Link href="/privacy" target="_blank" className="text-indigo-400 hover:underline">
-                Privacy Policy
+                {t("privacyPolicy")}
               </Link>
-              .
+              {t("period")}
             </span>
           </label>
           <button
@@ -302,7 +305,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
             disabled={loading || !agreeTerms}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Create workplace
+            {t("google.createWorkplace")}
           </button>
         </form>
       )}
@@ -310,7 +313,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
       {challengeToken && (
         <form onSubmit={handleTwoFactorSubmit} className="w-full mt-4 space-y-3">
           <label className="block text-xs text-slate-300">
-            Authenticator or backup code
+            {t("google.authenticatorCode")}
             <input
               required
               value={twoFactorCode}
@@ -324,7 +327,7 @@ export function GoogleSignInButton({ onStart, onError }: GoogleSignInButtonProps
             disabled={loading}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Verify and sign in
+            {t("google.verifySignIn")}
           </button>
         </form>
       )}

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Printer, Download, ShieldCheck, Building2, Calendar, UserCheck } from "lucide-react";
 import { generateQRCodeDataUrl } from "@/lib/qr-client";
+import { useTranslations } from "next-intl";
 
 export interface BadgeData {
   badgeNumber: string;
@@ -19,6 +20,7 @@ export interface BadgeData {
 }
 
 export function BadgeCard({ data }: { data: BadgeData }) {
+  const t = useTranslations("checkin");
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
 
   useEffect(() => {
@@ -45,14 +47,14 @@ export function BadgeCard({ data }: { data: BadgeData }) {
             </div>
             <div>
               <h4 className="text-xs font-bold tracking-wider uppercase text-white print:text-black">ENTRIVO</h4>
-              <p className="text-[10px] text-slate-400 print:text-slate-600 font-medium">VISITOR ACCESS</p>
+              <p className="text-[10px] text-slate-400 print:text-slate-600 font-medium">{t("visitorAccess")}</p>
             </div>
           </div>
           <div
             className="text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white"
             style={{ backgroundColor: data?.badgeColor || "#4f46e5" }}
           >
-            {data?.visitorTypeName || "GUEST"}
+            {data?.visitorTypeName || t("guest")}
           </div>
         </div>
 
@@ -60,7 +62,7 @@ export function BadgeCard({ data }: { data: BadgeData }) {
         <div className="flex gap-4 items-center mb-4">
           <div className="w-20 h-20 rounded-xl overflow-hidden bg-slate-800 border-2 border-slate-700 flex-shrink-0 shadow-md">
             {data?.photoUrl ? (
-              <img src={data.photoUrl} alt={data?.visitorName || "Visitor"} className="w-full h-full object-cover" />
+              <img src={data.photoUrl} alt={data?.visitorName || t("visitor")} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-indigo-950/60 text-indigo-300 font-bold text-xl">
                 {(data?.visitorName || "V").charAt(0)}
@@ -68,12 +70,12 @@ export function BadgeCard({ data }: { data: BadgeData }) {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-white print:text-black truncate">{data?.visitorName || "Guest"}</h3>
+            <h3 className="text-base font-bold text-white print:text-black truncate">{data?.visitorName || t("guest")}</h3>
             <p className="text-xs text-indigo-300 print:text-indigo-800 font-medium truncate">
-              {data?.visitorCompany || "Independent"}
+              {data?.visitorCompany || t("independent")}
             </p>
             <div className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono bg-slate-800/80 print:bg-slate-200 px-2 py-0.5 rounded border border-slate-700 print:border-slate-300">
-              <span className="text-slate-400 print:text-slate-600">ID:</span>
+              <span className="text-slate-400 print:text-slate-600">{t("idLabel")}</span>
               <span className="font-bold text-indigo-400 print:text-black">{data?.badgeNumber || "BADGE"}</span>
             </div>
           </div>
@@ -83,27 +85,27 @@ export function BadgeCard({ data }: { data: BadgeData }) {
         <div className="bg-slate-950/70 print:bg-slate-100 rounded-xl p-3 border border-slate-800/80 print:border-slate-300 mb-4 text-xs space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
-              <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> Host
+              <UserCheck className="w-3.5 h-3.5 text-indigo-400" /> {t("host")}
             </span>
             <span className="font-semibold text-white print:text-black truncate max-w-[170px]">{data?.hostName || "Host"}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
-              <Building2 className="w-3.5 h-3.5 text-indigo-400" /> Office / Area
+              <Building2 className="w-3.5 h-3.5 text-indigo-400" /> {t("officeArea")}
             </span>
             <span className="font-medium text-slate-300 print:text-slate-800 truncate max-w-[170px]">
-              {data?.hostOffice || "Campus Suite"}
+              {data?.hostOffice || t("campusSuite")}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-400 print:text-slate-600 flex items-center gap-1 text-[11px]">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" /> Date
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" /> {t("date")}
             </span>
-            <span className="text-slate-300 print:text-slate-800 font-mono text-[11px]">{data?.issueDate || "Today"}</span>
+            <span className="text-slate-300 print:text-slate-800 font-mono text-[11px]">{data?.issueDate || t("today")}</span>
           </div>
           {data?.parkingSlot && (
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 print:text-slate-600 text-[11px]">Parking slot</span>
+              <span className="text-slate-400 print:text-slate-600 text-[11px]">{t("parkingSlot")}</span>
               <span className="font-semibold text-cyan-300 print:text-cyan-800">{data.parkingSlot}</span>
             </div>
           )}
@@ -113,16 +115,16 @@ export function BadgeCard({ data }: { data: BadgeData }) {
         <div className="flex items-center justify-between pt-1">
           <div className="text-[10px] text-slate-400 print:text-slate-600 space-y-0.5">
             <div className="flex items-center gap-1 text-emerald-400 font-semibold print:text-emerald-700">
-              <ShieldCheck className="w-3.5 h-3.5" /> Security Verified
+              <ShieldCheck className="w-3.5 h-3.5" /> {t("securityVerified")}
             </div>
-            <div>Wear badge at all times.</div>
-            <div>Return to desk at checkout.</div>
+            <div>{t("wearBadge")}</div>
+            <div>{t("returnBadge")}</div>
           </div>
           <div className="w-16 h-16 bg-white p-1 rounded-lg border border-slate-300 shadow-sm flex items-center justify-center">
             {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="Badge QR" className="w-full h-full" />
+              <img src={qrCodeUrl} alt={t("badgeQrAlt")} className="w-full h-full" />
             ) : (
-              <div className="text-[8px] text-black font-mono">LOADING</div>
+              <div className="text-[8px] text-black font-mono">{t("loading")}</div>
             )}
           </div>
         </div>
@@ -135,7 +137,7 @@ export function BadgeCard({ data }: { data: BadgeData }) {
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-glow transition-all"
         >
           <Printer className="w-4 h-4" />
-          Print Badge Pass
+          {t("printBadge")}
         </button>
       </div>
     </div>

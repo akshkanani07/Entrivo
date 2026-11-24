@@ -15,6 +15,7 @@ import { dispatchWebhookEvent } from "@/services/webhooks/webhook.service";
 import { syncInvitationCalendar } from "@/services/calendar/calendar.service";
 import { createPreRegistrationCredential } from "@/services/preregistration/preregistration.service";
 import { preRegistrationTokenFingerprint } from "@/lib/preregistration";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const createInvitationSchema = z.object({
   visitorName: requiredString("Visitor name is required"),
@@ -33,9 +34,24 @@ const createInvitationSchema = z.object({
 
 const patchInvitationSchema = z.object({
   id: requiredString("Invitation ID is required"),
-  scheduledDate: optionalString(),
-  startTime: optionalString(),
-  endTime: optionalString(),
+  scheduledDate: z.preprocess(
+    (value) => (value === null || value === "" ? undefined : value),
+    z.string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Scheduled date must be a valid calendar date.")
+      .refine((value) => {
+        const parsed = new Date(`${value}T00:00:00.000Z`);
+        return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+      }, "Scheduled date must be a valid calendar date.")
+      .optional()
+  ),
+  startTime: z.preprocess(
+    (value) => (value === null || value === "" ? undefined : value),
+    z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Start time must use HH:MM.").optional()
+  ),
+  endTime: z.preprocess(
+    (value) => (value === null || value === "" ? undefined : value),
+    z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "End time must use HH:MM.").optional()
+  ),
   purpose: optionalString(),
   status: z.preprocess(
     (v) => (v === null || v === undefined || v === "" ? undefined : String(v).trim().toUpperCase()),
@@ -446,6 +462,13 @@ export async function PATCH(request: Request) {
 
     const orgId = orgCheck.organizationId;
     const user = auth.user;
+    const rateLimit = checkRateLimit(`invitation-update:${user.id}`, {
+      maxRequests: 30,
+      windowMs: 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ success: false, error: "Too many invitation updates. Try again shortly." }, { status: 429 });
+    }
 
     const body = await request.json().catch(() => null);
     const parsed = patchInvitationSchema.safeParse(body);
@@ -467,6 +490,11 @@ export async function PATCH(request: Request) {
     if (!existing) {
       return NextResponse.json({ success: false, error: "Invitation not found in organization." }, { status: 404 });
     }
+    const nextStartTime = startTime || existing.startTime;
+    const nextEndTime = endTime || existing.endTime;
+    if (nextEndTime <= nextStartTime) {
+      return NextResponse.json({ success: false, error: "End time must be later than start time." }, { status: 400 });
+    }
 
     // Role check: Employees can only reschedule or cancel their own invitations
     if (user.role === "EMPLOYEE" && existing.hostEmployeeId !== user.employeeId) {
@@ -485,7 +513,8 @@ export async function PATCH(request: Request) {
 
     const isReschedule = Boolean(
       (scheduledDate && new Date(scheduledDate).getTime() !== new Date(existing.scheduledDate).getTime()) ||
-      (startTime && startTime !== existing.startTime)
+      (startTime && startTime !== existing.startTime) ||
+      (endTime && endTime !== existing.endTime)
     );
     const isCancelled = status === "CANCELLED" && existing.status !== "CANCELLED";
 
@@ -495,6 +524,7 @@ export async function PATCH(request: Request) {
         ...(scheduledDate ? { scheduledDate: new Date(scheduledDate) } : {}),
         ...(startTime ? { startTime } : {}),
         ...(endTime ? { endTime } : {}),
+        ...(isReschedule ? { visitorReminder24hSentAt: null, visitorReminder1hSentAt: null } : {}),
         ...(purpose ? { purpose: purpose.trim() } : {}),
         ...(status ? { status } : {}),
         ...(meetingRoomId !== undefined ? { meetingRoomId } : {}),
@@ -588,13 +618,40 @@ export async function DELETE(request: Request) {
 
     const orgId = orgCheck.organizationId;
     const user = auth.user;
+    const rateLimit = checkRateLimit(`invitation-cancel:${user.id}`, {
+      maxRequests: 10,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json({ success: false, error: "Too many cancellation requests. Try again later." }, { status: 429 });
+    }
 
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    const reasonParam = searchParams.get("reason");
-    if (!id) {
-      return NextResponse.json({ success: false, error: "Invitation ID is required" }, { status: 400 });
+    const parsedQuery = z.object({
+      id: requiredString("Invitation ID is required"),
+      reason: z.preprocess(
+        (value) => (value === null || value === "" ? undefined : value),
+        z.string().trim().max(500).optional()
+      ),
+    }).superRefine((value, context) => {
+      if (value.reason && value.reason.replace(/\D/g, "").length >= 8) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["reason"],
+          message: "Do not include full ID or phone numbers in the cancellation reason.",
+        });
+      }
+    }).safeParse({
+      id: searchParams.get("id"),
+      reason: searchParams.get("reason"),
+    });
+    if (!parsedQuery.success) {
+      return NextResponse.json(
+        { success: false, error: parsedQuery.error.issues[0]?.message || "Invalid cancellation request." },
+        { status: 400 }
+      );
     }
+    const { id, reason: reasonParam } = parsedQuery.data;
 
     const existing = await prisma.invitation.findFirst({
       where: { id, organizationId: orgId },
@@ -613,7 +670,7 @@ export async function DELETE(request: Request) {
     }
 
     // Cancel invitation
-    const cancelled = await prisma.invitation.update({
+    await prisma.invitation.update({
       where: { id },
       data: { status: "CANCELLED" },
     });
@@ -645,7 +702,7 @@ export async function DELETE(request: Request) {
       action: "INVITATION_CANCEL",
       entity: "INVITATION",
       entityId: existing.id,
-      details: { visitorName: existing.visitor.name, reason: reasonParam || "Cancelled by host" },
+      details: { reason: reasonParam || "Cancelled by host" },
     }).catch(console.error);
 
     return NextResponse.json({ success: true, message: "Invitation cancelled successfully" });

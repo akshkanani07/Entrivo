@@ -75,6 +75,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
 
   const dispatches: Promise<unknown>[] = [];
   const visitorLinkEvents = new Set<string>([
+    NotificationEvent.VISITOR_INVITED,
     NotificationEvent.PREREG_REQUESTED,
     NotificationEvent.PREREG_REMINDER,
     NotificationEvent.PREREG_REJECTED,

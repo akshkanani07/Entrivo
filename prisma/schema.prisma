@@ -51,6 +51,7 @@ model Organization {
   settings               Setting[]
   users                  User[]
   visitors               Visitor[]
+  visitorNotes           VisitorNote[]
   vehicles               Vehicle[]
   parkingLots            ParkingLot[]
   parkingAssignments     ParkingAssignment[]
@@ -140,6 +141,7 @@ model User {
   phone                    String?
   lastLoginProvider        LoginProvider            @default(PASSWORD)
   role                     UserRole                 @default(EMPLOYEE)
+  locale                   String?
   isTwoFactorEnabled       Boolean                  @default(false)
   twoFactorSecret          String?
   twoFactorBackupCodes     String?
@@ -158,6 +160,7 @@ model User {
   createdAt                DateTime                 @default(now())
   updatedAt                DateTime                 @updatedAt
   auditLogs                AuditLog[]
+  visitorNotes             VisitorNote[]
   calendarConnections      CalendarConnection[]
   employee                 Employee?
   notifications            Notification[]
@@ -297,6 +300,7 @@ model Visitor {
   idProofNumberMasked String?
   idProofUrl          String?
   isBlacklisted       Boolean             @default(false)
+  isVip               Boolean             @default(false)
   isRegularVendor     Boolean             @default(false)
   blacklistReason     String?
   consentGiven        Boolean             @default(true)
@@ -307,6 +311,7 @@ model Visitor {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   badges              Badge[]
+  notes               VisitorNote[]
   checkIns            CheckIn[]
   documents           Document[]
   invitations         Invitation[]
@@ -325,6 +330,22 @@ model Visitor {
   @@index([organizationId])
 }
 
+model VisitorNote {
+  id             String       @id @default(cuid())
+  organizationId String
+  visitorId      String
+  authorUserId   String?
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  visitor        Visitor      @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  author         User?        @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, visitorId, createdAt])
+  @@index([authorUserId])
+}
+
 model Invitation {
   id                 String              @id @default(cuid())
   organizationId     String
@@ -334,6 +355,8 @@ model Invitation {
   scheduledDate      DateTime
   startTime          String              @default("10:00")
   endTime            String              @default("11:00")
+  visitorReminder24hSentAt DateTime?
+  visitorReminder1hSentAt  DateTime?
   purpose            String
   notes              String?
   status             InvitationStatus    @default(PENDING)

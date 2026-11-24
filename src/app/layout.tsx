@@ -1,9 +1,32 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Toaster } from "sonner";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
+import { Inter, Noto_Sans_Devanagari, Noto_Sans_Gujarati } from "next/font/google";
 import { ServiceWorkerRegistrar } from "@/components/notifications/ServiceWorkerRegistrar";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { OfflineBanner } from "@/components/pwa/OfflineBanner";
+import { THEME_COOKIE_NAME } from "@/lib/theme";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const notoSansGujarati = Noto_Sans_Gujarati({
+  subsets: ["gujarati"],
+  variable: "--font-noto-sans-gujarati",
+  display: "swap",
+});
+
+const notoSansDevanagari = Noto_Sans_Devanagari({
+  subsets: ["devanagari"],
+  variable: "--font-noto-sans-devanagari",
+  display: "swap",
+});
 
 export const viewport: Viewport = {
   themeColor: "#4f46e5",
@@ -32,19 +55,46 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#080c14] text-slate-100 antialiased selection:bg-indigo-600 selection:text-white">
-        <ServiceWorkerRegistrar />
-        <OfflineBanner />
-        <PwaInstallPrompt />
-        {children}
-        <Toaster richColors position="top-right" theme="dark" closeButton />
+    <html lang={locale} data-theme="dark" suppressHydrationWarning>
+      <head>
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  const getPreference = () => {
+    const savedTheme = document.cookie.match(/(?:^|;\\s*)${THEME_COOKIE_NAME}=(system|light|dark)(?:;|$)/);
+    return savedTheme ? savedTheme[1] : "dark";
+  };
+  const colorScheme = window.matchMedia("(prefers-color-scheme: light)");
+  const applyTheme = () => {
+    const preference = getPreference();
+    const theme = preference === "system" ? (colorScheme.matches ? "light" : "dark") : preference;
+    document.documentElement.dataset.theme = theme;
+  };
+  applyTheme();
+  colorScheme.addEventListener("change", applyTheme);
+})();`,
+          }}
+        />
+      </head>
+      <body className={`${inter.variable} ${notoSansGujarati.variable} ${notoSansDevanagari.variable} min-h-screen bg-background text-text antialiased selection:bg-brand selection:text-white`}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ServiceWorkerRegistrar />
+          <OfflineBanner />
+          <PwaInstallPrompt />
+          {children}
+          <Toaster richColors position="top-right" theme="dark" closeButton />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

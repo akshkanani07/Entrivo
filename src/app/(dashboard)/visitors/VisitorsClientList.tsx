@@ -38,6 +38,7 @@ interface VisitorItem {
   idProofType?: string | null;
   idProofNumber?: string | null;
   isBlacklisted: boolean;
+  isVip: boolean;
   isRegularVendor: boolean;
   blacklistReason?: string | null;
   typeName: string;
@@ -319,7 +320,14 @@ export function VisitorsClientList({
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-white text-xs">{v.name}</span>
+                            <Link href={`/visitors/${v.id}`} className="font-bold text-white text-xs hover:text-indigo-300">
+                              {v.name}
+                            </Link>
+                            {v.isVip && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
+                                VIP
+                              </span>
+                            )}
                             {v.isBlacklisted && (
                               <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-950 text-rose-400 border border-rose-800">
                                 Watchlisted

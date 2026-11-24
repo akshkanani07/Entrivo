@@ -48,6 +48,8 @@ export async function checkUpcomingVisitReminders(): Promise<{
   const invitations24h = await prisma.invitation.findMany({
     where: {
       status: "APPROVED",
+      deletedAt: null,
+      visitorReminder24hSentAt: null,
       scheduledDate: { gte: window24hStart, lte: window24hEnd },
       visitor: { email: { not: "" } },
     },
@@ -64,30 +66,49 @@ export async function checkUpcomingVisitReminders(): Promise<{
     if (!inv.visitor.email) continue;
     const location = inv.meetingRoom?.name || inv.hostEmployee.office?.name || inv.organization.name;
     const dateFormatted = formatDate(inv.scheduledDate);
-
-    await notify(NotificationEvent.VISITOR_REMINDER, {
-      organizationId: inv.organizationId,
-      visitorName: inv.visitor.name,
-      visitorEmail: inv.visitor.email,
-      visitorCompany: inv.visitor.company || undefined,
-      hostName: inv.hostEmployee.user.name,
-      hostEmail: inv.hostEmployee.user.email,
-      hostUserId: inv.hostEmployee.userId,
-      date: dateFormatted,
-      time: `${inv.startTime || ""} - ${inv.endTime || ""}`,
-      location,
-      qrPassUrl: inv.passUrl || `${appUrl}/pass/${inv.qrToken}`,
-      reminderType: "24H",
-      entityId: `rem24-${inv.id}`,
-    }).catch(console.error);
-
-    reminded24h++;
+    const sentAt = new Date();
+    const claimed = await prisma.invitation.updateMany({
+      where: {
+        id: inv.id,
+        organizationId: inv.organizationId,
+        status: "APPROVED",
+        deletedAt: null,
+        visitorReminder24hSentAt: null,
+      },
+      data: { visitorReminder24hSentAt: sentAt },
+    });
+    if (claimed.count !== 1) continue;
+    try {
+      await notify(NotificationEvent.VISITOR_REMINDER, {
+        organizationId: inv.organizationId,
+        visitorName: inv.visitor.name,
+        visitorEmail: inv.visitor.email,
+        visitorCompany: inv.visitor.company || undefined,
+        hostName: inv.hostEmployee.user.name,
+        hostEmail: inv.hostEmployee.user.email,
+        hostUserId: inv.hostEmployee.userId,
+        date: dateFormatted,
+        time: `${inv.startTime || ""} - ${inv.endTime || ""}`,
+        location,
+        qrPassUrl: inv.passUrl || `${appUrl}/pass/${inv.qrToken}`,
+        reminderType: "24H",
+      });
+      reminded24h++;
+    } catch (error) {
+      await prisma.invitation.updateMany({
+        where: { id: inv.id, organizationId: inv.organizationId, visitorReminder24hSentAt: sentAt },
+        data: { visitorReminder24hSentAt: null },
+      });
+      throw error;
+    }
   }
 
   // Process 1-Hour Reminders
   const invitations1h = await prisma.invitation.findMany({
     where: {
       status: "APPROVED",
+      deletedAt: null,
+      visitorReminder1hSentAt: null,
       scheduledDate: { gte: window1hStart, lte: window1hEnd },
       visitor: { email: { not: "" } },
     },
@@ -104,24 +125,41 @@ export async function checkUpcomingVisitReminders(): Promise<{
     if (!inv.visitor.email) continue;
     const location = inv.meetingRoom?.name || inv.hostEmployee.office?.name || inv.organization.name;
     const dateFormatted = formatDate(inv.scheduledDate);
-
-    await notify(NotificationEvent.VISITOR_REMINDER, {
-      organizationId: inv.organizationId,
-      visitorName: inv.visitor.name,
-      visitorEmail: inv.visitor.email,
-      visitorCompany: inv.visitor.company || undefined,
-      hostName: inv.hostEmployee.user.name,
-      hostEmail: inv.hostEmployee.user.email,
-      hostUserId: inv.hostEmployee.userId,
-      date: dateFormatted,
-      time: `${inv.startTime || ""} - ${inv.endTime || ""}`,
-      location,
-      qrPassUrl: inv.passUrl || `${appUrl}/pass/${inv.qrToken}`,
-      reminderType: "1H",
-      entityId: `rem1-${inv.id}`,
-    }).catch(console.error);
-
-    reminded1h++;
+    const sentAt = new Date();
+    const claimed = await prisma.invitation.updateMany({
+      where: {
+        id: inv.id,
+        organizationId: inv.organizationId,
+        status: "APPROVED",
+        deletedAt: null,
+        visitorReminder1hSentAt: null,
+      },
+      data: { visitorReminder1hSentAt: sentAt },
+    });
+    if (claimed.count !== 1) continue;
+    try {
+      await notify(NotificationEvent.VISITOR_REMINDER, {
+        organizationId: inv.organizationId,
+        visitorName: inv.visitor.name,
+        visitorEmail: inv.visitor.email,
+        visitorCompany: inv.visitor.company || undefined,
+        hostName: inv.hostEmployee.user.name,
+        hostEmail: inv.hostEmployee.user.email,
+        hostUserId: inv.hostEmployee.userId,
+        date: dateFormatted,
+        time: `${inv.startTime || ""} - ${inv.endTime || ""}`,
+        location,
+        qrPassUrl: inv.passUrl || `${appUrl}/pass/${inv.qrToken}`,
+        reminderType: "1H",
+      });
+      reminded1h++;
+    } catch (error) {
+      await prisma.invitation.updateMany({
+        where: { id: inv.id, organizationId: inv.organizationId, visitorReminder1hSentAt: sentAt },
+        data: { visitorReminder1hSentAt: null },
+      });
+      throw error;
+    }
   }
 
   async function sendPreRegistrationReminders(

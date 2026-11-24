@@ -3,9 +3,38 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { requireOrg } from "@/lib/tenant";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { z } from "zod";
+
+const dateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  });
+const dashboardStatsQuerySchema = z.object({
+  branchId: z.string().trim().min(1).max(64).optional(),
+  range: z.enum(["today", "7d", "30d", "custom"]).default("7d"),
+  startDate: dateSchema.optional(),
+  endDate: dateSchema.optional(),
+}).superRefine((value, context) => {
+  if (value.range === "custom" && (!value.startDate || !value.endDate)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Custom ranges require a start and end date." });
+  }
+  if (value.startDate && value.endDate && value.startDate > value.endDate) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "Start date must be before end date." });
+  }
+  if (value.range === "custom" && value.startDate && value.endDate) {
+    const days = (Date.parse(value.endDate) - Date.parse(value.startDate)) / (24 * 60 * 60 * 1000);
+    if (days > 59) {
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "Custom ranges cannot exceed 60 days." });
+    }
+  }
+});
 
 interface CacheEntry {
-  data: any;
+  data: unknown;
   expiresAt: number;
 }
 
@@ -22,11 +51,35 @@ export async function GET(request: Request) {
     const organizationId = org.organizationId;
     const user = auth.user;
 
-    const { searchParams } = new URL(request.url);
-    const branchId = searchParams.get("branchId") || undefined;
-    const range = searchParams.get("range") || "7d"; // "today", "7d", "30d", "custom"
-    const startDateParam = searchParams.get("startDate");
-    const endDateParam = searchParams.get("endDate");
+    const requestUrl = new URL(request.url);
+    const parsedFilters = dashboardStatsQuerySchema.safeParse({
+      branchId: requestUrl.searchParams.get("branchId") || undefined,
+      range: requestUrl.searchParams.get("range") || undefined,
+      startDate: requestUrl.searchParams.get("startDate") || undefined,
+      endDate: requestUrl.searchParams.get("endDate") || undefined,
+    });
+    if (!parsedFilters.success) {
+      return NextResponse.json({ success: false, error: "Invalid dashboard filters." }, { status: 400 });
+    }
+
+    const { branchId, range, startDate: startDateParam, endDate: endDateParam } = parsedFilters.data;
+    const limit = checkRateLimit(`dashboard-stats:${user.id}`, {
+      maxRequests: 60,
+      windowMs: 60 * 1000,
+    });
+    if (!limit.allowed) {
+      return NextResponse.json({ success: false, error: "Too many dashboard requests." }, { status: 429 });
+    }
+
+    if (branchId) {
+      const branch = await prisma.branch.findFirst({
+        where: { id: branchId, organizationId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!branch) {
+        return NextResponse.json({ success: false, error: "Branch not found." }, { status: 404 });
+      }
+    }
 
     // Employee scoping: If EMPLOYEE, restrict to their hosted visits
     const isEmployee = user.role === "EMPLOYEE";
@@ -88,12 +141,11 @@ export async function GET(request: Request) {
       upcomingNext3h,
       overstaying,
       checkedOutToday,
-      contractorDocumentsExpiring30d,
     ] = await Promise.all([
       // Card 1: Checked-in now
       prisma.checkIn.count({
         where: {
-          status: "CHECKED_IN",
+          status: { in: ["CHECKED_IN", "OVERSTAYED"] },
           visitor: { organizationId },
           ...branchFilter,
           ...employeeCheckInFilter,
@@ -171,20 +223,6 @@ export async function GET(request: Request) {
           },
         },
       }),
-      prisma.document.count({
-        where: {
-          organizationId,
-          deletedAt: null,
-          OR: [
-            { contractorCompanyId: { not: null } },
-            { contractorWorkerId: { not: null } },
-          ],
-          expiryDate: {
-            gte: now,
-            lte: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
     ]);
 
     // Total Today's visitors = checked in today + scheduled invitations today
@@ -199,15 +237,18 @@ export async function GET(request: Request) {
     else if (range === "custom" && startDateParam && endDateParam) {
       const s = new Date(startDateParam);
       const e = new Date(endDateParam);
-      numDays = Math.max(1, Math.min(60, Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
+      numDays = Math.max(1, Math.min(60, Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1));
     }
 
     // Chart 1: Daily Visitors Time Series (real data only)
     const dailyVisitors = [];
     const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const chartEnd = range === "custom" && endDateParam
+      ? new Date(`${endDateParam}T12:00:00`)
+      : now;
 
     for (let i = numDays - 1; i >= 0; i--) {
-      const d = new Date();
+      const d = new Date(chartEnd);
       d.setDate(d.getDate() - i);
       const dStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
       const dEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
@@ -371,6 +412,84 @@ export async function GET(request: Request) {
       visitorCount: h._count.checkInsHosted,
     }));
 
+    const yesterdayStart = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayEnd = new Date(startOfToday.getTime() - 1);
+    const sameTimeYesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [
+      yesterdayCheckIns,
+      yesterdayInvitations,
+      onSiteAtSameTimeYesterday,
+      pendingApprovalsCreatedToday,
+      pendingApprovalsCreatedYesterday,
+      overstaysExpectedToday,
+      overstaysExpectedYesterday,
+    ] = await Promise.all([
+      prisma.checkIn.count({
+        where: {
+          checkInTime: { gte: yesterdayStart, lte: yesterdayEnd },
+          visitor: { organizationId },
+          ...branchFilter,
+          ...employeeCheckInFilter,
+        },
+      }),
+      prisma.invitation.count({
+        where: {
+          scheduledDate: { gte: yesterdayStart, lte: yesterdayEnd },
+          organizationId,
+          ...(branchId ? { hostEmployee: { office: { branchId } } } : {}),
+          ...employeeInvitationFilter,
+        },
+      }),
+      prisma.checkIn.count({
+        where: {
+          visitor: { organizationId },
+          checkInTime: { lte: sameTimeYesterday },
+          ...branchFilter,
+          ...employeeCheckInFilter,
+          OR: [
+            { status: "CHECKED_IN" },
+            { status: "OVERSTAYED" },
+            {
+              status: "CHECKED_OUT",
+              checkOut: { is: { checkOutTime: { gt: sameTimeYesterday } } },
+            },
+          ],
+        },
+      }),
+      prisma.approval.count({
+        where: {
+          status: "PENDING",
+          createdAt: { gte: startOfToday, lte: now },
+          invitation: { organizationId, ...branchFilter, ...employeeInvitationFilter },
+        },
+      }),
+      prisma.approval.count({
+        where: {
+          status: "PENDING",
+          createdAt: { gte: yesterdayStart, lte: yesterdayEnd },
+          invitation: { organizationId, ...branchFilter, ...employeeInvitationFilter },
+        },
+      }),
+      prisma.checkIn.count({
+        where: {
+          visitor: { organizationId },
+          status: "OVERSTAYED",
+          expectedCheckout: { gte: startOfToday, lte: now },
+          ...branchFilter,
+          ...employeeCheckInFilter,
+        },
+      }),
+      prisma.checkIn.count({
+        where: {
+          visitor: { organizationId },
+          status: "OVERSTAYED",
+          expectedCheckout: { gte: yesterdayStart, lte: yesterdayEnd },
+          ...branchFilter,
+          ...employeeCheckInFilter,
+        },
+      }),
+    ]);
+
     const responseData = {
       cards: {
         todayVisitors,
@@ -379,6 +498,12 @@ export async function GET(request: Request) {
         upcomingNext3h,
         overstaying,
         checkedOutToday,
+        deltas: {
+          todayVisitors: todayVisitors - (yesterdayCheckIns + yesterdayInvitations),
+          checkedInNow: checkedInNow - onSiteAtSameTimeYesterday,
+          pendingApprovals: pendingApprovalsCreatedToday - pendingApprovalsCreatedYesterday,
+          overstaying: overstaysExpectedToday - overstaysExpectedYesterday,
+        },
       },
       charts: {
         dailyVisitors,
@@ -407,10 +532,13 @@ export async function GET(request: Request) {
       success: true,
       data: responseData,
     });
-  } catch (error: any) {
-    console.error("Dashboard Stats error:", error);
+  } catch (error: unknown) {
+    console.error(
+      "Dashboard Stats error:",
+      error instanceof Error ? error.name : "UnknownError"
+    );
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load dashboard statistics" },
+      { success: false, error: "Failed to load dashboard statistics" },
       { status: 500 }
     );
   }

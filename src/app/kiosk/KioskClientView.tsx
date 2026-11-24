@@ -21,6 +21,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { CameraCapture } from "@/components/visitor/CameraCapture";
 import { SignatureCanvas } from "@/components/visitor/SignatureCanvas";
 import { BadgeCard, BadgeData } from "@/components/visitor/BadgeCard";
@@ -59,6 +60,7 @@ export function KioskClientView({
   policy?: OrgPolicy;
 }) {
   const router = useRouter();
+  const t = useTranslations("kiosk");
   const [step, setStep] = useState<"WELCOME" | "QR_CHECKIN" | "WALKIN_INFO" | "WALKIN_PHOTO" | "WALKIN_NDA" | "SUCCESS">("WELCOME");
   const [qrInput, setQrInput] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
@@ -144,8 +146,8 @@ export function KioskClientView({
           setIssuedBadge({
             badgeNumber: "PASS-OFFLINE",
             visitorName: localVisitor.visitorName,
-            visitorCompany: localVisitor.company || "Guest",
-            visitorTypeName: "Visitor",
+            visitorCompany: localVisitor.company || t("guest"),
+            visitorTypeName: t("visitor"),
             badgeColor: "#6366f1",
             hostName: localVisitor.hostName,
             issueDate: formatDateTime(new Date()),
@@ -153,14 +155,14 @@ export function KioskClientView({
           });
 
           setStep("SUCCESS");
-          toast.info("Offline check-in queued. Badge issued and will sync once reconnected.");
+          toast.info(t("offlineCheckinQueued"));
           return;
         } else {
-          setQrError("Pass token not found in offline directory. Please check network connection or see reception.");
+          setQrError(t("offlinePassNotFound"));
           return;
         }
       } catch (err: any) {
-        setQrError(err?.message || "Offline verification failed.");
+        setQrError(err?.message || t("offlineVerificationFailed"));
         return;
       } finally {
         setQrLoading(false);
@@ -176,14 +178,14 @@ export function KioskClientView({
       });
 
       if (verifyRes.status === 401) {
-        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        toast.error(t("sessionExpired"));
         router.push("/kiosk/pair");
         return;
       }
 
       const verifyData = await verifyRes.json();
       if (!verifyRes.ok) {
-        throw new Error(verifyData.error || "Invalid invitation QR pass");
+        throw new Error(verifyData.error || t("invalidPass"));
       }
 
       // 2. Perform Checkin via kiosk-scoped endpoint
@@ -198,17 +200,17 @@ export function KioskClientView({
       });
 
       if (checkinRes.status === 401) {
-        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        toast.error(t("sessionExpired"));
         router.push("/kiosk/pair");
         return;
       }
 
       const checkinData = await checkinRes.json();
       if (!checkinRes.ok) {
-        throw new Error(checkinData.error || "Failed to check in");
+        throw new Error(checkinData.error || t("checkinFailed"));
       }
       if (verifyData.data.isPreRegistered) {
-        toast.info("Pre-registered visitor details verified for fast-lane check-in.");
+        toast.info(t("preregisteredVerified"));
       }
       if (checkinData.warnings?.length) toast.warning(checkinData.warnings.join(" "));
 
@@ -218,16 +220,16 @@ export function KioskClientView({
 
       const item = checkinData?.data || checkinData?.checkIn;
       if (!item) {
-        throw new Error(checkinData?.error || "Check-in failed to return confirmation");
+        throw new Error(checkinData?.error || t("checkinConfirmationMissing"));
       }
       setIssuedBadge({
         badgeNumber: item?.badgeNumber || "BADGE",
-        visitorName: item?.visitorName || item?.visitor?.name || "Guest",
-        visitorCompany: item?.visitorCompany || item?.visitor?.company || "Visitor",
-        visitorTypeName: "Visitor",
+        visitorName: item?.visitorName || item?.visitor?.name || t("guest"),
+        visitorCompany: item?.visitorCompany || item?.visitor?.company || t("visitor"),
+        visitorTypeName: t("visitor"),
         badgeColor: "#6366f1",
-        hostName: item?.hostName || item?.hostEmployee?.user?.name || "Host",
-        hostOffice: item?.hostOffice || "Main Office",
+        hostName: item?.hostName || item?.hostEmployee?.user?.name || t("host"),
+        hostOffice: item?.hostOffice || t("mainOffice"),
         photoUrl: item?.photoUrl || null,
         issueDate: formatDateTime(item?.checkInTime || new Date()),
         token: item?.badgeNumber || item?.id || "BADGE",
@@ -251,19 +253,19 @@ export function KioskClientView({
           setIssuedBadge({
             badgeNumber: "PASS-OFFLINE",
             visitorName: localVisitor.visitorName,
-            visitorCompany: localVisitor.company || "Guest",
-            visitorTypeName: "Visitor",
+            visitorCompany: localVisitor.company || t("guest"),
+            visitorTypeName: t("visitor"),
             badgeColor: "#6366f1",
             hostName: localVisitor.hostName,
             issueDate: formatDateTime(new Date()),
             token: localVisitor.qrToken,
           });
           setStep("SUCCESS");
-          toast.info("Network dropped: Check-in saved offline. Will sync once reconnected.");
+          toast.info(t("networkDroppedCheckin"));
           return;
         }
       }
-      setQrError(err.message || "Failed to verify or check in pass");
+      setQrError(err.message || t("passCheckinFailed"));
     } finally {
       setQrLoading(false);
     }
@@ -271,7 +273,7 @@ export function KioskClientView({
 
   const handleWalkinComplete = async () => {
     if (!consentChecked) {
-      toast.error("Please review and agree to the Workplace Privacy & Consent Policy");
+      toast.error(t("consentRequired"));
       return;
     }
 
@@ -305,21 +307,21 @@ export function KioskClientView({
         setIssuedBadge({
           badgeNumber: "WALKIN-OFFLINE",
           visitorName: name.trim(),
-          visitorCompany: company.trim() || "Guest",
-          visitorTypeName: "Visitor",
+          visitorCompany: company.trim() || t("guest"),
+          visitorTypeName: t("visitor"),
           badgeColor: "#6366f1",
-          hostName: selectedHost?.user?.name || "Host",
-          hostOffice: selectedHost?.office?.name || "Main Reception",
+          hostName: selectedHost?.user?.name || t("host"),
+          hostOffice: selectedHost?.office?.name || t("mainReception"),
           photoUrl: photoUrl || null,
           issueDate: formatDateTime(new Date()),
           token: "WALKIN-OFFLINE",
         });
 
         setStep("SUCCESS");
-        toast.info("Offline walk-in registration queued. Badge issued and will sync once reconnected.");
+        toast.info(t("offlineWalkinQueued"));
         return;
       } catch (err: any) {
-        toast.error(err.message || "Failed to save offline walk-in");
+        toast.error(err.message || t("offlineWalkinFailed"));
         return;
       } finally {
         setSubmitting(false);
@@ -345,14 +347,14 @@ export function KioskClientView({
       });
 
       if (res.status === 401) {
-        toast.error("Kiosk session expired or revoked. Redirecting to pairing...");
+        toast.error(t("sessionExpired"));
         router.push("/kiosk/pair");
         return;
       }
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Check-in failed");
+        throw new Error(data.error || t("checkinFailed"));
       }
 
       try {
@@ -361,16 +363,16 @@ export function KioskClientView({
 
       const item = data?.data || data?.checkIn;
       if (!item) {
-        throw new Error(data?.error || "Walk-in registration did not return confirmation");
+        throw new Error(data?.error || t("walkinConfirmationMissing"));
       }
       setIssuedBadge({
         badgeNumber: item?.badgeNumber || "BADGE",
-        visitorName: item?.visitorName || item?.visitor?.name || "Guest",
-        visitorCompany: item?.visitorCompany || item?.visitor?.company || "Visitor",
-        visitorTypeName: "Visitor",
+        visitorName: item?.visitorName || item?.visitor?.name || t("guest"),
+        visitorCompany: item?.visitorCompany || item?.visitor?.company || t("visitor"),
+        visitorTypeName: t("visitor"),
         badgeColor: "#6366f1",
-        hostName: item?.hostName || item?.hostEmployee?.user?.name || "Host",
-        hostOffice: item?.hostOffice || "Main Office",
+        hostName: item?.hostName || item?.hostEmployee?.user?.name || t("host"),
+        hostOffice: item?.hostOffice || t("mainOffice"),
         photoUrl: item?.photoUrl || null,
         issueDate: formatDateTime(item?.checkInTime || new Date()),
         token: item?.badgeNumber || item?.id || "BADGE",
@@ -400,17 +402,17 @@ export function KioskClientView({
         setIssuedBadge({
           badgeNumber: "WALKIN-OFFLINE",
           visitorName: name.trim(),
-          visitorCompany: company.trim() || "Guest",
-          visitorTypeName: "Visitor",
+          visitorCompany: company.trim() || t("guest"),
+          visitorTypeName: t("visitor"),
           badgeColor: "#6366f1",
-          hostName: selectedHost?.user?.name || "Host",
-          hostOffice: selectedHost?.office?.name || "Main Reception",
+          hostName: selectedHost?.user?.name || t("host"),
+          hostOffice: selectedHost?.office?.name || t("mainReception"),
           photoUrl: photoUrl || null,
           issueDate: formatDateTime(new Date()),
           token: "WALKIN-OFFLINE",
         });
         setStep("SUCCESS");
-        toast.info("Network dropped: Walk-in saved offline and will sync once reconnected.");
+        toast.info(t("networkDroppedWalkin"));
         return;
       }
       toast.error(err.message || "Check-in failed");
@@ -436,7 +438,7 @@ export function KioskClientView({
                 </span>
               )}
             </div>
-            <p className="text-xs text-indigo-300 font-medium">Welcome to Our Modern Workplace</p>
+            <p className="text-xs text-indigo-300 font-medium">{t("welcomeTagline")}</p>
           </div>
         </div>
 
@@ -444,12 +446,12 @@ export function KioskClientView({
           {!isOnline ? (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[11px]">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span>OFFLINE STANDALONE</span>
+              <span>{t("offlineStatus")}</span>
             </div>
           ) : (
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono text-[11px]">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>LIVE CONNECTED</span>
+              <span>{t("onlineStatus")}</span>
             </div>
           )}
 
@@ -459,7 +461,7 @@ export function KioskClientView({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-semibold"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Start Over
+              {t("startOver")}
             </button>
           )}
         </div>
@@ -470,13 +472,13 @@ export function KioskClientView({
         <div className="py-12 space-y-10 text-center">
           <div>
             <span className="text-xs font-bold text-indigo-400 bg-indigo-950/80 px-3 py-1 rounded-full border border-indigo-800/40 uppercase tracking-widest">
-              LOBBY SELF CHECK-IN KIOSK
+              {t("lobbyKiosk")}
             </span>
             <h2 className="text-3xl md:text-5xl font-black text-white mt-4 tracking-tight">
-              Please Select Check-In Option
+              {t("selectCheckinOption")}
             </h2>
             <p className="text-slate-400 text-sm mt-2 max-w-lg mx-auto">
-              Fast, touchless entry. If you received an invitation on email or phone, scan your QR pass.
+              {t("welcomeDescription")}
             </p>
           </div>
 
@@ -491,14 +493,14 @@ export function KioskClientView({
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
-                  I Have a QR Pass
+                  {t("haveQrPass")}
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Fast-track touchless check-in for pre-registered guests with invitation codes.
+                  {t("qrPassDescription")}
                 </p>
               </div>
               <div className="mt-6 flex items-center gap-2 text-xs font-bold text-indigo-400">
-                <span>Scan & Print Badge</span>
+                <span>{t("scanPrintBadge")}</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </button>
@@ -510,9 +512,9 @@ export function KioskClientView({
                   <UserPlus className="w-8 h-8" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-slate-400">Walk-Ins Disabled</h3>
+                  <h3 className="text-xl font-bold text-slate-400">{t("walkinsDisabled")}</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Unscheduled walk-in registrations are disabled by workplace policy. Please report to security or reception.
+                    {t("walkinsDisabledDescription")}
                   </p>
                 </div>
               </div>
@@ -526,14 +528,14 @@ export function KioskClientView({
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    I am a Walk-In Visitor
+                    {t("walkinVisitor")}
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    First-time guest registration, meeting host selection, and digital pass generation.
+                    {t("walkinDescription")}
                   </p>
                 </div>
                 <div className="mt-6 flex items-center gap-2 text-xs font-bold text-cyan-400">
-                  <span>Register Entry</span>
+                  <span>{t("registerEntry")}</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </button>
@@ -546,21 +548,21 @@ export function KioskClientView({
       {step === "QR_CHECKIN" && (
         <div className="max-w-md mx-auto py-8 space-y-6">
           <div className="text-center space-y-2">
-            <h2 className="text-2xl font-bold text-white">Present Your QR Pass</h2>
+            <h2 className="text-2xl font-bold text-white">{t("presentQrPass")}</h2>
             <p className="text-xs text-slate-400">
-              Hold your mobile QR code up or enter your invitation token below.
+              {t("qrPassInstructions")}
             </p>
           </div>
 
           <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
             <div className="w-full h-36 rounded-xl bg-slate-950 border border-indigo-500/40 flex flex-col items-center justify-center">
               <QrCode className="w-12 h-12 text-indigo-400 animate-pulse mb-2" />
-              <span className="text-xs font-mono text-slate-400">TOUCHSCREEN READY</span>
+              <span className="text-xs font-mono text-slate-400">{t("touchscreenReady")}</span>
             </div>
 
             <div>
               <span className="text-[11px] font-semibold text-slate-400 block mb-1.5">
-                Quick Test Token Sample:
+                {t("quickTestToken")}
               </span>
               <button
                 type="button"
@@ -570,14 +572,14 @@ export function KioskClientView({
                 }}
                 className="w-full text-left px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 hover:border-indigo-500 text-xs text-indigo-300 transition-colors"
               >
-                ENTRIVO-INV-APEX-101 (Rajesh Sharma)
+                {t("sampleToken")}
               </button>
             </div>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Type code (e.g. ENTRIVO-INV-APEX-101)..."
+                placeholder={t("tokenPlaceholder")}
                 value={qrInput}
                 onChange={(e) => setQrInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleQRVerify()}
@@ -588,7 +590,7 @@ export function KioskClientView({
                 disabled={qrLoading || !qrInput}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
               >
-                {qrLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Check In"}
+                {qrLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : t("verifyCheckin")}
               </button>
             </div>
 
@@ -605,7 +607,7 @@ export function KioskClientView({
               className="text-xs text-slate-400 hover:text-white inline-flex items-center gap-1"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Options
+              {t("backToOptions")}
             </button>
           </div>
         </div>
@@ -616,18 +618,18 @@ export function KioskClientView({
         <div className="max-w-lg mx-auto py-6 space-y-5">
           <div className="text-center">
             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-              Step 1 of 3
+              {t("stepOf", { step: 1, total: 3 })}
             </span>
-            <h2 className="text-2xl font-bold text-white mt-1">Visitor Details</h2>
+            <h2 className="text-2xl font-bold text-white mt-1">{t("visitorDetails")}</h2>
           </div>
 
           <div className="glass-card rounded-2xl border border-slate-800 p-6 space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Your Full Name *</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">{t("fullNameRequired")}</label>
               <input
                 type="text"
                 required
-                placeholder="e.g. Rahul Gupta"
+                placeholder={t("namePlaceholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
@@ -635,11 +637,11 @@ export function KioskClientView({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Mobile Phone *</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">{t("mobilePhoneRequired")}</label>
               <input
                 type="tel"
                 required
-                placeholder="+91 98765 00000"
+                placeholder={t("phonePlaceholder")}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
@@ -648,11 +650,11 @@ export function KioskClientView({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Your Company Name {policy?.requireCompany ? "*" : ""}
+                {t("companyName")}{policy?.requireCompany ? " *" : ""}
               </label>
               <input
                 type="text"
-                placeholder="Company / Client Name"
+                placeholder={t("companyPlaceholder")}
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
@@ -661,7 +663,7 @@ export function KioskClientView({
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Select Host Employee You Are Visiting *
+                {t("selectHostRequired")}
               </label>
               <select
                 value={hostId}
@@ -670,7 +672,7 @@ export function KioskClientView({
               >
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
-                    {emp.user.name} ({emp.department?.name || "General"})
+                    {emp.user.name} ({emp.department?.name || t("general")})
                   </option>
                 ))}
               </select>
@@ -679,18 +681,18 @@ export function KioskClientView({
             <button
               onClick={() => {
                 if (!name || !phone) {
-                  toast.error("Please enter both your name and phone number");
+                  toast.error(t("namePhoneRequired"));
                   return;
                 }
                 if (policy?.requireCompany && !company.trim()) {
-                  toast.error("Company / organization is required by workplace policy");
+                  toast.error(t("companyRequired"));
                   return;
                 }
                 setStep("WALKIN_PHOTO");
               }}
               className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-glow-sm"
             >
-              Next: Photo Verification
+              {t("nextPhoto")}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -702,10 +704,10 @@ export function KioskClientView({
         <div className="max-w-md mx-auto py-6 space-y-5 text-center">
           <div>
             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-              Step 2 of 3
+              {t("stepOf", { step: 2, total: 3 })}
             </span>
-            <h2 className="text-2xl font-bold text-white mt-1">Visitor Photo Snapshot</h2>
-            <p className="text-xs text-slate-400">Used for your printed badge identification</p>
+            <h2 className="text-2xl font-bold text-white mt-1">{t("visitorPhoto")}</h2>
+            <p className="text-xs text-slate-400">{t("photoUsage")}</p>
           </div>
 
           <div className="glass-card rounded-2xl border border-slate-800 p-6 flex flex-col items-center">
@@ -720,13 +722,13 @@ export function KioskClientView({
                 onClick={() => setStep("WALKIN_INFO")}
                 className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold transition-colors"
               >
-                Back
+                {t("back")}
               </button>
               <button
                 onClick={() => setStep("WALKIN_NDA")}
                 className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-glow-sm transition-all flex items-center justify-center gap-1.5"
               >
-                <span>Next: Sign Agreement</span>
+                <span>{t("nextAgreement")}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -739,15 +741,15 @@ export function KioskClientView({
         <div className="max-w-lg mx-auto py-6 space-y-5">
           <div className="text-center">
             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">
-              Step 3 of 3
+              {t("stepOf", { step: 3, total: 3 })}
             </span>
-            <h2 className="text-2xl font-bold text-white mt-1">Workplace Policy & Signature</h2>
-            <p className="text-xs text-slate-400">Please review policies and provide your signature</p>
+            <h2 className="text-2xl font-bold text-white mt-1">{t("policySignature")}</h2>
+            <p className="text-xs text-slate-400">{t("reviewPolicy")}</p>
           </div>
 
           <div className="glass-card rounded-2xl border border-slate-800 p-6 space-y-4">
             <div className="p-3 rounded-xl bg-slate-950 text-slate-300 text-[11px] leading-relaxed max-h-28 overflow-y-auto border border-slate-800">
-              I certify that I will wear my visitor badge visibly at all times, follow workplace security protocols, remain in authorized areas with my host, and return this pass at departure.
+              {t("badgePolicy")}
             </div>
 
             <SignatureCanvas onSave={(url) => setSignatureUrl(url)} />
@@ -761,13 +763,13 @@ export function KioskClientView({
                 className="mt-0.5 rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
               />
               <span className="text-[11px] leading-relaxed text-slate-400">
-                I agree to the collection and processing of my name, photo (retained for {policy?.retentionPhotosDays ?? 90} days), and digital signature (retained for {policy?.retentionSignaturesDays ?? 180} days) under the{" "}
+                {t("consentText", { photoDays: policy?.retentionPhotosDays ?? 90, signatureDays: policy?.retentionSignaturesDays ?? 180 })}{" "}
                 <a href="/privacy" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">
-                  DPDP Act 2023 & Privacy Policy ({policy?.privacyPolicyNoticeVersion ?? "v1.0"})
+                  {t("privacyPolicyVersion", { version: policy?.privacyPolicyNoticeVersion ?? "v1.0" })}
                 </a>{" "}
-                and accept the workplace{" "}
+                {t("andAccept")}{" "}
                 <a href="/terms" target="_blank" className="text-indigo-400 underline hover:text-indigo-300 font-medium">
-                  Terms of Service
+                  {t("termsOfService")}
                 </a>.
               </span>
             </label>
@@ -777,14 +779,14 @@ export function KioskClientView({
                 onClick={() => setStep("WALKIN_PHOTO")}
                 className="flex-1 py-2.5 bg-slate-900 text-slate-300 rounded-xl text-xs font-semibold"
               >
-                Back
+                {t("back")}
               </button>
               <button
                 onClick={handleWalkinComplete}
                 disabled={submitting}
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-glow-emerald flex items-center justify-center gap-1.5"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Complete & Print Badge"}
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("completePrint")}
               </button>
             </div>
           </div>
@@ -798,24 +800,24 @@ export function KioskClientView({
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-white">Check-in Complete! Welcome!</h2>
+            <h2 className="text-2xl font-black text-white">{t("checkinComplete")}</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Badge issued for <strong className="text-white">{issuedBadge.visitorName}</strong>. Your host has been notified of your arrival.
+              {t("badgeIssued", { name: issuedBadge.visitorName })}
             </p>
           </div>
 
           <BadgeCard data={issuedBadge} />
 
           <p className="text-xs text-slate-500">
-            This kiosk will automatically return to the welcome screen in 15 seconds.
+            {t("kioskResetNotice")}
           </p>
         </div>
       )}
 
       {/* Bottom Footer */}
       <div className="pt-6 border-t border-indigo-950/60 text-center text-xs text-slate-500 flex items-center justify-between">
-        <span>Concierge Help Desk: Press assistance button if needed</span>
-        <span className="font-mono text-[11px] text-indigo-400">Entrivo Touchless Access</span>
+        <span>{t("helpDesk")}</span>
+        <span className="font-mono text-[11px] text-indigo-400">{t("brand")}</span>
       </div>
     </div>
   );

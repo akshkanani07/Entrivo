@@ -9,6 +9,9 @@ export interface CurrentUser {
   avatar?: string | null;
   organizationId?: string | null;
   organizationName?: string | null;
+  timeZone?: string | null;
+  locale?: string | null;
+  organizationLocale?: string | null;
   employeeId?: string | null;
   employeeCode?: string | null;
   designation?: string | null;

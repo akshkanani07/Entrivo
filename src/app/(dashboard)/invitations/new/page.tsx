@@ -3,12 +3,22 @@ import prisma from "@/lib/db";
 import { requirePagePermission } from "@/lib/rbac";
 import { getOrgPolicy } from "@/lib/settings-registry";
 import { NewInvitationForm } from "./NewInvitationForm";
+import { z } from "zod";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewInvitationPage() {
+export default async function NewInvitationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ visitorId?: string | string[] }>;
+}) {
   const user = await requirePagePermission("invitations.create");
   const orgId = user.organizationId;
+  const params = await searchParams;
+  const rawVisitorId = Array.isArray(params.visitorId) ? params.visitorId[0] : params.visitorId;
+  const visitorId = rawVisitorId === undefined ? undefined : z.string().trim().min(1).max(100).safeParse(rawVisitorId);
+  if (visitorId && !visitorId.success) notFound();
 
   if (!orgId) {
     return (
@@ -18,7 +28,7 @@ export default async function NewInvitationPage() {
     );
   }
 
-  const [{ policy }, employees, rooms, visitorTypes] = await Promise.all([
+  const [{ policy }, employees, rooms, visitorTypes, visitor] = await Promise.all([
     getOrgPolicy(orgId),
     prisma.employee.findMany({
       where: { organizationId: orgId },
@@ -33,6 +43,12 @@ export default async function NewInvitationPage() {
       where: { organizationId: orgId },
       orderBy: { createdAt: "asc" },
     }),
+    visitorId?.success
+      ? prisma.visitor.findFirst({
+          where: { id: visitorId.data, organizationId: orgId, deletedAt: null },
+          select: { name: true, email: true, phone: true, company: true, visitorTypeId: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -52,6 +68,7 @@ export default async function NewInvitationPage() {
         visitorTypes={visitorTypes}
         currentEmployeeId={user?.employeeId || employees[0]?.id}
         policy={policy}
+        initialVisitor={visitor}
       />
     </div>
   );

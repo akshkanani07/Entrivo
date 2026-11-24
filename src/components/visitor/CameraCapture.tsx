@@ -16,6 +16,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface CameraCaptureProps {
   onCapture: (imageDataUrl: string) => void;
@@ -27,32 +28,32 @@ interface CameraCaptureProps {
 const PRESET_PORTRAITS = [
   {
     id: "p1",
-    label: "Corporate Executive",
+    labelKey: "portraitExecutive",
     url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "p2",
-    label: "Tech Lead",
+    labelKey: "portraitTechLead",
     url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "p3",
-    label: "Product Specialist",
+    labelKey: "portraitProductSpecialist",
     url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "p4",
-    label: "Operations Lead",
+    labelKey: "portraitOperationsLead",
     url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "p5",
-    label: "Enterprise Guest",
+    labelKey: "portraitEnterpriseGuest",
     url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80",
   },
   {
     id: "p6",
-    label: "Consultant",
+    labelKey: "portraitConsultant",
     url: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=400&q=80",
   },
 ];
@@ -63,6 +64,15 @@ export function CameraCapture({
   initialImage,
   autoStart = true,
 }: CameraCaptureProps) {
+  const t = useTranslations("checkin");
+  const portraitLabels: Record<string, string> = {
+    p1: t("portraitExecutive"),
+    p2: t("portraitTechLead"),
+    p3: t("portraitProductSpecialist"),
+    p4: t("portraitOperationsLead"),
+    p5: t("portraitEnterpriseGuest"),
+    p6: t("portraitConsultant"),
+  };
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +125,7 @@ export function CameraCapture({
     setCameraError(null);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera API is not supported in this browser environment.");
+        throw new Error(t("cameraUnsupported"));
       }
 
       // Stop any existing stream
@@ -144,13 +154,13 @@ export function CameraCapture({
       }
     } catch (err: any) {
       console.warn("Camera access error:", err);
-      let errorMsg = "Unable to access camera.";
+      let errorMsg = t("cameraUnavailable");
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        errorMsg = "Camera permission was denied. Please allow camera access in your browser address bar.";
+        errorMsg = t("cameraPermissionDenied");
       } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        errorMsg = "No webcam detected on this device. You can upload a photo or choose a preset portrait below.";
+        errorMsg = t("cameraNotFound");
       } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-        errorMsg = "Camera is currently used by another application (e.g. Zoom or Teams).";
+        errorMsg = t("cameraInUse");
       }
       setCameraError(errorMsg);
       setIsCameraActive(false);
@@ -223,7 +233,7 @@ export function CameraCapture({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setCameraError("Please select a valid image file (JPEG, PNG, WebP).");
+      setCameraError(t("invalidImageFile"));
       return;
     }
 
@@ -263,7 +273,7 @@ export function CameraCapture({
             }`}
           >
             <Camera className="w-3.5 h-3.5" />
-            Live Camera
+            {t("liveCamera")}
           </button>
           <button
             type="button"
@@ -278,7 +288,7 @@ export function CameraCapture({
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
-            Upload File
+            {t("uploadFile")}
           </button>
           <button
             type="button"
@@ -293,7 +303,7 @@ export function CameraCapture({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Portraits
+            {t("portraits")}
           </button>
         </div>
       )}
@@ -310,13 +320,13 @@ export function CameraCapture({
           <div className="relative w-full h-full">
             <img
               src={capturedImage}
-              alt="Visitor Portrait"
+              alt={t("visitorPortrait")}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
             <div className="absolute top-3 left-3 bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 backdrop-blur-md shadow-lg">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              Photo Verified
+              {t("photoVerified")}
             </div>
           </div>
         ) : activeTab === "CAMERA" ? (
@@ -337,7 +347,7 @@ export function CameraCapture({
             {isStartingCamera && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/90 z-20">
                 <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-                <span className="text-xs text-slate-300 font-medium">Initializing Camera...</span>
+                <span className="text-xs text-slate-300 font-medium">{t("initializingCamera")}</span>
               </div>
             )}
 
@@ -348,9 +358,9 @@ export function CameraCapture({
                   <Camera className="w-7 h-7" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">Camera Access Required</h4>
+                  <h4 className="text-xs font-bold text-white">{t("cameraAccessRequired")}</h4>
                   <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">
-                    Click below to enable your camera for badge photo identification.
+                    {t("cameraEnableDescription")}
                   </p>
                 </div>
                 <button
@@ -358,7 +368,7 @@ export function CameraCapture({
                   onClick={() => startCamera()}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-glow-sm"
                 >
-                  Enable Camera
+                  {t("enableCamera")}
                 </button>
               </div>
             )}
@@ -369,7 +379,7 @@ export function CameraCapture({
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
                   <div className="w-44 h-56 rounded-[50%] border-2 border-dashed border-indigo-400/50 shadow-[0_0_20px_rgba(99,102,241,0.25)] flex items-center justify-center">
                     <span className="text-[10px] font-semibold text-indigo-300/80 bg-slate-950/70 px-2 py-0.5 rounded-full backdrop-blur-sm -translate-y-24">
-                      Align Face Here
+                      {t("alignFace")}
                     </span>
                   </div>
                 </div>
@@ -379,7 +389,7 @@ export function CameraCapture({
                   type="button"
                   onClick={toggleCameraFacing}
                   className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-slate-900/80 hover:bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center backdrop-blur-md transition-colors"
-                  title="Switch Camera (Front / Back)"
+                  title={t("switchCamera")}
                 >
                   <SwitchCamera className="w-4 h-4" />
                 </button>
@@ -411,8 +421,8 @@ export function CameraCapture({
             <div className="w-14 h-14 rounded-2xl bg-indigo-950/80 border border-indigo-700/50 flex items-center justify-center text-indigo-400 mb-3 group-hover:scale-105 transition-transform">
               <Upload className="w-7 h-7" />
             </div>
-            <h4 className="text-xs font-bold text-white">Click to Upload Photo</h4>
-            <p className="text-[11px] text-slate-400 mt-1">JPEG, PNG or WebP image from your device</p>
+            <h4 className="text-xs font-bold text-white">{t("uploadPhoto")}</h4>
+            <p className="text-[11px] text-slate-400 mt-1">{t("supportedImageTypes")}</p>
           </div>
         ) : (
           /* 4. Preset Portraits Mode */
@@ -423,16 +433,16 @@ export function CameraCapture({
                 type="button"
                 onClick={() => handleSelectPreset(preset.url)}
                 className="group relative rounded-xl overflow-hidden aspect-square border border-slate-800 hover:border-indigo-500 transition-all hover:scale-105"
-                title={preset.label}
+                title={portraitLabels[preset.id]}
               >
                 <img
                   src={preset.url}
-                  alt={preset.label}
+                  alt={portraitLabels[preset.id]}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors" />
                 <span className="absolute bottom-1 left-1 right-1 text-[8px] font-bold text-white bg-slate-950/80 rounded py-0.5 px-1 truncate text-center">
-                  {preset.label}
+                  {portraitLabels[preset.id]}
                 </span>
               </button>
             ))}
@@ -454,7 +464,7 @@ export function CameraCapture({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Retake / Change Photo
+              {t("retakePhoto")}
             </button>
           </div>
         ) : activeTab === "CAMERA" && isCameraActive ? (
@@ -466,7 +476,7 @@ export function CameraCapture({
               className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-950/50"
             >
               <Check className="w-4 h-4" />
-              Snap Photo Now
+              {t("snapPhoto")}
             </button>
 
             <button
@@ -474,10 +484,10 @@ export function CameraCapture({
               onClick={() => setCountdown(3)}
               disabled={countdown !== null}
               className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-glow-sm disabled:opacity-50"
-              title="3-Second Timer with Countdown"
+              title={t("timerTitle")}
             >
               <Timer className="w-3.5 h-3.5" />
-              3s Timer
+              {t("timerLabel")}
             </button>
 
             <button
@@ -486,7 +496,7 @@ export function CameraCapture({
               className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 text-xs font-medium transition-colors"
             >
               <X className="w-3.5 h-3.5" />
-              Cancel
+              {t("cancel")}
             </button>
           </div>
         ) : null}
@@ -497,7 +507,7 @@ export function CameraCapture({
         <div className="mt-3 p-3 bg-amber-950/70 border border-amber-600/40 text-amber-200 text-xs rounded-xl max-w-sm flex items-start gap-2 text-left">
           <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-semibold text-white">Camera Notice</p>
+            <p className="font-semibold text-white">{t("cameraNotice")}</p>
             <p className="text-[11px] text-amber-300/90 leading-relaxed">{cameraError}</p>
             <div className="pt-1 flex gap-2">
               <button
@@ -508,7 +518,7 @@ export function CameraCapture({
                 }}
                 className="text-[11px] underline text-cyan-300 font-bold"
               >
-                Upload Photo File
+                {t("uploadPhotoFile")}
               </button>
               <span className="text-slate-500">•</span>
               <button
@@ -519,7 +529,7 @@ export function CameraCapture({
                 }}
                 className="text-[11px] underline text-cyan-300 font-bold"
               >
-                Select Preset Portrait
+                {t("selectPresetPortrait")}
               </button>
             </div>
           </div>

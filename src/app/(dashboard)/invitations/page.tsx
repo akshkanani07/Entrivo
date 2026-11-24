@@ -1,8 +1,9 @@
 import React from "react";
 import prisma from "@/lib/db";
 import { can, requireAnyPagePermission } from "@/lib/rbac";
+import { Prisma } from "@prisma/client";
 import Link from "next/link";
-import { MailCheck, Plus, Search, Calendar, Clock, QrCode, ExternalLink, User, ClipboardCheck } from "lucide-react";
+import { Plus, ClipboardCheck } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function InvitationsPage() {
     );
   }
 
-  const where: any = { organizationId: orgId };
+  const where: Prisma.InvitationWhereInput = { organizationId: orgId };
   if (user.role === "EMPLOYEE" && user.employeeId) {
     where.hostEmployeeId = user.employeeId;
   }
@@ -91,8 +92,8 @@ export default async function InvitationsPage() {
                 <th className="py-3 px-4">Meeting Room</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Pre-registration</th>
-                <th className="py-3 px-4">QR Token</th>
-                <th className="py-3 px-4 text-right">Pass Link</th>
+                <th className="py-3 px-4">Pass</th>
+                <th className="py-3 px-4 text-right">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
@@ -110,7 +111,12 @@ export default async function InvitationsPage() {
                     {/* Visitor */}
                     <td className="py-3.5 px-4">
                       <div>
-                        <span className="font-bold text-white block">{inv.visitor.name}</span>
+                        <Link
+                          href={`/invitations/${inv.id}`}
+                          className="block font-bold text-indigo-300 hover:text-indigo-200 hover:underline"
+                        >
+                          {inv.visitor.name}
+                        </Link>
                         <span className="text-[11px] text-slate-400">{inv.visitor.company}</span>
                         <span className="text-[10px] text-slate-500 font-mono">{inv.visitor.phone}</span>
                         {inv.visitors.length > 1 && <span className="mt-1 block text-[10px] text-indigo-300">+ {inv.visitors.length - 1} more visitors</span>}
@@ -177,20 +183,18 @@ export default async function InvitationsPage() {
                       ) : <span className="text-[10px] text-slate-500">Not linked</span>}
                     </td>
 
-                    {/* QR Token */}
-                    <td className="py-3.5 px-4 font-mono text-[11px] text-indigo-300 font-bold">
-                      {inv.qrToken}
+                    {/* Pass access is kept on the authorized invitation detail page. */}
+                    <td className="py-3.5 px-4 text-[11px] text-slate-400">
+                      Protected pass
                     </td>
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
                       <Link
-                        href={`/pass/${inv.qrToken}`}
-                        target="_blank"
+                        href={`/invitations/${inv.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold transition-colors"
                       >
-                        <span>View Pass</span>
-                        <ExternalLink className="w-3 h-3" />
+                        <span>Details</span>
                       </Link>
                       {inv.visitors.length > 1 && (
                         <Link href={`/invitations/${inv.id}/group`} className="ml-2 inline-flex items-center rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-200">

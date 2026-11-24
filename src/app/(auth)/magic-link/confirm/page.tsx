@@ -4,6 +4,7 @@ import React, { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ShieldCheck, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { getRoleHomeFromSession } from "@/lib/role-home";
 
 function MagicLinkConfirmContent() {
   const searchParams = useSearchParams();
@@ -35,7 +36,7 @@ function MagicLinkConfirmContent() {
       }
 
       toast.success("Identity verified! Welcome to Entrivo.");
-      router.push("/");
+      router.push(await getRoleHomeFromSession());
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Authentication failed";

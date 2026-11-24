@@ -73,7 +73,7 @@ export function DashboardCharts({
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-64 w-full" role="img" aria-label="Daily visitor inflow chart. Hover or touch the chart for values.">
             {dailyVisitors.length === 0 || totalVisitorsInPeriod === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
                 <BarChart2 className="w-8 h-8 mb-2 opacity-40" />
@@ -112,6 +112,7 @@ export function DashboardCharts({
                     fillOpacity={1}
                     fill="url(#colorVisitors)"
                     name="Expected / Total"
+                    isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
@@ -121,11 +122,17 @@ export function DashboardCharts({
                     fillOpacity={1}
                     fill="url(#colorChecked)"
                     name="Checked In"
+                    isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
+          <table className="sr-only">
+            <caption>Daily expected visitors and check-ins</caption>
+            <thead><tr><th>Date</th><th>Expected visitors</th><th>Checked in</th></tr></thead>
+            <tbody>{dailyVisitors.map((item) => <tr key={item.fullDate}><td>{item.fullDate}</td><td>{item.visitors}</td><td>{item.checkedIn}</td></tr>)}</tbody>
+          </table>
         </div>
 
         {/* 2. Department Breakdown (Donut Chart) */}
@@ -138,7 +145,7 @@ export function DashboardCharts({
             <p className="text-xs text-slate-400">Host workplace allocation</p>
           </div>
 
-          <div className="h-44 w-full flex items-center justify-center relative">
+          <div className="h-44 w-full flex items-center justify-center relative" role="img" aria-label="Visits by department. Touch the chart or use the data table for values.">
             {byDepartment.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
                 <PieIcon className="w-8 h-8 mb-2 opacity-40" />
@@ -154,6 +161,7 @@ export function DashboardCharts({
                       outerRadius={70}
                       paddingAngle={4}
                       dataKey="value"
+                      isAnimationActive={false}
                     >
                       {byDepartment.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -175,6 +183,11 @@ export function DashboardCharts({
                   </span>
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider">Visits</span>
                 </div>
+                <table className="sr-only">
+                  <caption>Visitor check-ins by department</caption>
+                  <thead><tr><th>Department</th><th>Visits</th></tr></thead>
+                  <tbody>{byDepartment.map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.value}</td></tr>)}</tbody>
+                </table>
               </>
             )}
           </div>
@@ -205,7 +218,7 @@ export function DashboardCharts({
             <p className="text-xs text-slate-400">Visitor type breakdown</p>
           </div>
 
-          <div className="h-40 w-full flex items-center justify-center relative">
+          <div className="h-40 w-full flex items-center justify-center relative" role="img" aria-label="Visitor type mix. Touch the chart or use the data table for values.">
             {visitorTypeMix.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
                 <Users className="w-7 h-7 mb-2 opacity-40" />
@@ -220,6 +233,7 @@ export function DashboardCharts({
                     outerRadius={65}
                     paddingAngle={3}
                     dataKey="value"
+                    isAnimationActive={false}
                   >
                     {visitorTypeMix.map((entry, index) => (
                       <Cell key={`cell-vt-${index}`} fill={entry.color} />
@@ -237,6 +251,11 @@ export function DashboardCharts({
               </ResponsiveContainer>
             )}
           </div>
+          <table className="sr-only">
+            <caption>Visitors by type</caption>
+            <thead><tr><th>Visitor type</th><th>Visitors</th></tr></thead>
+            <tbody>{visitorTypeMix.map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.value}</td></tr>)}</tbody>
+          </table>
 
           <div className="space-y-1.5 mt-3 pt-3 border-t border-slate-800/80 max-h-24 overflow-y-auto">
             {visitorTypeMix.map((vt) => (
@@ -261,7 +280,7 @@ export function DashboardCharts({
             <p className="text-xs text-slate-400">Primary reason for workplace visits</p>
           </div>
 
-          <div className="h-40 w-full">
+          <div className="h-40 w-full" role="img" aria-label="Visits by purpose. Touch the chart or use the data table for values.">
             {purposeAnalysis.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
                 <BarChart2 className="w-7 h-7 mb-2 opacity-40" />
@@ -281,11 +300,16 @@ export function DashboardCharts({
                       fontSize: "12px",
                     }}
                   />
-                  <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
+          <table className="sr-only">
+            <caption>Visitor counts by visit purpose</caption>
+            <thead><tr><th>Purpose</th><th>Visits</th></tr></thead>
+            <tbody>{purposeAnalysis.map((item) => <tr key={item.name}><td>{item.name}</td><td>{item.value}</td></tr>)}</tbody>
+          </table>
 
           <div className="mt-3 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 text-center">
             Top visit purposes across current cohort
@@ -302,7 +326,7 @@ export function DashboardCharts({
             <p className="text-xs text-slate-400">Check-in peak activity hours (08:00 - 19:00)</p>
           </div>
 
-          <div className="h-40 w-full">
+          <div className="h-40 w-full" role="img" aria-label="Hourly visitor footfall. Touch the chart or use the data table for values.">
             {hourlyFootfall.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
                 <Clock className="w-7 h-7 mb-2 opacity-40" />
@@ -322,11 +346,16 @@ export function DashboardCharts({
                       fontSize: "12px",
                     }}
                   />
-                  <Bar dataKey="count" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" fill="#06b6d4" radius={[4, 4, 0, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
+          <table className="sr-only">
+            <caption>Visitor check-ins by hour</caption>
+            <thead><tr><th>Hour</th><th>Check-ins</th></tr></thead>
+            <tbody>{hourlyFootfall.map((item) => <tr key={item.time}><td>{item.time}</td><td>{item.count}</td></tr>)}</tbody>
+          </table>
 
           <div className="mt-3 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 text-center">
             Monitored arrival spikes for staffing

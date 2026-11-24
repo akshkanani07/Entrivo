@@ -166,7 +166,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       include: {
         user: {
           include: {
-            organization: { select: { name: true, deletedAt: true } },
+            organization: { select: { name: true, timezone: true, locale: true, deletedAt: true } },
             employee: { select: { id: true, employeeCode: true, designation: true, deletedAt: true } },
           },
         },
@@ -213,6 +213,9 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       avatar: user.avatar,
       organizationId: user.organizationId,
       organizationName: user.organization?.name,
+      timeZone: user.organization?.timezone,
+      locale: user.locale,
+      organizationLocale: user.organization?.locale,
       employeeId: user.employee?.id,
       employeeCode: user.employee?.employeeCode,
       designation: user.employee?.designation,

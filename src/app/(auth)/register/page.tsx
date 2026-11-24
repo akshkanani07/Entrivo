@@ -20,8 +20,11 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { getRoleHomeFromSession } from "@/lib/role-home";
+import { useTranslations } from "next-intl";
 
 export default function RegisterPage() {
+  const t = useTranslations("auth");
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const [formData, setFormData] = useState({
@@ -39,12 +42,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.companyName || !formData.name || !formData.email || !formData.password) {
-      setError("Please fill all required fields");
+      setError(t("register.fillRequired"));
       return;
     }
 
     if (!agreeTerms) {
-      setError("You must agree to the Terms of Service and Privacy Policy to register.");
+      setError(t("register.agreeToPolicies"));
       return;
     }
 
@@ -60,13 +63,13 @@ export default function RegisterPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
+        throw new Error(data.error || t("register.failed"));
       }
 
-      router.push("/");
+      router.push(await getRoleHomeFromSession());
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "Failed to create account");
+      setError(err.message || t("register.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -81,7 +84,7 @@ export default function RegisterPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#080c14] text-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
       <aside
-        aria-label="Entrivo platform overview"
+        aria-label={t("platformOverview")}
         className="relative isolate flex min-h-[460px] flex-col overflow-hidden border-b border-white/[0.06] px-6 py-7 sm:px-10 sm:py-10 lg:min-h-screen lg:border-b-0 lg:border-r lg:border-white/[0.06] lg:px-12 lg:py-12 xl:px-16"
       >
         <div className="absolute inset-0 -z-20 bg-[radial-gradient(ellipse_at_18%_16%,rgba(79,70,229,0.28),transparent_44%),radial-gradient(ellipse_at_82%_78%,rgba(8,145,178,0.12),transparent_38%),linear-gradient(145deg,#111827_0%,#0b1020_52%,#080c14_100%)]" />
@@ -97,13 +100,13 @@ export default function RegisterPage() {
 
         <div className="my-12 max-w-xl sm:my-14 lg:my-auto lg:py-20">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200/80">
-            A better welcome starts here
+            {t("overviewTagline")}
           </p>
           <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl xl:text-5xl">
-            Visitor management, without the friction
+            {t("overviewTitle")}
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-6 text-slate-300 sm:text-base">
-            Make every arrival feel effortless while keeping your workplace secure and in control.
+            {t("overviewDescription")}
           </p>
 
           <ul className="mt-9 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
@@ -111,29 +114,29 @@ export default function RegisterPage() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/15 bg-indigo-400/10 text-indigo-200">
                 <QrCode className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Pre-registration and QR passes</span>
+              <span>{t("featurePreregistration")}</span>
             </li>
             <li className="flex items-center gap-3 text-sm text-slate-200">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/15 bg-cyan-400/10 text-cyan-200">
                 <BellRing className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Instant host notifications</span>
+              <span>{t("featureNotifications")}</span>
             </li>
             <li className="flex items-center gap-3 text-sm text-slate-200">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-300/15 bg-violet-400/10 text-violet-200">
                 <FileCheck2 className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Audit-ready security</span>
+              <span>{t("featureAuditReady")}</span>
             </li>
           </ul>
         </div>
 
         <div className="mt-auto border-t border-white/10 pt-5">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Built for trust
+            {t("trustLabel")}
           </p>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-slate-300 sm:grid-cols-4">
-            {["TLS 1.3", "Multi-tenant isolation", "2FA", "Audit logs"].map((item) => (
+            {[t("trustTls"), t("trustIsolation"), t("trustTwoFactor"), t("trustAudit")].map((item) => (
               <li key={item} className="flex items-center gap-2">
                 <Check className="h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
                 {item}
@@ -153,9 +156,9 @@ export default function RegisterPage() {
           <div className="rounded-2xl border border-white/[0.12] bg-gradient-to-br from-white/[0.08] to-white/[0.025] p-px shadow-2xl shadow-black/40">
             <div className="rounded-[15px] border border-white/[0.04] bg-[#0d1321]/95 p-5 backdrop-blur-2xl sm:p-8">
               <header className="mb-7">
-                <h2 className="text-2xl font-semibold tracking-tight text-white">Create your workplace</h2>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">{t("register.title")}</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Set up your organization and welcome visitors with confidence.
+                  {t("register.description")}
                 </p>
               </header>
 
@@ -173,7 +176,7 @@ export default function RegisterPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label htmlFor="register-company" className="mb-2 block text-sm font-medium text-slate-200">
-                    Company / organization name
+                    {t("register.companyName")}
                   </label>
                   <div className="relative">
                     <Building2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -182,7 +185,7 @@ export default function RegisterPage() {
                       type="text"
                       autoComplete="organization"
                       required
-                      placeholder="Acme Tech Global"
+                      placeholder={t("register.companyPlaceholder")}
                       value={formData.companyName}
                       onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                       aria-invalid={Boolean(error)}
@@ -195,7 +198,7 @@ export default function RegisterPage() {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-slate-200">
-                      Administrator full name
+                      {t("register.adminName")}
                     </label>
                     <div className="relative">
                       <User className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -204,7 +207,7 @@ export default function RegisterPage() {
                         type="text"
                         autoComplete="name"
                         required
-                        placeholder="John Doe"
+                        placeholder={t("register.namePlaceholder")}
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         aria-invalid={Boolean(error)}
@@ -216,7 +219,7 @@ export default function RegisterPage() {
 
                   <div>
                     <label htmlFor="register-phone" className="mb-2 block text-sm font-medium text-slate-200">
-                      Contact phone
+                      {t("register.contactPhone")}
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -224,7 +227,7 @@ export default function RegisterPage() {
                         id="register-phone"
                         type="tel"
                         autoComplete="tel"
-                        placeholder="+91 98765 43210"
+                        placeholder={t("register.phonePlaceholder")}
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         aria-invalid={Boolean(error)}
@@ -237,7 +240,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-slate-200">
-                    Work email
+                    {t("register.workEmail")}
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -246,7 +249,7 @@ export default function RegisterPage() {
                       type="email"
                       autoComplete="email"
                       required
-                      placeholder="admin@acme.com"
+                      placeholder={t("register.emailPlaceholder")}
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       aria-invalid={Boolean(error)}
@@ -258,7 +261,7 @@ export default function RegisterPage() {
 
                 <div>
                   <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-slate-200">
-                    Create secure password
+                    {t("register.createPassword")}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -267,7 +270,7 @@ export default function RegisterPage() {
                       type="password"
                       autoComplete="new-password"
                       required
-                      placeholder="Choose a strong password"
+                      placeholder={t("register.passwordPlaceholder")}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       aria-invalid={Boolean(error)}
@@ -285,23 +288,23 @@ export default function RegisterPage() {
                     className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-950 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1321]"
                   />
                   <span>
-                    I agree to the Entrivo{" "}
+                    {t("register.agreePrefix")}{" "}
                     <Link
                       href="/terms"
                       target="_blank"
                       className="text-indigo-300 hover:text-indigo-200 hover:underline"
                     >
-                      Terms of Service
+                      {t("termsOfService")}
                     </Link>{" "}
-                    and{" "}
+                    {t("and")}{" "}
                     <Link
                       href="/privacy"
                       target="_blank"
                       className="text-indigo-300 hover:text-indigo-200 hover:underline"
                     >
-                      Privacy Policy
+                      {t("privacyPolicy")}
                     </Link>
-                    .
+                    {t("period")}
                   </span>
                 </label>
 
@@ -313,11 +316,11 @@ export default function RegisterPage() {
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                      <span>Creating your workplace...</span>
+                      <span>{t("register.creating")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Complete Free Setup &amp; Launch</span>
+                      <span>{t("register.completeSetup")}</span>
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </>
                   )}
@@ -327,20 +330,20 @@ export default function RegisterPage() {
               <GoogleSignInButton onError={(msg) => setError(msg)} />
 
               <div className="mt-6 border-t border-white/[0.08] pt-5 text-center text-sm text-slate-400">
-                Already registered?{" "}
+                {t("register.alreadyRegistered")}{" "}
                 <Link
                   href="/login"
                   className="font-semibold text-indigo-300 transition-colors hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                 >
-                  Sign in
+                  {t("login.signIn")}
                 </Link>
                 <p className="mt-3 text-xs text-slate-500">
                   <Link href="/terms" className="transition-colors hover:text-slate-300 hover:underline">
-                    Terms of Service
+                    {t("termsOfService")}
                   </Link>
                   <span className="mx-2 text-slate-700">·</span>
                   <Link href="/privacy" className="transition-colors hover:text-slate-300 hover:underline">
-                    Privacy Policy
+                    {t("privacyPolicy")}
                   </Link>
                 </p>
               </div>

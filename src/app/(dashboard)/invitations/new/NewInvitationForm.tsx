@@ -30,12 +30,20 @@ export function NewInvitationForm({
   visitorTypes,
   currentEmployeeId,
   policy,
+  initialVisitor,
 }: {
   employees: EmployeeItem[];
   rooms: RoomItem[];
   visitorTypes: TypeItem[];
   currentEmployeeId?: string | null;
   policy?: OrgPolicy;
+  initialVisitor?: {
+    name: string;
+    email: string;
+    phone: string;
+    company: string | null;
+    visitorTypeId: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const todayStr = new Date().toISOString().split("T")[0];
@@ -50,11 +58,11 @@ export function NewInvitationForm({
   const isPurposeRequired = policy?.requirePurpose ?? true;
 
   const [formData, setFormData] = useState({
-    visitorName: "",
-    visitorEmail: "",
-    visitorPhone: "",
-    visitorCompany: "",
-    visitorTypeId: visitorTypes[0]?.id || "",
+    visitorName: initialVisitor?.name || "",
+    visitorEmail: initialVisitor?.email || "",
+    visitorPhone: initialVisitor?.phone || "",
+    visitorCompany: initialVisitor?.company || "",
+    visitorTypeId: initialVisitor?.visitorTypeId || visitorTypes[0]?.id || "",
     hostEmployeeId: currentEmployeeId || employees[0]?.id || "",
     scheduledDate: todayStr,
     startTime: "11:00",

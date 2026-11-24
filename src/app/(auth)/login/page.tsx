@@ -23,8 +23,12 @@ import {
 } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { toast } from "sonner";
+import { getRoleHome } from "@/lib/role-home";
+import type { UserRole } from "@/types";
+import { useTranslations } from "next-intl";
 
 export default function LoginPage() {
+  const t = useTranslations("auth");
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const [authMode, setAuthMode] = useState<"PASSWORD" | "MAGIC_LINK">("PASSWORD");
@@ -41,7 +45,7 @@ export default function LoginPage() {
   const handle2FAVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!twoFactorCode.trim()) {
-      setError("Please enter the 6-digit authenticator code or backup code");
+      setError(t("login.enterCode"));
       return;
     }
 
@@ -60,15 +64,15 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "2FA verification failed");
+        throw new Error(data.error || t("login.verificationFailed"));
       }
 
-      toast.success("Identity verified! Welcome back.");
-      router.push("/");
+      toast.success(t("login.identityVerified"));
+      router.push(getRoleHome(data.user.role as UserRole));
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "Failed to verify 2FA code");
-      toast.error(err.message || "Failed to verify 2FA code");
+      setError(err.message || t("login.verificationFailed"));
+      toast.error(err.message || t("login.verificationFailed"));
     } finally {
       setLoading(false);
     }
@@ -80,7 +84,7 @@ export default function LoginPage() {
       return handle2FAVerify(e);
     }
     if (!email) {
-      setError("Please enter your work email address");
+      setError(t("login.enterWorkEmail"));
       return;
     }
 
@@ -94,12 +98,12 @@ export default function LoginPage() {
           body: JSON.stringify({ email }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to send magic link");
+        if (!res.ok) throw new Error(data.error || t("login.magicLinkFailed"));
         setMagicSent(true);
-        toast.success("Magic sign-in link dispatched to your inbox!");
+        toast.success(t("login.magicLinkSent"));
       } catch (err: any) {
-        setError(err.message || "Failed to send magic link");
-        toast.error(err.message || "Failed to send magic link");
+        setError(err.message || t("login.magicLinkFailed"));
+        toast.error(err.message || t("login.magicLinkFailed"));
       } finally {
         setLoading(false);
       }
@@ -107,7 +111,7 @@ export default function LoginPage() {
     }
 
     if (!password) {
-      setError("Please enter your password");
+      setError(t("login.enterPassword"));
       return;
     }
 
@@ -123,21 +127,21 @@ export default function LoginPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Authentication failed");
+        throw new Error(data.error || t("login.authenticationFailed"));
       }
 
       if (data.requires2FA && data.challengeToken) {
         setChallengeToken(data.challengeToken);
-        toast.info("Two-factor authentication required. Enter your 6-digit code.");
+        toast.info(t("login.twoFactorRequired"));
         return;
       }
 
-      toast.success("Welcome back to Entrivo!");
-      router.push("/");
+      toast.success(t("login.welcomeToast"));
+      router.push(getRoleHome(data.user.role as UserRole));
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "Login failed");
-      toast.error(err.message || "Login failed");
+      setError(err.message || t("login.failed"));
+      toast.error(err.message || t("login.failed"));
     } finally {
       setLoading(false);
     }
@@ -154,7 +158,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#080c14] text-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(480px,0.9fr)]">
       <aside
-        aria-label="Entrivo platform overview"
+        aria-label={t("platformOverview")}
         className="relative isolate flex min-h-[460px] flex-col overflow-hidden border-b border-white/[0.06] px-6 py-7 sm:px-10 sm:py-10 lg:min-h-screen lg:border-b-0 lg:border-r lg:border-white/[0.06] lg:px-12 lg:py-12 xl:px-16"
       >
         <div className="absolute inset-0 -z-20 bg-[radial-gradient(ellipse_at_18%_16%,rgba(79,70,229,0.28),transparent_44%),radial-gradient(ellipse_at_82%_78%,rgba(8,145,178,0.12),transparent_38%),linear-gradient(145deg,#111827_0%,#0b1020_52%,#080c14_100%)]" />
@@ -170,13 +174,13 @@ export default function LoginPage() {
 
         <div className="my-12 max-w-xl sm:my-14 lg:my-auto lg:py-20">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200/80">
-            A better welcome starts here
+            {t("overviewTagline")}
           </p>
           <h1 className="max-w-lg text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl xl:text-5xl">
-            Visitor management, without the friction
+            {t("overviewTitle")}
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-6 text-slate-300 sm:text-base">
-            Make every arrival feel effortless while keeping your workplace secure and in control.
+            {t("overviewDescription")}
           </p>
 
           <ul className="mt-9 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
@@ -184,29 +188,29 @@ export default function LoginPage() {
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-300/15 bg-indigo-400/10 text-indigo-200">
                 <QrCode className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Pre-registration and QR passes</span>
+              <span>{t("featurePreregistration")}</span>
             </li>
             <li className="flex items-center gap-3 text-sm text-slate-200">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/15 bg-cyan-400/10 text-cyan-200">
                 <BellRing className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Instant host notifications</span>
+              <span>{t("featureNotifications")}</span>
             </li>
             <li className="flex items-center gap-3 text-sm text-slate-200">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-300/15 bg-violet-400/10 text-violet-200">
                 <FileCheck2 className="h-4 w-4" aria-hidden="true" />
               </span>
-              <span>Audit-ready security</span>
+              <span>{t("featureAuditReady")}</span>
             </li>
           </ul>
         </div>
 
         <div className="mt-auto border-t border-white/10 pt-5">
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Built for trust
+            {t("trustLabel")}
           </p>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-slate-300 sm:grid-cols-4">
-            {["TLS 1.3", "Multi-tenant isolation", "2FA", "Audit logs"].map((item) => (
+            {[t("trustTls"), t("trustIsolation"), t("trustTwoFactor"), t("trustAudit")].map((item) => (
               <li key={item} className="flex items-center gap-2">
                 <Check className="h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
                 {item}
@@ -226,15 +230,15 @@ export default function LoginPage() {
           <div className="rounded-2xl border border-white/[0.12] bg-gradient-to-br from-white/[0.08] to-white/[0.025] p-px shadow-2xl shadow-black/40">
             <div className="rounded-[15px] border border-white/[0.04] bg-[#0d1321]/95 p-5 backdrop-blur-2xl sm:p-8">
               <header className="mb-7">
-                <h2 className="text-2xl font-semibold tracking-tight text-white">Welcome back</h2>
+                <h2 className="text-2xl font-semibold tracking-tight text-white">{t("login.welcomeBack")}</h2>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Sign in to manage your workplace visitors.
+                  {t("login.description")}
                 </p>
               </header>
 
               <div
                 role="group"
-                aria-label="Choose a sign-in method"
+                aria-label={t("login.chooseMethod")}
                 className="relative mb-6 grid grid-cols-2 rounded-xl border border-white/[0.08] bg-slate-950/70 p-1"
               >
                 <span
@@ -259,7 +263,7 @@ export default function LoginPage() {
                     authMode === "PASSWORD" ? "text-white" : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  Password Login
+                  {t("login.passwordLogin")}
                 </button>
                 <button
                   type="button"
@@ -273,7 +277,7 @@ export default function LoginPage() {
                   }`}
                 >
                   <Wand2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  Magic Link
+                  {t("login.magicLink")}
                 </button>
               </div>
 
@@ -294,15 +298,15 @@ export default function LoginPage() {
                     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-400/10 text-indigo-200">
                       <KeyRound className="h-6 w-6" aria-hidden="true" />
                     </div>
-                    <h3 className="text-base font-semibold text-white">Two-Factor Challenge</h3>
+                    <h3 className="text-base font-semibold text-white">{t("login.twoFactorChallenge")}</h3>
                     <p className="mt-1 text-xs leading-5 text-slate-400">
-                      Enter the 6-digit authenticator code or one of your 10 backup codes.
+                      {t("login.twoFactorDescription")}
                     </p>
                   </div>
 
                   <div>
                     <label htmlFor="two-factor-code" className="mb-2 block text-sm font-medium text-slate-200">
-                      Security Code / Backup Code
+                      {t("login.securityCodeLabel")}
                     </label>
                     <div className="relative">
                       <KeyRound className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -312,7 +316,7 @@ export default function LoginPage() {
                         autoComplete="one-time-code"
                         value={twoFactorCode}
                         onChange={(e) => setTwoFactorCode(e.target.value)}
-                        placeholder="123456 or XXXX-XXXX"
+                        placeholder={t("login.securityCodePlaceholder")}
                         autoFocus
                         required
                         aria-invalid={Boolean(error)}
@@ -334,11 +338,11 @@ export default function LoginPage() {
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                        <span>Verifying code...</span>
+                        <span>{t("login.verifyingCode")}</span>
                       </>
                     ) : (
                       <>
-                        <span>Verify &amp; Continue</span>
+                        <span>{t("login.verifyContinue")}</span>
                         <ArrowRight className="h-4 w-4" aria-hidden="true" />
                       </>
                     )}
@@ -353,7 +357,7 @@ export default function LoginPage() {
                     }}
                     className="w-full rounded-lg py-2 text-center text-xs text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                   >
-                    &larr; Cancel and try another login method
+                    &larr; {t("login.cancelAndTryAnother")}
                   </button>
                 </form>
               ) : magicSent ? (
@@ -361,23 +365,23 @@ export default function LoginPage() {
                   <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/10 text-emerald-300">
                     <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
                   </div>
-                  <h3 className="text-sm font-semibold text-white">Magic Link Dispatched!</h3>
+                  <h3 className="text-sm font-semibold text-white">{t("login.magicLinkDispatched")}</h3>
                   <p className="text-xs leading-5 text-slate-400">
-                    Check your inbox at <strong className="text-white">{email}</strong>. Click the secure sign-in link inside to log in immediately.
+                    {t("login.checkInbox")} <strong className="text-white">{email}</strong>. {t("login.clickSecureLink")}
                   </p>
                   <button
                     type="button"
                     onClick={() => setMagicSent(false)}
                     className="rounded-lg px-3 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                   >
-                    Use password instead
+                    {t("login.usePassword")}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
                     <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-slate-200">
-                      Work email address
+                      {t("login.workEmail")}
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
@@ -388,7 +392,7 @@ export default function LoginPage() {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@company.com"
+                        placeholder={t("login.emailPlaceholder")}
                         aria-invalid={Boolean(error)}
                         aria-describedby={error ? "login-error" : undefined}
                         className={inputClassName}
@@ -400,13 +404,13 @@ export default function LoginPage() {
                     <div>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <label htmlFor="login-password" className="text-sm font-medium text-slate-200">
-                          Password
+                          {t("login.password")}
                         </label>
                         <Link
                           href="/forgot-password"
                           className="rounded text-xs font-medium text-indigo-300 transition-colors hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                         >
-                          Forgot?
+                          {t("login.forgot")}
                         </Link>
                       </div>
                       <div className="relative">
@@ -418,7 +422,7 @@ export default function LoginPage() {
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Enter your password"
+                          placeholder={t("login.passwordPlaceholder")}
                           aria-invalid={Boolean(error)}
                           aria-describedby={error ? "login-error" : undefined}
                           className={`${inputClassName} pr-12`}
@@ -426,7 +430,7 @@ export default function LoginPage() {
                         <button
                           type="button"
                           onClick={() => setShowPassword((visible) => !visible)}
-                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          aria-label={showPassword ? t("login.hidePassword") : t("login.showPassword")}
                           aria-pressed={showPassword}
                           className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
                         >
@@ -448,7 +452,7 @@ export default function LoginPage() {
                         onChange={(e) => setRememberMe(e.target.checked)}
                         className="h-4 w-4 rounded border-slate-600 bg-slate-950 accent-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d1321]"
                       />
-                      Remember me
+                      {t("login.rememberMe")}
                     </label>
                   )}
 
@@ -460,11 +464,11 @@ export default function LoginPage() {
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                        <span>Authenticating...</span>
+                        <span>{t("login.authenticating")}</span>
                       </>
                     ) : (
                       <>
-                        <span>{authMode === "MAGIC_LINK" ? "Send Magic Sign-in Link" : "Sign In to Workplace"}</span>
+                        <span>{authMode === "MAGIC_LINK" ? t("login.sendMagicLink") : t("login.signIn")}</span>
                         <ArrowRight className="h-4 w-4" aria-hidden="true" />
                       </>
                     )}
@@ -475,25 +479,25 @@ export default function LoginPage() {
               <GoogleSignInButton onError={(msg) => setError(msg)} />
 
               <p className="mt-5 text-center text-[11px] leading-5 text-slate-500">
-                By continuing, you agree to Entrivo&apos;s{" "}
+                {t("login.termsAgreement")}{" "}
                 <Link href="/terms" className="text-indigo-300 hover:text-indigo-200 hover:underline">
-                  Terms of Service
+                  {t("termsOfService")}
                 </Link>{" "}
-                and{" "}
+                {t("and")}{" "}
                 <Link href="/privacy" className="text-indigo-300 hover:text-indigo-200 hover:underline">
-                  Privacy Policy
-                </Link>.
+                  {t("privacyPolicy")}
+                </Link>{t("period")}
               </p>
             </div>
           </div>
 
           <p className="mt-6 text-center text-sm text-slate-400">
-            New workplace organization?{" "}
+            {t("login.newOrganization")}{" "}
             <Link
               href="/register"
               className="font-semibold text-indigo-300 underline decoration-indigo-300/40 underline-offset-4 transition-colors hover:text-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
             >
-              Register your company
+              {t("login.registerCompany")}
             </Link>
           </p>
         </motion.div>

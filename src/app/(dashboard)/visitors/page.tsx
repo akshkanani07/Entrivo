@@ -67,6 +67,7 @@ export default async function VisitorsPage({
             : maskIdNumber(v.idProofNumber)
           : null),
       isBlacklisted: v.isBlacklisted,
+      isVip: v.isVip,
       isRegularVendor: v.isRegularVendor,
       blacklistReason: v.blacklistReason,
       typeName: v.visitorType?.name || "General",

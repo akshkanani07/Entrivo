@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, KeyRound, ShieldAlert, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getRoleHomeFromSession } from "@/lib/role-home";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -53,7 +54,7 @@ export default function ChangePasswordPage() {
       }
 
       toast.success("Password updated successfully!");
-      router.push("/");
+      router.push(await getRoleHomeFromSession());
       router.refresh();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update password";

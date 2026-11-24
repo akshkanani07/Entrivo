@@ -55,6 +55,7 @@ const PUBLIC_ROUTES = [
   "/api/public/self-checkin",
   "/api/health",
   // Public auth API handlers only:
+  "/api/locale",
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/google",

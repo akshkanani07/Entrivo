@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { PenTool, RotateCcw, Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 interface SignatureCanvasProps {
   onSave: (dataUrl: string) => void;
@@ -9,6 +10,7 @@ interface SignatureCanvasProps {
 }
 
 export function SignatureCanvas({ onSave, onClear }: SignatureCanvasProps) {
+  const t = useTranslations("checkin");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -101,20 +103,20 @@ export function SignatureCanvas({ onSave, onClear }: SignatureCanvasProps) {
         {!hasSignature && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-500/60 text-xs gap-1.5">
             <PenTool className="w-4 h-4" />
-            Sign here with touch or mouse
+            {t("signHere")}
           </div>
         )}
       </div>
 
       <div className="flex justify-between items-center px-1">
-        <span className="text-[11px] text-slate-400">Digital Acknowledgment</span>
+        <span className="text-[11px] text-slate-400">{t("digitalAcknowledgment")}</span>
         <button
           type="button"
           onClick={clearCanvas}
           className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-rose-400 transition-colors"
         >
           <RotateCcw className="w-3 h-3" />
-          Clear
+          {t("clear")}
         </button>
       </div>
     </div>

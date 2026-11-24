@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 type DetectedBarcode = { rawValue?: string };
 type BarcodeDetectorLike = {
@@ -9,6 +10,7 @@ type BarcodeDetectorLike = {
 type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorLike;
 
 export function SelfCheckinPassScanner({ onScan }: { onScan: (value: string) => void }) {
+  const t = useTranslations("selfCheckin");
   const [active, setActive] = useState(false);
   const [error, setError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,7 +37,7 @@ export function SelfCheckinPassScanner({ onScan }: { onScan: (value: string) => 
     completeRef.current = false;
     const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
     if (!Detector) {
-      setError("QR scanning is not supported by this browser. Enter the pass code instead.");
+      setError(t("qrUnsupported"));
       return;
     }
     try {
@@ -62,15 +64,15 @@ export function SelfCheckinPassScanner({ onScan }: { onScan: (value: string) => 
             onScan(value);
           }
         } catch {
-          setError("Could not read the QR code. Hold it steady and try again.");
+          setError(t("qrReadFailed"));
         } finally {
           detectingRef.current = false;
         }
       }, 350);
     } catch (cause) {
       setError(cause instanceof Error && cause.name === "NotAllowedError"
-        ? "Camera access was denied. Enter the pass code instead."
-        : "Unable to open the camera. Enter the pass code instead.");
+        ? t("cameraDenied")
+        : t("cameraOpenFailed"));
       stop();
     }
   };
@@ -79,12 +81,12 @@ export function SelfCheckinPassScanner({ onScan }: { onScan: (value: string) => 
     <div className="space-y-2">
       {active ? (
         <div className="space-y-2">
-          <video ref={videoRef} playsInline muted className="max-h-64 w-full rounded-xl bg-slate-950 object-cover" aria-label="Pass QR camera" />
-          <button type="button" className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm" onClick={stop}>Stop camera</button>
+          <video ref={videoRef} playsInline muted className="max-h-64 w-full rounded-xl bg-slate-950 object-cover" aria-label={t("cameraAlt")} />
+          <button type="button" className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm" onClick={stop}>{t("stopCamera")}</button>
         </div>
       ) : (
         <button type="button" className="w-full rounded-xl border border-indigo-300 px-4 py-2 font-medium text-indigo-700" onClick={() => void start()}>
-          Scan personal pass QR
+          {t("scanPass")}
         </button>
       )}
       {error && <p role="status" className="text-sm text-amber-800">{error}</p>}
