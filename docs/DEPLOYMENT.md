@@ -159,7 +159,7 @@ For teams hosting Entrivo on Windows Server 2022 / Windows 11:
 ## 5. Security & Operational Checklist
 
 - [ ] `JWT_SECRET`, `QR_SIGNING_SECRET`, and `CRON_SECRET` generated using `crypto.randomBytes(32).toString('hex')`.
-- [ ] `APP_ENCRYPTION_KEY` configured as a 32-byte Base64 key for AES-256-GCM field encryption.
+- [ ] `APP_ENCRYPTION_KEY` configured as exactly 64 hexadecimal characters (32 bytes) for AES-256-GCM field encryption.
 - [ ] Database credentials not shared across development and production environments.
 - [ ] Automated health checks monitor `/api/health` with alerting for database or redis degradation.
 - [ ] SSL/TLS terminated with HTTP/2 and modern ciphers enabled.

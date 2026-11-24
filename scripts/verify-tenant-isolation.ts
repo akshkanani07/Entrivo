@@ -28,6 +28,8 @@ const PUBLIC_WHITELIST = new Set([
   "/api/auth/accept-terms",
   "/api/invitations/verify-qr",
   "/api/public/preregister/[token]",
+  "/api/public/feedback",
+  "/api/public/self-checkin",
   "/api/kiosk/pair",
   "/api/v1/openapi.json",
   "/api/health",
@@ -88,7 +90,8 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
       } else if (
         routePath === "/api/kiosk/checkin" ||
         routePath === "/api/kiosk/walkin" ||
-        routePath === "/api/kiosk/verify-qr"
+        routePath === "/api/kiosk/verify-qr" ||
+        routePath === "/api/kiosk/feedback-qr"
       ) {
         securityType = "KIOSK";
       } else if (routePath.startsWith("/api/v1/")) {
@@ -147,6 +150,7 @@ function autoDiscoverApiRoutes(dir: string, baseRoute = "/api"): RouteAuditInfo[
         hasRoleOrScopeDenial =
           code.includes("getKioskSession") ||
           code.includes("kioskAuth") ||
+          code.includes("requireKiosk") ||
           code.includes("kioskToken") ||
           code.includes("verifyKioskToken");
       } else if (securityType === "API_V1") {
@@ -237,6 +241,63 @@ function verifyDeliveryTenantBoundary(routes: RouteAuditInfo[]) {
     }
   }
   console.log(`  [DELIVERY] ${deliveryRoutes.length} routes include tenant, RBAC, and mutation controls.`);
+}
+
+function verifyFeedbackTenantBoundary(routes: RouteAuditInfo[]) {
+  const feedbackRoutes = routes.filter((route) =>
+    route.routePath.startsWith("/api/feedback") ||
+    route.routePath.startsWith("/api/public/feedback") ||
+    route.routePath === "/api/kiosk/feedback-qr" ||
+    route.routePath.startsWith("/api/analytics")
+  );
+  if (!feedbackRoutes.length) throw new Error("P10-G feedback/analytics API routes were not discovered.");
+
+  for (const route of feedbackRoutes) {
+    const source = fs.readFileSync(route.filePath, "utf8");
+    if (route.securityType === "PUBLIC") {
+      if (!source.includes("hashFeedbackToken") || !source.includes("checkRateLimit") || !source.includes("$transaction")) {
+        throw new Error(`${route.routePath} is missing public feedback anti-abuse or atomic consumption guards.`);
+      }
+    } else if (route.securityType === "KIOSK") {
+      if (!source.includes("requireKiosk") || !source.includes("organizationId")) {
+        throw new Error(`${route.routePath} is missing kiosk tenant isolation.`);
+      }
+    } else {
+      for (const guard of ["requirePermission", "requireOrg"]) {
+        if (!source.includes(guard)) {
+          throw new Error(`${route.routePath} is missing P10-G tenant/RBAC guard ${guard}.`);
+        }
+      }
+    }
+  }
+  console.log(`  [P10-G] ${feedbackRoutes.length} feedback/analytics routes include tenant, RBAC, and public-boundary controls.`);
+}
+
+function verifySelfCheckinTenantBoundary(routes: RouteAuditInfo[]) {
+  const selfCheckinRoutes = routes.filter((route) =>
+    route.routePath.startsWith("/api/self-checkin/") ||
+    route.routePath === "/api/public/self-checkin"
+  );
+  if (!selfCheckinRoutes.length) throw new Error("P10-H self-check-in routes were not discovered.");
+
+  for (const route of selfCheckinRoutes) {
+    const source = fs.readFileSync(route.filePath, "utf8");
+    if (route.routePath === "/api/public/self-checkin") {
+      for (const guard of ["verifyRotatingQrToken", "getSelfCheckinSessionToken", "checkRateLimit", "organizationId"]) {
+        if (!source.includes(guard)) throw new Error(`${route.routePath} is missing token/tenant anti-abuse guard ${guard}.`);
+      }
+    } else {
+      for (const guard of ["requirePermission", "requireOrg"]) {
+        if (!source.includes(guard)) throw new Error(`${route.routePath} is missing P10-H tenant/RBAC guard ${guard}.`);
+      }
+      if (route.methods.some((method) => ["POST", "PATCH", "PUT", "DELETE"].includes(method))) {
+        if (!source.includes("checkRateLimit") || !source.includes("audit(")) {
+          throw new Error(`${route.routePath} is missing P10-H mutation rate-limit or audit controls.`);
+        }
+      }
+    }
+  }
+  console.log(`  [P10-H] ${selfCheckinRoutes.length} self-check-in routes include token, tenant, RBAC, rate-limit, and audit controls.`);
 }
 
 function verifyContractorTenantBoundary(routes: RouteAuditInfo[]) {
@@ -543,6 +604,8 @@ async function main() {
   verifyParkingTenantBoundary(routes);
   verifyDeliveryTenantBoundary(routes);
   verifyContractorTenantBoundary(routes);
+  verifyFeedbackTenantBoundary(routes);
+  verifySelfCheckinTenantBoundary(routes);
 
   // Probe live target server if accessible
   let isServerRunning = false;

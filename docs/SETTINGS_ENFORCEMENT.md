@@ -136,3 +136,12 @@ These settings dynamically control form rendering on staff dashboards and self-s
 | :--- | :--- | :--- | :--- | :--- |
 | `contractorComplianceEnforcement` | `z.enum(["BLOCK", "WARN", "OFF"])` | `"BLOCK"` | `src/services/visitors/checkin.service.ts` | P10-F2 compliance unit and acceptance tests |
 
+## 12. Self Check-In (P10-H)
+
+| Setting Key | Type & Constraints | Default | Enforcing File & Function | Verification Test |
+| :--- | :--- | :--- | :--- | :--- |
+| `selfCheckinMode` | `z.enum(["OFF", "HOST_CONFIRM", "DESK_CONFIRM", "AUTO_IF_PREREGISTERED"])` | `"OFF"` | `src/app/api/public/self-checkin/route.ts`, `src/app/api/self-checkin/sessions/[id]/decision/route.ts` | P10-H policy unit and acceptance tests |
+| `selfCheckinEscalationMinutes` | `z.number().int().min(1).max(60)` | `SELF_CHECKIN_ESCALATE_MINUTES` or `5` | `src/services/self-checkin/self-checkin-sweep.service.ts` | P10-H acceptance checks |
+
+The rotating QR and visitor-session lifetimes are environment-controlled rather than organization policy settings. See `docs/ENV.md`.
+

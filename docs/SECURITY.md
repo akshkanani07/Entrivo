@@ -87,8 +87,9 @@ Not all routes require a standard staff web session. The following routes are in
 | `/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/resend-verification`, `/api/auth/google` | Account entry points | **Rate-Limited Public**: Open for onboarding/login, protected by per-IP and per-email sliding-window rate limiters, bcrypt timing defense, and anti-enumeration uniform responses. |
 | `/api/health`, `/api/v1/openapi.json` | Monitoring & API specs | **Public Read-Only**: System availability probe and public OpenAPI 3.0 specification. |
 | `/preregister/[token]`, `/api/public/preregister/[token]` | Invitation visitor pre-registration | **Bearer Capability**: 32-byte random token; only its SHA-256 hash is stored. Links are visit-expiring, rate-limited per IP and token, bound to an invitation and organization, and become unusable after submission, approval, expiry, or revocation. Invalid links return a generic 404. JSON-only writes reject cross-site requests; responses are private/no-store and set `Referrer-Policy: no-referrer`. Application audit records use only a six-character hash fingerprint. |
+| `/self-checkin`, `/api/public/self-checkin` | Front-desk visitor check-in | **Rotating QR + Bearer Capability**: desk QR HMAC expires in 60–120 seconds; start requires a valid point/version, and later requests require a short-lived session token whose SHA-256 hash is stored. OTP, per-IP/point/email/invitation limits, same-origin JSON writes, and generic invalid-credential responses apply. |
 
-#### Pre-registration token threat model
+### 2.6 Visitor pre-registration (P10-A)
 
 - Treat each link as a password: deliver it only in the visitor email and the invitation's private calendar description, do not place it in analytics or application logs, and redact `/preregister/<token>` from reverse-proxy access logs.
 - The database stores only the SHA-256 hash. The raw token is not recoverable by staff; resend, reject, reopen, or regenerate operations issue a new token and invalidate the old one.
@@ -96,7 +97,18 @@ Not all routes require a standard staff web session. The following routes are in
 - ID numbers entered through pre-registration are encrypted at rest; Aadhaar-like IDs retain only a masked last-four display value. Staff review pages return masked values only. Rejection reasons reject phone/ID-like digit sequences.
 - Check-in still enforces invitation approval, schedule/working-hour policy, blacklist rules, and the configured pre-registration policy. A submitted registration satisfies the collected ID/photo/NDA requirements; `BLOCK` additionally requires host approval.
 
-### 2.7 Recurring, group, and bulk invitations (P10-D)
+### 2.7 Emergency muster (P10-B)
+
+- Muster event, point, roster, and accounting APIs require the corresponding `muster.*` permission and enforce organization scope. Mutations validate input, apply rate limits, and write audit events.
+- Emergency rosters use event-scoped snapshots of active check-ins. Roll-call actions are idempotent per client event, retain the accounting actor/status history, and reject invalid state transitions.
+- Emergency notifications use the existing notification job and channel infrastructure; delivery retry and all-clear actions remain permission-gated and audited.
+
+### 2.8 Localization groundwork (P10-C; partial)
+
+- Locale values are preference/template metadata, not authorization inputs. Continue enforcing tenant/RBAC checks independently of a user's or visitor's selected locale.
+- Organization and notification-template locale fields and the locale-aware records introduced by other phases do not constitute full application localization. Full locale routing and page translations remain incomplete.
+
+### 2.9 Recurring, group, and bulk invitations (P10-D)
 
 - `InvitationVisitor` is the authoritative per-person membership and pass record. Every legacy invitation is backfilled into exactly one membership; legacy `Invitation.visitorId` and `qrToken` remain intact for existing API and workflow consumers.
 - QR resolution, public pre-registration, and group check-in verify the member against the organization-scoped invitation. Group members have separate unique QR tokens and pre-registration records; approvals remain attached to the parent invitation.
@@ -105,7 +117,7 @@ Not all routes require a standard staff web session. The following routes are in
 - Recurrence stores local visit time with an IANA timezone; materialized invitations have a unique `(seriesId, occurrenceDate)` key. Calendar exports include an RRULE and timezone observances. External calendar synchronization remains per occurrence, so cancellations/update operations address the same concrete events.
 - Bulk import jobs store organization and host identity and revalidate both before processing. Error reports are stored as organization-owned files and served only through an authorized, tenant-scoped route.
 
-### 2.8 Parking & Vehicle Management (P10-E)
+### 2.10 Parking & Vehicle Management (P10-E)
 
 - Parking APIs require an organization membership, the corresponding `parking.*` permission, Zod-validated input, and tenant-scoped queries. Mutations are rate limited and audited.
 - Slot assignments run in serializable transactions, lock the selected `ParkingSlot` row with `FOR UPDATE`, and reject time-window overlaps. Gate transitions lock the slot before changing assignment state; checkout releases active assignments.
@@ -113,17 +125,35 @@ Not all routes require a standard staff web session. The following routes are in
 - Gate entry checks the organization plate blacklist and applies the configured `BLOCK` or `WARN` policy. A match creates a security log and sends a security alert.
 - Contractor permits and parking reports are organization scoped. CSV/spreadsheet exports escape formula-leading values.
 
-### 2.9 Delivery / Courier Management (P10-F1)
+### 2.11 Delivery / Courier Management (P10-F1)
 
 - Delivery reception, pickup, return, and export routes require organization context and the appropriate `deliveries.*` permission. Mutations use Zod validation, rate limits, and append-only audit entries.
 - Pickup codes are generated with a cryptographically secure random generator and stored only as SHA-256 hashes. Verification uses constant-time byte comparison and invalidates the hash after collection.
 - Package and signature images reuse the existing magic-byte, storage-adapter, signed-file, and audit infrastructure. Tracking/AWB values are hashed in audit metadata rather than logged as plaintext.
 
-### 2.10 Contractor Compliance (P10-F2)
+### 2.12 Contractor Compliance (P10-F2)
 
 - Contractor companies and workers are organization scoped and controlled by `contractors.*` and `compliance.override` RBAC permissions. Status changes and overrides are audited with reasons.
 - Government IDs and police verification documents reuse signed storage URLs and existing antivirus/magic-byte validation. Document view/download operations create audit entries; sensitive values are excluded from logs.
 - Check-in enforcement evaluates mandatory document expiry, company status, work-permit date/site/shift window, and safety induction validity. Override access is permission-gated and requires a reason.
+
+### 2.13 Visitor Feedback & Analytics (P10-G)
+
+- Feedback email links and signed feedback QR payloads are capability-bound. Email tokens are cryptographically random, stored only as SHA-256 hashes, expiry constrained, and atomically consumed; replay or concurrent submission is rejected.
+- Visit QR responses identify the signed check-in only for kiosk checkout. Generic desk/kiosk QR responses are anonymous organization/branch/office responses and are not permitted to disclose visit PII.
+- Public feedback submission is Zod validated, rate limited per IP and token, protected by a honeypot, and strips HTML/control characters from comments. Profanity is flagged only and never auto-blocked.
+- Feedback comments contain visitor PII and are subject to configurable comment and response retention. Stored IP values are HMAC-hashed and are not logged.
+- Feedback inbox and analytics routes require organization context and `feedback.*` / `analytics.*` RBAC permissions. EMPLOYEE feedback and analytics queries are restricted to hosted visits.
+- Analytics pages and exports contain aggregates only. Aggregate exports are permission gated, rate limited, and audited as `ANALYTICS_EXPORT`; inbox comment access is audited as `FEEDBACK_VIEWED`.
+
+### 2.14 Front-Desk Self Check-In (P10-H)
+
+- The authenticated desk display obtains an HMAC-SHA256 signed QR for one active tenant point. Tokens include a nonce, point secret version, issue time, and 60–120 second expiry; disabling or rotating a point invalidates its outstanding QR.
+- A photographed QR is time-bounded, but can be replayed until expiry. The public route also enforces IP/point/invitation/email rate limits, a honeypot, a JSON/same-origin request check, short-lived random bearer sessions stored only as SHA-256 hashes, and a single final-submit idempotency key. For higher assurance, keep the display physically visible at reception and configure office network controls at the reverse proxy; no precise GPS is collected.
+- Public request metadata is HMAC-hashed. Email OTPs are six digits, HMAC-hashed with session context, expire after 10 minutes, and allow at most five attempts. OTP delivery bypasses durable notification storage and retry payloads. Pending form data is encrypted until completion or expiry.
+- `/api/public/self-checkin` uses generic invalid-credential responses to avoid exposing invitation, visitor, and email existence. Its public session credential is required for every subsequent operation. Rate-limit exhaustion returns 429.
+- Staff point/session endpoints require organization context and `selfcheckin.manage` or `selfcheckin.confirm`; all point/session queries are tenant scoped. Approval decisions are host/desk role checked and audited. Completion delegates blacklist, schedule, NDA, duplicate, and walk-in checks to the shared check-in services.
+- Approval alerts are delivered through existing in-app, Web Push, email, Slack, and Teams channels. The visitor status page polls with its bearer session token; it does not expose visitor data to an unauthenticated status lookup.
 
 
 ---

@@ -17,12 +17,12 @@ This document provides a comprehensive specification of every environment variab
 | Variable | Type | Required | Default | Description |
 | :--- | :---: | :---: | :--- | :--- |
 | `JWT_SECRET` | String | **Yes** | None (Min 32 chars) | HMAC-SHA256 secret key used for signing session tokens and stateless authentication cookies. |
-| `QR_SIGNING_SECRET` | String | **Yes** | None (Min 32 chars) | Dedicated cryptographic secret used by `src/lib/qr.ts` for signing and validating QR visitor passes (`ENTQ1.*`). |
+| `QR_SIGNING_SECRET` | String | **Yes** | None (Min 32 chars) | Cryptographic secret used by `src/lib/qr.ts` for visitor passes (`ENTQ1.*`) and by P10-H for rotating desk QR tokens and keyed OTP/request-identifier hashes. |
 | `CRON_SECRET` | String | **Yes** | None (Min 32 chars) | Bearer secret required in the `Authorization: Bearer <CRON_SECRET>` header for scheduled automation and maintenance endpoints. |
 | `STORAGE_SIGNING_SECRET` | String | **Yes** | None (Min 32 chars) | Dedicated cryptographic secret used for signing and verifying temporary upload and download URLs for stored documents and assets. |
 | `SEED_ADMIN_PASSWORD` | String | Optional | Auto-generated | Password assigned to default seed users during `pnpm prisma:seed`. When omitted, a cryptographically random password is generated and printed. |
 | `APP_ENCRYPTION_KEY` | String | **Yes** | 64-hex char key | AES-256-GCM master 64-character hexadecimal key (32 bytes) used to encrypt OAuth tokens, TOTP secrets, and integration credentials at rest. |
-| `PREREG_TOKEN_TTL_HOURS` | Integer | Optional | `24` | Default number of hours after the scheduled visit end that pre-registration links remain valid; accepted range is 1–720 hours. Organization settings may override this value. |
+| `PREREG_TOKEN_TTL_HOURS` | Integer | Optional | `24` | P10-A pre-registration link lifetime after the scheduled visit end; accepted range is 1–720 hours. Organization settings may override this value. |
 
 ## 12. Visitor Feedback and Analytics (P10-G)
 
@@ -35,6 +35,8 @@ This document provides a comprehensive specification of every environment variab
 | `FEEDBACK_COMMENT_MAX_LENGTH` | Integer | Optional | `1000` | Maximum submitted comment length, from 100–5000 characters. |
 | `FEEDBACK_HOST_LOAD_THRESHOLD` | Integer | Optional | `5` | Concurrent/periodic host load threshold used by analytics warnings, from 1–1000. |
 | `FEEDBACK_ANALYTICS_CACHE_SECONDS` | Integer | Optional | `300` | Short analytics aggregate cache TTL, from 10–3600 seconds. |
+
+Organization settings under P10-G can override the environment defaults: `feedbackRequestDelayMinutes`, `feedbackTokenTtlHours`, `feedbackDetractorThreshold`, `feedbackRetentionDays`, `feedbackCommentMaxLength`, `feedbackHostLoadThreshold`, and `feedbackAnalyticsCacheSeconds`. Feedback comments are retention-bound by `FEEDBACK_RETENTION_DAYS`/`feedbackRetentionDays`; the retention job should purge or anonymize expired response records while preserving aggregate reporting where permitted.
 
 ---
 
@@ -171,4 +173,18 @@ No additional environment variables are required for delivery management. `deliv
 ## 15. P10-F2 Contractor Compliance
 
 No additional environment variables are required. `contractorComplianceEnforcement` is an organization setting: `BLOCK` (default), `WARN`, or `OFF`. Sensitive contractor document storage continues to use the configured storage adapter and existing signed-URL settings.
+
+## 16. P10-B Emergency Muster and P10-C Localization
+
+P10-B emergency-muster operations and P10-C locale groundwork do not introduce environment variables. Locale metadata and notification-template translations are application/tenant data; the full P10-C locale-routing and page-localization scope is not implemented.
+
+## 17. P10-H Self Check-In
+
+| Variable | Type | Required | Default | Description |
+| :--- | :---: | :---: | :--- | :--- |
+| `SELF_CHECKIN_QR_TTL_SECONDS` | Integer | Optional | `90` | Lifetime of rotating desk QR tokens; accepted range is 60–120 seconds. |
+| `SELF_CHECKIN_SESSION_TTL_MINUTES` | Integer | Optional | `30` | Visitor self-check-in session lifetime; accepted range is 5–120 minutes. |
+| `SELF_CHECKIN_ESCALATE_MINUTES` | Integer | Optional | `5` | Default delay before pending host confirmation escalates to reception; accepted range is 1–60 minutes. The organization `selfCheckinEscalationMinutes` setting overrides it. |
+
+`QR_SIGNING_SECRET` (minimum 32 characters) signs rotating desk QR tokens and keys OTP/email/IP/UA hashes. Email OTPs expire after 10 minutes and allow five attempts; those limits are fixed in the application. Keep `QR_SIGNING_SECRET` private and rotate each point's `secretVersion` when its QR is compromised.
 

@@ -60,7 +60,9 @@ export type Permission =
   | "feedback.read"
   | "feedback.manage"
   | "analytics.view"
-  | "analytics.export";
+  | "analytics.export"
+  | "selfcheckin.manage"
+  | "selfcheckin.confirm";
 
 export const ALL_PERMISSIONS: Permission[] = [
   "dashboard.view",
@@ -118,6 +120,8 @@ export const ALL_PERMISSIONS: Permission[] = [
   "feedback.manage",
   "analytics.view",
   "analytics.export",
+  "selfcheckin.manage",
+  "selfcheckin.confirm",
   "contractors.manage",
   "compliance.override",
   "feedback.read",
@@ -156,6 +160,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "employees.manage",
     "org.manage",
     "settings.manage",
+    "selfcheckin.manage",
+    "selfcheckin.confirm",
     "kiosks.manage",
     "integrations.manage",
     "templates.manage",
@@ -185,6 +191,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "feedback.read",
     "feedback.manage",
     "analytics.view",
+    "analytics.export",
     "deliveries.log",
     "deliveries.read.own",
     "deliveries.read.all",
@@ -206,6 +213,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "walkin.create",
     "checkin.perform",
     "checkout.perform",
+    "selfcheckin.confirm",
     "qr.verify",
     "blacklist.read",
     "employees.read",
@@ -231,6 +239,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "walkin.create",
     "checkin.perform",
     "checkout.perform",
+    "selfcheckin.confirm",
     "qr.verify",
     "approvals.act",
     "blacklist.read",
@@ -259,6 +268,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "preregistration.read",
     "preregistration.manage",
     "approvals.act",
+    "selfcheckin.confirm",
     "employees.read",
     "meetingRooms.read",
     "files.read",

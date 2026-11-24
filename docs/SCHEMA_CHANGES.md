@@ -1,3 +1,13 @@
+# Entrivo Schema Changes (P10-H Self Check-In)
+
+## P10-H.1 Front-Desk Check-In
+
+- Added `SelfCheckinPoint` with tenant/office ownership, active state, and a version used to revoke outstanding rotating desk QR tokens.
+- Added `SelfCheckinSession` with invitation/visitor/host/check-in relations, status and method state, expiry, hashed session/IP/UA/email/OTP/idempotency metadata, encrypted submission payload, and escalation/completion claims.
+- Added `SelfCheckinPointStatus`, `SelfCheckinStatus`, and `SelfCheckinMethod` enums and organization/status/expiry indexes.
+- Migration: `prisma/migrations/20261124110000_p10_h_self_checkin/migration.sql`.
+- Public self-check-in sessions hold only encrypted pending submission data and hashed bearer/OTP credentials; expired or rejected sessions clear sensitive payload fields.
+
 ---
 
 # Entrivo Schema Changes (P10-G Feedback Foundation)
@@ -12,6 +22,8 @@
 - Added `FeedbackCategory`, `FeedbackChannel`, and `FeedbackSource` enums.
 - Added supporting invitation, check-out, and host/check-in indexes for no-show, duration, and wait-time aggregates.
 - Migration: `prisma/migrations/20261123202500_p10_g_feedback_foundation/migration.sql`.
+
+The migration also adds a unique visit-response constraint, preventing duplicate responses for a single check-in; `FeedbackRequest.consumedAt` provides atomic email-token consumption state. Seeded feedback and visit timestamps support deterministic feedback/heatmap smoke tests.
 
 ---
 
@@ -274,7 +286,18 @@ Linked external calendar events for automated synchronize/cancel/reschedule acti
 - `Vehicle`: tenant-scoped optional visitor association, normalized plate number and display plate, type, and creation time. Unique constraint covers organization, normalized plate, and visitor.
 - Migration: `prisma/migrations/20261123153500_p10_a_preregistration/migration.sql`.
 
-## 7. Recurring and Group Visits (P10-D)
+## 7. Emergency Muster (P10-B)
+- Added `EmergencyEvent` for organization-scoped emergency lifecycle, location scope, starter, message, and summary.
+- Added `MusterPoint` for office muster locations; `MusterAccountEntry` stores an event-scoped subject snapshot and current roll-call state; `MusterAccountAction` records idempotent, actor-attributed status actions; `EmergencyDelivery` tracks notification delivery state.
+- Unique event/client-event keys and event/status indexes support replay-safe accounting and live event reporting.
+- Migration: `prisma/migrations/20261123163800_p10_b_muster/migration.sql`.
+
+## 8. Localization groundwork (P10-C; partial)
+- No dedicated P10-C migration is present. `Organization.locale` and `NotificationTemplate.locale` support existing locale-aware behavior.
+- `PreRegistration.locale` was added with P10-A and `Visitor.preferredLocale` with P10-G; these fields and multilingual notification templates are groundwork only.
+- Full application-wide locale routing and localized page coverage remain unimplemented.
+
+## 9. Recurring and Group Visits (P10-D)
 - `InvitationVisitor` stores each visitor membership, status, and unique per-person QR token. The migration backfills one membership from every existing invitation's legacy `visitorId` and `qrToken`; those fields remain on `Invitation` for single-visitor compatibility.
 - `Invitation` now has nullable `seriesId` and `occurrenceDate`, an `isException` flag, and a unique `(seriesId, occurrenceDate)` key to make occurrence materialization idempotent.
 - `InvitationSeries` stores the tenant, host, either an existing visitor or JSON group definition, recurrence rule, local visit times/timezone, end-date or occurrence-count constraint, holiday preference, approval metadata, and rolling materialization cursor.
@@ -283,7 +306,7 @@ Linked external calendar events for automated synchronize/cancel/reschedule acti
 - `Visitor.isRegularVendor` enables vendor quick re-invites.
 - Migration: `prisma/migrations/20261123174400_p10_d_recurring_group_visits/migration.sql`. Apply after the prior P10-A/P10-B migrations; the backfill must run before dropping the legacy single pre-registration uniqueness constraint.
 
-## 8. Parking and Vehicle Management (P10-E)
+## 10. Parking and Vehicle Management (P10-E)
 - `ParkingLot` belongs to an organization and office; `ParkingSlot` stores a unique code and slot type within each lot.
 - `Vehicle` gains optional make/color fields; `BlacklistVisitor` gains an optional normalized vehicle plate match.
 - `ParkingAssignment` stores organization-scoped vehicle/slot reservations, optional invitation/check-in links, status transitions, reservation/entry/exit timestamps, and `overstayedAt` for historical utilization reports.
@@ -291,13 +314,13 @@ Linked external calendar events for automated synchronize/cancel/reschedule acti
 - Active slot conflicts are prevented by serializable assignment transactions and row-level `SELECT ... FOR UPDATE` locking. The database migration does not install a partial unique index for active assignments.
 - Migration: `prisma/migrations/20261124100000_p10_e_parking/migration.sql`. It adds the parking tables/enums, vehicle attributes, blacklist plate field/index, and historical overstay timestamp. Apply through the normal migration deployment process; do not use `prisma db push` in production.
 
-## 9. Delivery / Courier Management (P10-F1)
+## 11. Delivery / Courier Management (P10-F1)
 - `Delivery` stores organization-scoped package receipt and pickup lifecycle state (`RECEIVED`, `NOTIFIED`, `COLLECTED`, `RETURNED`, `UNCLAIMED`), recipient/receiver employee relations, courier/AWB details, storage location, optional photo/signature file IDs, and pickup reminder timestamps.
 - Pickup codes are never stored in plaintext; only a SHA-256 hash is persisted, and collection is re-verified using constant-time comparison.
 - `DeliveryPersonLog` provides a lightweight, policy-controlled courier-person entry without creating a normal visitor check-in.
 - Migration: `prisma/migrations/20261123194500_p10_f1_delivery/migration.sql`.
 
-## 10. Contractor Management and Compliance (P10-F2)
+## 12. Contractor Management and Compliance (P10-F2)
 - `ContractorCompany` stores company status, contract window, contact details, GSTIN, and sponsor employee. `ContractorWorker` links an organization worker to a visitor identity and adds trade, induction, and work-permit fields.
 - `ComplianceRequirement` defines organization-level mandatory document types and validity rules. `Document.visitorId` becomes nullable and is supplemented by nullable `contractorCompanyId` and `contractorWorkerId`, preserving all P3 visitor document flows.
 - Sensitive contractor documents reuse `Document`, `File`, storage adapters, antivirus/magic-byte validation, signed URLs, soft delete, and `DOCUMENT_VIEW/DOWNLOAD` plus `COMPLIANCE_DOC_UPLOAD` auditing.

@@ -39,6 +39,13 @@ export const WorkingHoursSchema = z.object({
 export const EnforcementModeSchema = z.enum(["ALLOW", "WARN", "BLOCK"]);
 export type EnforcementMode = z.infer<typeof EnforcementModeSchema>;
 export const PreRegistrationPolicySchema = z.enum(["BLOCK", "WARN", "OFF"]);
+export const SelfCheckinModeSchema = z.enum([
+  "OFF",
+  "HOST_CONFIRM",
+  "DESK_CONFIRM",
+  "AUTO_IF_PREREGISTERED",
+]);
+export type SelfCheckinMode = z.infer<typeof SelfCheckinModeSchema>;
 
 export const OrgPolicySchema = z.object({
   // 1. Visitor Policies & Limits
@@ -72,6 +79,8 @@ export const OrgPolicySchema = z.object({
   requireHost: z.boolean().default(true),
   preRegistrationRequired: PreRegistrationPolicySchema.default("WARN"),
   preRegistrationTokenTtlHours: z.number().int().min(1).max(720).default(getDefaultPreRegistrationTtlHours()),
+  selfCheckinMode: SelfCheckinModeSchema.default("OFF"),
+  selfCheckinEscalationMinutes: z.number().int().min(1).max(60).default(getEnvInt("SELF_CHECKIN_ESCALATE_MINUTES", 5, 1, 60)),
 
   // 4. Approval Rules
   autoApprovalEnabled: z.boolean().default(false),

@@ -69,6 +69,12 @@ The permission model is built around a strongly-typed string union (`Permission`
 | `contractors.read` | ✅ | ✅ | ✅ | ✅ | ❌ |
 | `contractors.manage` | ✅ | ✅ | ✅ | ❌ | ❌ |
 | `compliance.override` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `selfcheckin.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `selfcheckin.confirm` | ✅ | ✅ | ✅ | ✅ | ✅ (assigned host only) |
+| `muster.view` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `muster.broadcast` | ✅ | ✅ | ❌ | ✅ | ❌ |
+| `muster.manage` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| `muster.account` | ✅ | ✅ | ❌ | ✅ | ❌ |
 
 ---
 
@@ -132,7 +138,27 @@ Implemented in `src/lib/rbac.ts` (`canAssignRole` & `validateRoleChange`):
 | `/api/parking/permits` | GET | `parking.read` | API permission + organization scope |
 | `/api/parking/permits` | POST | `parking.manage` | API permission + Zod + rate limit + audit |
 | `/api/parking/report` | GET | `reports.export` | API permission + organization scope; rate limited and audited |
+| `/api/self-checkin/points` | GET, POST | `selfcheckin.manage` | API permission + organization-scoped office validation + rate limit + audit |
+| `/api/self-checkin/points/:id` | PATCH | `selfcheckin.manage` | API permission + tenant-scoped point + rate limit + audit |
+| `/api/self-checkin/points/:id/qr` | GET | `selfcheckin.manage` | API permission + tenant-scoped active point + rate limit; no-store rotating signed QR |
+| `/api/self-checkin/sessions` | GET | `selfcheckin.confirm` | API permission + tenant scope + host-only queue visibility for employees |
+| `/api/self-checkin/sessions/:id/decision` | POST | `selfcheckin.confirm` | API permission + tenant scope + host/desk approver check + rate limit + audit |
+| `/api/public/self-checkin` | POST | Public rotating-QR/session capability | Zod, generic errors, JSON/same-origin, rate limits, honeypot, hashed request metadata, expiring hashed credentials |
+| `/api/muster` | GET | `muster.view` | API permission + organization scope + audit |
+| `/api/muster/events` | GET, POST | `muster.view`, `muster.broadcast` | API permission + organization scope + Zod + rate limit + audit |
+| `/api/muster/events/:id` | GET | `muster.view` | API permission + organization scope + audit |
+| `/api/muster/events/:id/entries/:entryId` | PATCH | `muster.account` | API permission + organization scope + Zod + idempotency + rate limit + audit |
+| `/api/muster/events/:id/all-clear` | POST | `muster.broadcast` | API permission + organization scope + rate limit + audit |
+| `/api/muster/events/:id/deliveries` | GET, POST | `muster.view`, `muster.broadcast` | API permission + organization scope + rate limit + audit |
+| `/api/muster/points` | GET, POST | `muster.view`, `muster.manage` | API permission + organization scope + Zod + rate limit + audit |
+| `/api/muster/points/:id` | PATCH, DELETE | `muster.manage` | API permission + tenant-scoped point + audit |
 | `/api/reports/export` | GET | `reports.export` | API `requirePermission` |
+| `/api/feedback` | GET, PATCH | `feedback.read`, `feedback.manage` | API permission + organization scope + cursor filters |
+| `/api/feedback/qr` | POST | `feedback.read` | API permission + organization scope + rate limit |
+| `/api/public/feedback` | POST | Public token/signed QR capability | Hash, expiry, rate limit, honeypot, tenant/atomic checks |
+| `/api/kiosk/feedback-qr` | POST | Kiosk device authentication | Organization-scoped signed QR + audit |
+| `/api/analytics` | GET | `analytics.view` | API permission + organization scope + EMPLOYEE hosted-visit scope |
+| `/api/analytics/export` | GET | `analytics.export` | API permission + organization scope + export rate limit/audit |
 | `/api/dashboard/stats` | GET | `dashboard.view` | API `requirePermission` |
 | `/api/notifications/templates` | GET, POST, PUT, DELETE | `templates.manage` | API `requirePermission` |
 | `/api/notifications/test-email` | POST | `templates.manage` | API `requirePermission` |

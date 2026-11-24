@@ -22,7 +22,7 @@ import {
   maskIdNumber,
 } from "@/lib/preregistration";
 import { resolveCheckInLocation } from "@/services/muster/muster-core";
-import { maskPlateNumber, normalizePlateNumber, preferredParkingSlotType } from "@/lib/parking";
+import { normalizePlateNumber, preferredParkingSlotType } from "@/lib/parking";
 import {
   computeContractorComplianceStatus,
   evaluateContractorPolicy,
@@ -193,12 +193,11 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       select: { vehiclePlateNumber: true },
     });
     if (blacklistedVehicle?.vehiclePlateNumber) {
-      const maskedPlate = maskPlateNumber(blacklistedVehicle.vehiclePlateNumber);
       await prisma.securityLog.create({
         data: {
           organizationId: orgId,
           logType: "BLACKLIST_MATCH",
-          description: `Visitor vehicle matched parking blacklist (plate ${maskedPlate}).`,
+          description: "A visitor vehicle matched the parking blacklist.",
           severity: "CRITICAL",
           guardName: input.actorName,
         },
@@ -231,7 +230,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       data: {
         organizationId: orgId,
         logType: "BLACKLIST_MATCH",
-        description: `Check-in blocked for blacklisted visitor ${invitation.visitor.name}`,
+        description: "Check-in was blocked by the visitor blacklist.",
         severity: "CRITICAL",
         guardName: input.actorName,
       },
@@ -259,7 +258,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
       data: {
         organizationId: orgId,
         logType: "BLACKLIST_MATCH",
-        description: `Check-in blocked (blacklist record): ${invitation.visitor.name} — ${blacklisted.reason}`,
+        description: "Check-in was blocked by a visitor blacklist record.",
         severity: "CRITICAL",
         guardName: input.actorName,
       },
@@ -532,6 +531,7 @@ export async function performCheckin(input: CheckInInput): Promise<CheckInResult
               signatureUrl: storedSignatureUrl ?? null,
               receptionistName: input.receptionistName ?? input.actorName,
               securityGuardName: input.actorName,
+              hostNotifiedAt: new Date(),
             },
             include: {
               visitor: { include: { visitorType: true } },

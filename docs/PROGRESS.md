@@ -55,7 +55,7 @@ Document management and NDA e-signature.
 
 # Entrivo — Phase 4 Implementation Progress
 
-Notifications and email completion (WhatsApp stays permanently removed).
+Notifications and email completion.
 
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
@@ -140,9 +140,13 @@ Quality, Performance, Docs.
 
 Visitor Pre-Registration Portal.
 
+Status `PARTIAL` denotes implemented groundwork that does not cover the full phase scope. P10-B currently has muster APIs/services and unit tests but no dashboard UI or dedicated acceptance script. P10-C has locale metadata/template groundwork, not full application locale routing or page localization.
+
 | Task ID | Description | Status | Date | Commit |
 |---------|-------------|--------|------|--------|
 | **P10-A** | Invitation-linked public pre-registration with hashed expiring tokens, resumable mobile wizard, encrypted/minimized ID storage, validated photo and signature uploads, NDA reuse/signing, vehicle details, versioned consent, host review and link lifecycle, localized email/reminders, tenant-scoped RBAC, check-in BLOCK/WARN/OFF policy, and acceptance/security verification. | [x] | 2026-11-23 | — |
+| **P10-B** | Emergency muster backend: tenant-scoped events and muster points, active-check-in roster snapshots, idempotent roll-call actions, notification delivery tracking, RBAC, rate limits, audit events, migration, and core/notification unit tests. No dashboard UI or dedicated acceptance script is present. | PARTIAL | 2026-11-24 | — |
+| **P10-C** | Locale groundwork in organization/template/pre-registration/visitor records and multilingual notification templates. Full application locale routing and localized page coverage are not implemented. | PARTIAL | — | — |
 | **P10-D** | Recurring invitation series and RRULE calendar export, group invitations with per-visitor passes and reception check-in, tenant-scoped CSV preview/import and error reports, visitor deduplication, vendor registry, migration backfill, RBAC/policy/docs, and focused recurrence/CSV/calendar tests. | [x] | 2026-11-23 | — |
 | **P10-E** | Parking lots and typed slots, serializable reservation locking, vehicle plate validation/blacklist, check-in/checkout and gate state transitions, permits, availability/utilization reports, plate PII export/erase/retention, RBAC, tenant audit, migration, docs, and acceptance tests. | [x] | 2026-11-24 | — |
 | **P10-F1** | Organization-scoped courier/delivery reception, hashed one-time pickup codes, collection/return/unclaimed lifecycle, 24h/72h reminders, lightweight delivery-person policy entry, notifications, CSV export, RBAC, audit, migration, docs, and acceptance tests. | [x] | 2026-11-23 | — |
@@ -151,6 +155,12 @@ Visitor Pre-Registration Portal.
 | **P10-G2** | Checkout feedback scheduling: delayed BullMQ feedback queue, checkout-thanks event integration, SHA-256 feedback tokens, locale-aware payload routing, one-tap NPS email links, kiosk/staff signed visit and generic QR helpers, and worker support. | [x] | 2026-11-23 | — |
 | **P10-G3** | Public feedback submission: email/visit/generic QR pages, Zod and honeypot controls, comment sanitization and profanity flagging, IP/token limits, atomic one-use email consumption, visit-response uniqueness, privacy-hashed IP metadata, and detractor notification routing. | [x] | 2026-11-23 | — |
 | **P10-G4** | Feedback inbox: tenant-scoped cursor pagination, date/score/host/branch/review filters, EMPLOYEE own-host restriction, reviewed state, sanitized internal notes, and feedback view/manage audit events. | [x] | 2026-11-23 | — |
+| **P10-G5** | Analytics dashboard and reporting: P5-01 reuse, peak-hours heatmap, busy days, host load, wait/p90, no-show, duration/overstay, approval turnaround, NPS trend/split/themes, previous-period comparison, tenant/RBAC/employee scope, CSV/Excel export, short cache, and scheduled Report job support. | [x] | 2026-11-24 | — |
+| **P10-G6** | Tests and acceptance: NPS, wait-time, no-show, token single-use concepts, checkout→feedback→detractor→analytics flow coverage, deterministic seeded heatmap totals, P10-G acceptance script, package script, and tenant auto-discovery extensions. | [x] | 2026-11-24 | — |
+| **P10-G7** | Documentation and closeout: README feature/run guidance, environment settings, security threat model, RBAC matrix/routes, schema changes, analytics formulas, acceptance progress, and P10-G operational verification. | [x] | 2026-11-24 | — |
+| **P10-H1** | Self-check-in point/session schema, versioned rotating QR, OTP/session security, tenant policy settings, audit events, rate limits, and RBAC. | [x] | 2026-11-24 | — |
+| **P10-H2** | Mobile visitor flow with personal pass camera scan, Email OTP walk-in flow, live status polling, host/reception approval queue, notifications, expiry/escalation worker, and shared check-in service enforcement. | [x] | 2026-11-24 | — |
+| **P10-H3** | Focused unit and mobile E2E tests, tenant/acceptance verification, migration checks, and README/ENV/settings/security/RBAC/schema/progress documentation. | [x] | 2026-11-24 | — |
 
 
 

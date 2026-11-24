@@ -212,7 +212,7 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
       data: {
         organizationId: orgId,
         logType: "BLACKLIST_MATCH",
-        description: `Blocked walk-in for blacklisted visitor ${input.name} (${cleanPhone}). Reason: ${blacklisted.reason}`,
+        description: "Walk-in check-in was blocked by the visitor blacklist.",
         severity: "CRITICAL",
         guardName: input.actorName,
       },
@@ -327,7 +327,7 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
         data: {
           organizationId: orgId,
           logType: "WALKIN_CHECKIN",
-          description: `Walk-in visitor ${visitor.name} checked in (Badge ${badgeNumber}) for host ${hostEmp.user.name}.`,
+          description: "A walk-in visitor completed check-in.",
           severity: "LOW",
           guardName: input.actorName,
         },
@@ -365,7 +365,7 @@ export async function performWalkIn(input: WalkInInput): Promise<WalkInResult | 
     action: "CHECKIN_SUCCESS",
     entity: "CHECKIN",
     entityId: checkIn.id,
-    details: { badgeNumber, walkin: true, visitorName: checkIn.visitor?.name, hostName: checkIn.hostEmployee?.user?.name },
+    details: { walkin: true },
   }).catch(console.error);
 
   // Notify host (fire-and-forget)

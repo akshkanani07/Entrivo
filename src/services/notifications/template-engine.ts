@@ -91,6 +91,46 @@ const BUILTIN_TEMPLATES: Record<string, Record<string, DefaultTemplate>> = {
       subject: "Guest Waiting",
       body: "Guest Waiting: {{visitor_name}} ({{visitor_company}}) is waiting at {{location}} for {{host_name}}.",
     },
+    [`${NotificationEvent.SELF_CHECKIN_PENDING}:${NotificationChannel.EMAIL}`]: {
+      subject: "Confirm visitor self check-in for {{visitor_name}}",
+      body: "{{visitor_name}} is waiting at {{location}} for {{host_name}} to confirm their self check-in. Review and approve or reject: {{action_url}}",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_PENDING}:${NotificationChannel.IN_APP}`]: {
+      subject: "Visitor self check-in needs confirmation",
+      body: "{{visitor_name}} is waiting at {{location}} for confirmation.",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_PENDING}:${NotificationChannel.WEB_PUSH}`]: {
+      subject: "Visitor check-in confirmation needed",
+      body: "{{visitor_name}} is waiting at {{location}}.",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_PENDING}:${NotificationChannel.SLACK}`]: {
+      subject: "Visitor self check-in pending",
+      body: "{{visitor_name}} is waiting at {{location}} for {{host_name}}. Review: {{action_url}}",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_PENDING}:${NotificationChannel.TEAMS}`]: {
+      subject: "Visitor self check-in pending",
+      body: "{{visitor_name}} is waiting at {{location}} for {{host_name}}. Review: {{action_url}}",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.EMAIL}`]: {
+      subject: "Reception action required: visitor still waiting",
+      body: "{{visitor_name}} is still waiting at {{location}} after {{host_name}} did not confirm in time. Review: {{action_url}}",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.IN_APP}`]: {
+      subject: "Self check-in escalated to reception",
+      body: "{{visitor_name}} is still waiting at {{location}}.",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.WEB_PUSH}`]: {
+      subject: "Visitor still waiting",
+      body: "{{visitor_name}} needs reception confirmation at {{location}}.",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.SLACK}`]: {
+      subject: "Visitor self check-in escalated",
+      body: "{{visitor_name}} is still waiting at {{location}}. Review: {{action_url}}",
+    },
+    [`${NotificationEvent.SELF_CHECKIN_ESCALATED}:${NotificationChannel.TEAMS}`]: {
+      subject: "Visitor self check-in escalated",
+      body: "{{visitor_name}} is still waiting at {{location}}. Review: {{action_url}}",
+    },
     [`${NotificationEvent.VISITOR_ARRIVED}:${NotificationChannel.EMAIL}`]: {
       subject: "Visitor Arrived: {{visitor_name}} checked in",
       body: "Hello {{host_name}},\n\nYour visitor {{visitor_name}} ({{visitor_company}}) has checked in at {{location}}.\n\nAssigned Badge: #{{badge_number}}\nArrival Time: {{time}}",

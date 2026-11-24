@@ -28,6 +28,7 @@ import {
   Package,
   HardHat,
   MessageSquareText,
+  ScanLine,
 } from "lucide-react";
 import { CurrentUser } from "@/types";
 import { can, Permission } from "@/lib/rbac-base";
@@ -85,6 +86,9 @@ export function Sidebar({ currentUser, isOpenMobile = false, onCloseMobile }: Si
     { label: "Notifications", href: "/notifications", icon: BellRing, permission: "notifications.self" },
     { label: "Reports & Logs", href: "/reports", icon: BarChart3, permission: "reports.view" },
     { label: "Feedback Inbox", href: "/feedback", icon: MessageSquareText, permission: "feedback.read" },
+    { label: "Visitor Analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+    { label: "Self Check-in Queue", href: "/desk/self-checkins", icon: ScanLine, permission: "selfcheckin.confirm" },
+    { label: "Self Check-in Points", href: "/self-checkin/points", icon: QrCode, permission: "selfcheckin.manage" },
     { label: "Organization", href: "/organization", icon: Building2, permission: "org.manage" },
     { label: "Audit Trail", href: "/audit-logs", icon: Activity, permission: "audit.read" },
     { label: "Integrations", href: "/integrations", icon: Webhook, permission: "integrations.manage" },

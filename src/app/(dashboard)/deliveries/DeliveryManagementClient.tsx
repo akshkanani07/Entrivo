@@ -129,9 +129,13 @@ export function DeliveryManagementClient({
           <p className="text-sm text-slate-500">Courier reception and pickup management</p>
         </div>
         {canExport && (
-          <a className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold" href="/api/deliveries/export">
+          <button
+            type="button"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"
+            onClick={() => window.location.assign("/api/deliveries/export")}
+          >
             Export CSV
-          </a>
+          </button>
         )}
       </div>
 

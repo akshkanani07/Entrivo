@@ -24,6 +24,8 @@ export enum NotificationEvent {
   DELIVERY_REMINDER = "DELIVERY_REMINDER",
   DELIVERY_UNCLAIMED = "DELIVERY_UNCLAIMED",
   FEEDBACK_DETRACTOR = "FEEDBACK_DETRACTOR",
+  SELF_CHECKIN_PENDING = "SELF_CHECKIN_PENDING",
+  SELF_CHECKIN_ESCALATED = "SELF_CHECKIN_ESCALATED",
 }
 
 export interface NotificationPayload {
@@ -70,5 +72,6 @@ export interface NotificationPayload {
   feedbackUrl?: string;
   locale?: string;
   npsScore?: number;
+  recipientEmails?: string[];
 }
 

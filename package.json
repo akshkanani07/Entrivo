@@ -19,6 +19,8 @@
     "test:p10e": "node --experimental-strip-types scripts/verify-p10-e-acceptance.ts",
     "test:p10f": "node --experimental-strip-types scripts/verify-p10-f-acceptance.ts",
     "test:p10f2": "node --experimental-strip-types scripts/verify-p10-f2-acceptance.ts",
+    "test:p10g": "node --experimental-strip-types scripts/verify-p10-g-acceptance.ts",
+    "test:p10h": "node --experimental-strip-types scripts/verify-p10-h-acceptance.ts",
     "migrate:backfill-checkin-locations": "tsx scripts/backfill-checkin-locations.ts",
     "test:acceptance": "node --experimental-strip-types scripts/verify-phase-0-acceptance.ts",
     "test:phase3": "npx tsx -r ./scripts/mock-server-only.cjs scripts/verify-phase-3-acceptance.ts",

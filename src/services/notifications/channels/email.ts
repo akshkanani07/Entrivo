@@ -66,6 +66,27 @@ export async function sendEmailNotification(
     });
 
     switch (event) {
+      case NotificationEvent.SELF_CHECKIN_PENDING:
+      case NotificationEvent.SELF_CHECKIN_ESCALATED: {
+        const recipients = Array.from(new Set(payload.recipientEmails || (payload.hostEmail ? [payload.hostEmail] : [])));
+        if (!recipients.length) return { success: false, reason: "No self check-in approvers" };
+        const reviewUrl = absoluteUrl(payload.approvalUrl, "/desk/self-checkins");
+        const emailResults = await Promise.all(recipients.map((to) => emailService.sendEmail({
+          to,
+          recipientName: "Visitor reception",
+          subject: rendered.subject,
+          htmlContent: renderBrandedEmailLayout({
+            title: rendered.subject,
+            tag: "Confirmation Required",
+            contentHtml: `<div style="font-size:14px;line-height:1.6;color:#354256;">${escapeHtml(rendered.body).replace(/\n/g, "<br>")}</div>`,
+            actionButton: { text: "Review self check-in", url: reviewUrl },
+            organizationName: orgName,
+          }),
+          textContent: rendered.body,
+        }, undefined, payload.organizationId, event)));
+        return { success: emailResults.every((result) => result.success) };
+      }
+
       case NotificationEvent.GROUP_INVITE_CREATED: {
         if (!payload.hostEmail) return { success: false, reason: "No host email" };
         const email: EmailPayload = {

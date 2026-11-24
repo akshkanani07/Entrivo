@@ -187,6 +187,50 @@ export class MailjetEmailService {
     }
   }
 
+  async sendEphemeralEmail(
+    payload: EmailPayload,
+    organizationId: string
+  ): Promise<{ success: boolean }> {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!payload.to || !emailRegex.test(payload.to)) return { success: false };
+
+    const suppression = await prisma.emailSuppression.findUnique({
+      where: {
+        organizationId_email: {
+          organizationId,
+          email: payload.to.toLowerCase(),
+        },
+      },
+      select: { id: true },
+    });
+    if (suppression) return { success: false };
+
+    if (!this.isConfigured) return { success: false };
+
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.apiKey}:${this.secretKey}`).toString("base64")}`;
+      const response = await fetch("https://api.mailjet.com/v3.1/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify({
+          Messages: [{
+            From: { Email: this.fromEmail, Name: this.fromName },
+            To: [{ Email: payload.to, Name: payload.recipientName }],
+            Subject: payload.subject,
+            TextPart: payload.textContent || stripHtml(payload.htmlContent),
+            HTMLPart: payload.htmlContent,
+          }],
+        }),
+      });
+      return { success: response.ok };
+    } catch {
+      return { success: false };
+    }
+  }
+
   private getMessageId(response: unknown): string | undefined {
     if (!response || typeof response !== "object") return undefined;
     const messages = (response as { Messages?: Array<{ To?: Array<{ MessageID?: string | number }> }> }).Messages;

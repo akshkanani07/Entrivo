@@ -41,12 +41,14 @@ import { processBulkImportJob } from "../src/services/invitations/bulk-import.se
 import { markPastInvitationMembersNoShow } from "../src/services/invitations/no-show.service";
 import { runParkingSweep } from "../src/services/parking/parking.service";
 import { processFeedbackJob } from "../src/services/feedback/feedback.service";
+import { sweepSelfCheckinSessions } from "../src/services/self-checkin/self-checkin-sweep.service";
 
 const workers: Worker[] = [];
 let autoCheckoutInterval: NodeJS.Timeout | null = null;
 let invitationSeriesInterval: NodeJS.Timeout | null = null;
 let invitationNoShowInterval: NodeJS.Timeout | null = null;
 let parkingSweepInterval: NodeJS.Timeout | null = null;
+let selfCheckinSweepInterval: NodeJS.Timeout | null = null;
 
 async function startWorker() {
   logger.info("Starting Entrivo Background Worker Daemon...");
@@ -209,6 +211,20 @@ async function startWorker() {
     }
   }, 5 * 60 * 1000);
 
+  selfCheckinSweepInterval = setInterval(async () => {
+    try {
+      const result = await sweepSelfCheckinSessions();
+      if (result.expired || result.escalated) {
+        logger.info(result, "[Worker] Self check-in sessions swept");
+      }
+    } catch (error) {
+      logger.error(
+        { errorType: error instanceof Error ? error.name : "UnknownError" },
+        "[Worker] Self check-in session sweep failed"
+      );
+    }
+  }, 60 * 1000);
+
   logger.info("Entrivo Background Worker is listening for jobs.");
 }
 
@@ -226,6 +242,9 @@ async function gracefulShutdown(signal: string) {
   }
   if (parkingSweepInterval) {
     clearInterval(parkingSweepInterval);
+  }
+  if (selfCheckinSweepInterval) {
+    clearInterval(selfCheckinSweepInterval);
   }
   clearInterval(heartbeatInterval);
   try {

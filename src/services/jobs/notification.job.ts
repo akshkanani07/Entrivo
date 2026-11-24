@@ -83,6 +83,7 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
 
   // 1. RECIPIENT RESOLUTION
   const targetUserIds = new Set<string>();
+  let recipientEmails: string[] | undefined;
 
   // A. Host User
   if (payload.hostUserId) {
@@ -109,6 +110,8 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
 
   // C. For Security Alerts, Overstay & Daily Report, deliver to Admins & Security Staff
   if (
+    event === NotificationEvent.SELF_CHECKIN_PENDING ||
+    event === NotificationEvent.SELF_CHECKIN_ESCALATED ||
     event === NotificationEvent.SECURITY_ALERT ||
     event === NotificationEvent.VISITOR_OVERSTAYED ||
     event === NotificationEvent.APPROVAL_ESCALATED ||
@@ -116,7 +119,10 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
     event === NotificationEvent.FEEDBACK_DETRACTOR
   ) {
     try {
-      const recipientRoles = event === NotificationEvent.DOCUMENT_EXPIRING
+      const recipientRoles = event === NotificationEvent.SELF_CHECKIN_PENDING ||
+        event === NotificationEvent.SELF_CHECKIN_ESCALATED
+        ? [UserRole.RECEPTIONIST, UserRole.SECURITY_GUARD, UserRole.ORG_ADMIN]
+        : event === NotificationEvent.DOCUMENT_EXPIRING
         ? [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN]
         : [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.SECURITY_GUARD];
       const staffUsers = await prisma.user.findMany({
@@ -126,9 +132,19 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
           isActive: true,
         },
         select: { id: true, email: true },
-        take: 20,
+        take: event === NotificationEvent.SELF_CHECKIN_PENDING ||
+          event === NotificationEvent.SELF_CHECKIN_ESCALATED ? 50 : 20,
       });
       staffUsers.forEach((u) => targetUserIds.add(u.id));
+      if (
+        event === NotificationEvent.SELF_CHECKIN_PENDING ||
+        event === NotificationEvent.SELF_CHECKIN_ESCALATED
+      ) {
+        recipientEmails = Array.from(new Set([
+          ...(payload.hostEmail ? [payload.hostEmail] : []),
+          ...staffUsers.map((user) => user.email),
+        ]));
+      }
     } catch {}
   }
 
@@ -175,7 +191,10 @@ export async function processNotificationJob(jobData: NotificationJobData): Prom
   }
 
   // C. Email Notification
-  dispatches.push(sendEmailNotification(event, payload));
+  dispatches.push(sendEmailNotification(event, {
+    ...payload,
+    ...(recipientEmails ? { recipientEmails } : {}),
+  }));
 
   // D. Slack Integration (Workspace Channel)
   if (!emailOnlyVisitorLink) {

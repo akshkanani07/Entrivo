@@ -149,6 +149,8 @@ export function SettingsClientView({
     requireHost: initialPolicy?.requireHost ?? true,
     preRegistrationRequired: initialPolicy?.preRegistrationRequired ?? "WARN",
     preRegistrationTokenTtlHours: initialPolicy?.preRegistrationTokenTtlHours ?? 24,
+    selfCheckinMode: initialPolicy?.selfCheckinMode ?? "OFF",
+    selfCheckinEscalationMinutes: initialPolicy?.selfCheckinEscalationMinutes ?? 5,
 
     // 4. Approval Rules
     autoApprovalEnabled: initialPolicy?.autoApprovalEnabled ?? false,
@@ -898,6 +900,51 @@ export function SettingsClientView({
                 />
               </label>
             </div>
+          </div>
+
+          <div className="space-y-3 pt-2 border-t border-slate-800">
+            <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+              Self Check-in
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <label className="flex flex-col gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="font-semibold text-white">Confirmation policy</span>
+                <select
+                  value={policyData.selfCheckinMode}
+                  onChange={(e) =>
+                    setPolicyData({
+                      ...policyData,
+                      selfCheckinMode: e.target.value as OrgPolicy["selfCheckinMode"],
+                    })
+                  }
+                  className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-200"
+                >
+                  <option value="OFF">Off</option>
+                  <option value="HOST_CONFIRM">Host confirms</option>
+                  <option value="DESK_CONFIRM">Reception confirms</option>
+                  <option value="AUTO_IF_PREREGISTERED">Auto-confirm pre-registered visitors; host confirms walk-ins</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <span className="font-semibold text-white">Escalate to reception after (minutes)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={policyData.selfCheckinEscalationMinutes}
+                  onChange={(e) =>
+                    setPolicyData({
+                      ...policyData,
+                      selfCheckinEscalationMinutes: Math.min(60, Math.max(1, Number(e.target.value) || 5)),
+                    })
+                  }
+                  className="rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-slate-200"
+                />
+              </label>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              A rotating desk QR is required. Self check-in is disabled unless an active desk point is configured.
+            </p>
           </div>
 
           {/* Section B: Verification & NDA */}

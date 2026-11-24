@@ -17,6 +17,8 @@ async function main() {
   await prisma.notification.deleteMany({});
   await prisma.badge.deleteMany({});
   await prisma.qRCode.deleteMany({});
+  await prisma.feedbackResponse.deleteMany({});
+  await prisma.feedbackRequest.deleteMany({});
   await prisma.checkOut.deleteMany({});
   await prisma.checkIn.deleteMany({});
   await prisma.approval.deleteMany({});
@@ -445,6 +447,8 @@ async function main() {
       invitationId: invitation1.id,
       hostEmployeeId: alexEmp.id,
       checkInTime: new Date(Date.now() - 3600000), // 1 hour ago
+      hostNotifiedAt: new Date(Date.now() - 3300000),
+      meetingStartedAt: new Date(Date.now() - 3000000),
       expectedCheckout: new Date(Date.now() + 5400000),
       badgeNumber: "BADGE-101",
       badgeIssued: true,
@@ -470,6 +474,8 @@ async function main() {
       visitorId: visitor3.id,
       hostEmployeeId: alexEmp.id,
       checkInTime: new Date(Date.now() - 14400000), // 4 hours ago
+      hostNotifiedAt: new Date(Date.now() - 13800000),
+      meetingStartedAt: new Date(Date.now() - 13200000),
       badgeNumber: "BADGE-098",
       badgeIssued: true,
       status: CheckInStatus.CHECKED_OUT,
@@ -485,6 +491,36 @@ async function main() {
       durationMinutes: 120,
       checkoutMethod: "QR_SCAN",
       exitNotes: "Server rack inspection completed successfully. Badge returned.",
+    },
+  });
+
+  const seedFeedbackToken = crypto.randomBytes(32).toString("base64url");
+  await prisma.feedbackRequest.create({
+    data: {
+      organizationId: org.id,
+      checkInId: checkIn2.id,
+      tokenHash: crypto.createHash("sha256").update(seedFeedbackToken).digest("hex"),
+      expiresAt: new Date(Date.now() + 7 * 86400000),
+      sentAt: new Date(Date.now() - 3600000),
+      channelSentVia: "EMAIL",
+      consumedAt: new Date(Date.now() - 3000000),
+    },
+  });
+  await prisma.feedbackResponse.create({
+    data: {
+      organizationId: org.id,
+      checkInId: checkIn2.id,
+      hostEmployeeId: alexEmp.id,
+      branchId: branchHQ.id,
+      officeId: officeFloor6.id,
+      npsScore: 9,
+      csatScore: 5,
+      categories: ["STAFF", "PROCESS"],
+      comment: "Friendly staff and a smooth reception process.",
+      locale: "en-IN",
+      isAnonymous: false,
+      source: "EMAIL",
+      ipHash: crypto.createHash("sha256").update("seed-feedback-ip").digest("hex"),
     },
   });
 

@@ -64,7 +64,7 @@ export function FeedbackInboxClient() {
   }, [branchId, from, hostEmployeeId, reviewed, scoreBand, to]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   async function updateRow(id: string, patch: { reviewed?: boolean; internalNote?: string }) {

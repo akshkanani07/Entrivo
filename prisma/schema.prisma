@@ -69,6 +69,8 @@ model Organization {
   complianceRequirements ComplianceRequirement[]
   feedbackRequests       FeedbackRequest[]
   feedbackResponses      FeedbackResponse[]
+  selfCheckinPoints     SelfCheckinPoint[]
+  selfCheckinSessions   SelfCheckinSession[]
 
   @@index([slug])
 }
@@ -107,6 +109,7 @@ model Office {
   meetingRooms    MeetingRoom[]
   musterPoints    MusterPoint[]
   parkingLots     ParkingLot[]
+  selfCheckinPoints SelfCheckinPoint[]
   branch          Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@index([branchId])
@@ -172,6 +175,7 @@ model User {
   createdInvitationSeries  InvitationSeries[]       @relation("InvitationSeriesCreator")
   approvedInvitationSeries InvitationSeries[]       @relation("InvitationSeriesApprover")
   createdBulkImportJobs    BulkImportJob[]          @relation("BulkImportJobCreator")
+  confirmedSelfCheckinSessions SelfCheckinSession[] @relation("SelfCheckinConfirmedBy")
   organization             Organization?            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([email])
@@ -255,6 +259,7 @@ model Employee {
   deliveriesReceived   Delivery[]          @relation("DeliveryReceivedBy")
   deliveriesRecipient  Delivery[]          @relation("DeliveryRecipient")
   sponsoredContractors ContractorCompany[] @relation("ContractorSponsor")
+  selfCheckinSessions SelfCheckinSession[] @relation("SelfCheckinHost")
 
   @@index([organizationId])
   @@index([departmentId])
@@ -311,6 +316,7 @@ model Visitor {
   vehicles            Vehicle[]
   contractorPermits   ContractorPermit[]
   contractorWorkers   ContractorWorker[]
+  selfCheckinSessions SelfCheckinSession[]
   organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   visitorType         VisitorType?        @relation(fields: [visitorTypeId], references: [id])
 
@@ -352,6 +358,7 @@ model Invitation {
   visitors           InvitationVisitor[]
   series             InvitationSeries?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   parkingAssignments ParkingAssignment[]
+  selfCheckinSessions SelfCheckinSession[]
 
   @@unique([seriesId, occurrenceDate])
   @@index([qrToken])
@@ -444,6 +451,7 @@ model CheckIn {
   qrCodes            QRCode[]
   feedbackRequest    FeedbackRequest?
   feedbackResponses  FeedbackResponse[]
+  selfCheckinSession SelfCheckinSession?
   zone               Zone?                @relation(fields: [zoneId], references: [id], onDelete: SetNull)
 
   @@index([status])
@@ -777,6 +785,66 @@ model PreRegistration {
   @@index([organizationId])
   @@index([status])
   @@index([tokenExpiresAt])
+}
+
+model SelfCheckinPoint {
+  id             String                  @id @default(cuid())
+  organizationId String
+  officeId       String
+  name           String
+  status         SelfCheckinPointStatus  @default(ACTIVE)
+  secretVersion  Int                     @default(1)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  office         Office                  @relation(fields: [officeId], references: [id], onDelete: Cascade)
+  sessions       SelfCheckinSession[]
+
+  @@index([organizationId, status])
+  @@index([officeId])
+}
+
+model SelfCheckinSession {
+  id                   String                 @id @default(cuid())
+  organizationId       String
+  pointId              String
+  invitationId         String?
+  visitorId            String?
+  hostEmployeeId       String?
+  checkInId            String?                @unique
+  tokenHash            String                 @unique
+  status               SelfCheckinStatus      @default(STARTED)
+  method               SelfCheckinMethod
+  startedAt            DateTime               @default(now())
+  expiresAt            DateTime
+  confirmedById        String?
+  confirmedAt          DateTime?
+  ipHash               String?
+  userAgentHash        String?
+  emailHash            String?
+  emailCiphertext      String?
+  emailOtpHash         String?
+  emailOtpExpiresAt    DateTime?
+  emailOtpAttempts     Int                    @default(0)
+  emailVerifiedAt      DateTime?
+  payloadCiphertext    String?
+  idempotencyKeyHash   String?                @unique
+  completionClaimedAt  DateTime?
+  escalatedAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  organization         Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  point                SelfCheckinPoint       @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  invitation           Invitation?            @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+  visitor              Visitor?               @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  hostEmployee         Employee?               @relation("SelfCheckinHost", fields: [hostEmployeeId], references: [id], onDelete: SetNull)
+  confirmedBy          User?                  @relation("SelfCheckinConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  checkIn              CheckIn?               @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, startedAt])
+  @@index([pointId, status])
+  @@index([hostEmployeeId, status])
+  @@index([expiresAt, status])
 }
 
 model Vehicle {
@@ -1561,6 +1629,27 @@ enum PreRegistrationStatus {
   APPROVED
   REJECTED
   EXPIRED
+}
+
+enum SelfCheckinPointStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SelfCheckinStatus {
+  STARTED
+  IDENTIFIED
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  REJECTED
+  EXPIRED
+  COMPLETED
+}
+
+enum SelfCheckinMethod {
+  PREREG_QR
+  EMAIL_OTP
+  WALKIN
 }
 
 enum VehicleType {
