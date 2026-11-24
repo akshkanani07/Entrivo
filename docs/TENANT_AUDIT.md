@@ -15,6 +15,7 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 
 | Handler / Route | Entity | Scoping Mechanism | Foreign Relation Checks |
 | :--- | :--- | :--- | :--- |
+| `POST /api/locale` | `User.locale` / locale cookie | Public preference endpoint; signed-in update uses only authenticated `user.id` (+ `organizationId` when available) | Zod locale allow-list; IP rate limit; `LOCALE_CHANGED` audit; no user identifier accepted from request |
 | `GET /api/visitors` | `Visitor` | `where: { organizationId }` | N/A |
 | `POST /api/visitors` | `Visitor` | Created with `organizationId` | `visitorTypeId` verified in tenant |
 | `PATCH /api/visitors` | `Visitor` | `findFirst({ where: { id, organizationId } })` | N/A |
@@ -83,6 +84,7 @@ Multi-tenancy in Entrivo is strictly enforced through `organizationId`.
 ---
 
 ## 3. Public Endpoints Verification
+- `/api/locale`: Intentionally public so visitors can set their locale before sign-in. It accepts only the supported locale enum, rate-limits by client IP, sets a restrictive locale cookie, and when authenticated changes only the caller's own `User.locale` with an audit event. It does not reflect the submitted locale in the response.
 - `/pass/[token]`: Requires secret signed or unique random `qrToken`. Removed legacy fallback to raw database `id`. Does not expose tenant internal IDs or credentials.
 - `/kiosk`: Kiosk registration generates touchless check-ins scoped to the organization hosting the kiosk terminal.
 - `/api/cron/auto-checkout`: Protected by constant-time Bearer token comparison (`CRON_SECRET`). Operates system-wide to close stale open visits safely.

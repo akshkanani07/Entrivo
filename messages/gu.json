@@ -500,9 +500,6 @@
     "retry": "ફરી પ્રયાસ કરો",
     "quickTestPasses": "ઝડપી પરીક્ષણ પાસ:",
     "passTokenPlaceholder": "પાસ ટોકન દાખલ કરો (દા.ત. ENTRIVO-INV-APEX-101)...",
-    "blacklistAlert": "સુરક્ષા ચેતવણી: મુલાકાતી બ્લેકલિસ્ટમાં છે",
-    "unauthorizedFlag": "અનધિકૃત પ્રવેશ તરીકે ચિહ્નિત.",
-    "companyHost": "{company} • યજમાન: {host}",
     "roomName": "રૂમ: {room}",
     "executiveSuite": "એક્ઝિક્યુટિવ સ્યુટ",
     "proceedCheckin": "ચેક-ઇન પર આગળ વધો"

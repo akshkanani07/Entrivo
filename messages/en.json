@@ -500,9 +500,6 @@
     "retry": "Retry",
     "quickTestPasses": "Quick Test Passes:",
     "passTokenPlaceholder": "Enter Pass Token (e.g. ENTRIVO-INV-APEX-101)...",
-    "blacklistAlert": "SECURITY ALERT: VISITOR BLACKLISTED",
-    "unauthorizedFlag": "Unauthorized entry flagged.",
-    "companyHost": "{company} • Host: {host}",
     "roomName": "Room: {room}",
     "executiveSuite": "Executive Suite",
     "proceedCheckin": "Proceed to Check-in"

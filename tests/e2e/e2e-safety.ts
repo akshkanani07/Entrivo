@@ -10,10 +10,14 @@ export function isAllowedE2EDatabaseUrl(value: string | undefined): boolean {
   }
 }
 
-export function assertE2EDatabaseUrl(value: string | undefined): asserts value is string {
-  if (!isAllowedE2EDatabaseUrl(value)) {
+export function assertE2EDatabaseUrl(e2e: string | undefined, value: string | undefined): string {
+  if (e2e !== "1") {
+    throw new Error("E2E setup refused: set E2E=1 to run authenticated browser tests.");
+  }
+  if (typeof value !== "string" || !isAllowedE2EDatabaseUrl(value)) {
     throw new Error(
-      "E2E setup refused: set DATABASE_URL to a PostgreSQL test/e2e database; its database name must contain 'test' or 'e2e'."
+      "E2E setup refused: E2E_DATABASE_URL is missing or unsafe. Set it to a PostgreSQL database whose name contains 'test' or 'e2e'."
     );
   }
+  return value;
 }

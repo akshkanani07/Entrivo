@@ -195,11 +195,12 @@ Launches headless Chromium testing critical user journeys (login with 2FA, visit
 ```bash
 pnpm test:e2e
 ```
+All Playwright runs require `E2E=1` and a dedicated `E2E_DATABASE_URL`; the guarded Windows setup command is below.
 
 #### P11-U7a authenticated smoke tests (Windows PowerShell)
-Set `DATABASE_URL` to a dedicated PostgreSQL database whose name contains `test` or `e2e`; never point this at a production or shared non-test database. The setup refuses unsafe database names, applies migrations only after that guard, and seeds deterministic test accounts with per-run random passwords held only in process environment variables.
+Set `E2E_DATABASE_URL` to a dedicated PostgreSQL database whose name contains `test` or `e2e`, and set `E2E=1`; never point this at a production or shared non-test database. The setup fails clearly if either requirement is missing, applies migrations only after the guard, resets the deterministic E2E organization on each run, and seeds four test accounts with per-run random passwords held only in process environment variables.
 ```powershell
-$env:DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
+$env:E2E_DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
 $env:E2E = '1'
 pnpm test:e2e:7a
 ```

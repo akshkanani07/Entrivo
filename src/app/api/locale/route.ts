@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const response = NextResponse.json({ success: true, locale: parsed.data.locale });
+  const response = NextResponse.json({ success: true });
   response.cookies.set(LOCALE_COOKIE_NAME, parsed.data.locale, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

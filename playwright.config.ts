@@ -1,15 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 import { randomBytes } from "node:crypto";
-import { isAllowedE2EDatabaseUrl } from "./tests/e2e/e2e-safety";
+import { assertE2EDatabaseUrl } from "./tests/e2e/e2e-safety";
 
-const e2e = process.env.E2E === "1";
-const safeE2EDatabase = isAllowedE2EDatabaseUrl(process.env.DATABASE_URL);
-if (e2e) {
-  process.env.JWT_SECRET ||= randomBytes(48).toString("hex");
-  process.env.QR_SIGNING_SECRET ||= randomBytes(32).toString("hex");
-  process.env.STORAGE_SIGNING_SECRET ||= randomBytes(32).toString("hex");
-  process.env.APP_ENCRYPTION_KEY ||= randomBytes(32).toString("hex");
-}
+const e2eDatabaseUrl = assertE2EDatabaseUrl(process.env.E2E, process.env.E2E_DATABASE_URL);
+process.env.DATABASE_URL = e2eDatabaseUrl;
+process.env.JWT_SECRET ||= randomBytes(48).toString("hex");
+process.env.QR_SIGNING_SECRET ||= randomBytes(32).toString("hex");
+process.env.STORAGE_SIGNING_SECRET ||= randomBytes(32).toString("hex");
+process.env.APP_ENCRYPTION_KEY ||= randomBytes(32).toString("hex");
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -25,10 +23,10 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
-  webServer: e2e && !safeE2EDatabase ? undefined : {
-    command: e2e ? "pnpm dev" : "pnpm start",
+  webServer: {
+    command: "pnpm dev",
     url: "http://localhost:3000/login",
-    reuseExistingServer: !e2e,
+    reuseExistingServer: false,
     timeout: 60000,
   },
   projects: [

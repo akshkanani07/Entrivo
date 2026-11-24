@@ -33,6 +33,7 @@ const PUBLIC_WHITELIST = new Set([
   "/api/kiosk/pair",
   "/api/v1/openapi.json",
   "/api/health",
+  "/api/locale", // Public locale cookie; authenticated changes update only the caller's own account.
 ]);
 
 interface RouteAuditInfo {

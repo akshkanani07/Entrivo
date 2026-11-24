@@ -12,8 +12,8 @@ const visitorId = "e2e-7a-visitor";
 const invitationId = "e2e-7a-invitation";
 
 export default async function globalSetup() {
-  if (process.env.E2E !== "1") return;
-  assertE2EDatabaseUrl(process.env.DATABASE_URL);
+  const e2eDatabaseUrl = assertE2EDatabaseUrl(process.env.E2E, process.env.E2E_DATABASE_URL);
+  process.env.DATABASE_URL = e2eDatabaseUrl;
 
   execSync("pnpm exec prisma migrate deploy", { stdio: "inherit", env: process.env });
   const prisma = new PrismaClient();
@@ -26,6 +26,10 @@ export default async function globalSetup() {
 
   const employeeIds: Record<string, string> = {};
   try {
+    await prisma.organization.deleteMany({
+      where: { OR: [{ id: organizationId }, { slug: "entrivo-e2e-7a" }] },
+    });
+
     await prisma.organization.upsert({
       where: { slug: "entrivo-e2e-7a" },
       update: { name: "Entrivo 7a E2E Organization", timezone: "UTC", deletedAt: null },

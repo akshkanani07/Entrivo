@@ -181,11 +181,11 @@ P11-U6.2 has static and unit-test coverage. Browser execution requires an authen
 
 The walk-in approval policy is enforced in the shared walk-in service. `REQUIRE_HOST` is the secure default; `AUTO_APPROVE` delegates entry to the standard check-in gates; `DESK_OVERRIDE` keeps host approval pending while allowing authorized reception/security staff to approve with a required reason. The override is audited and cannot bypass blacklist or compliance blocks. Pending walk-ins escalate to reception in-app and through Web Push after the organization-configured delay (10 minutes by default).
 
-The authenticated Playwright setup now refuses databases unless `DATABASE_URL` is PostgreSQL and the database name includes `test` or `e2e`. After the guard, it applies migrations and seeds a deterministic organization and admin/receptionist/guard/employee accounts with random per-run passwords only in process environment variables. The 7a specs cover 390×844 mobile and 1440×900 desktop with axe critical-issue and browser-console checks.
+The authenticated Playwright setup requires `E2E=1` and `E2E_DATABASE_URL` pointing to PostgreSQL with a database name containing `test` or `e2e`. After the guard, it applies migrations, resets the deterministic organization, and seeds admin/receptionist/guard/employee accounts with random per-run passwords only in process environment variables. The 7a specs cover 390×844 mobile and 1440×900 desktop with axe critical-issue and browser-console checks.
 
-Windows PowerShell command (first set `DATABASE_URL` to a dedicated, disposable PostgreSQL test database):
+Windows PowerShell command (first set `E2E_DATABASE_URL` to a dedicated, disposable PostgreSQL test database):
 ```powershell
-$env:DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
+$env:E2E_DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_test'
 $env:E2E = '1'
 pnpm test:e2e:7a
 ```
@@ -195,5 +195,25 @@ pnpm test:e2e:7a
 | **P11-U7a** | Responsive visitor, walk-in, reception and security workflows; organization-scoped approval policy, audited desk override, escalation, guarded authenticated E2E setup, unit coverage, and documentation. | PARTIAL: TYPE/UNIT/BUILD PASS; TENANT/E2E NOT ACCEPTED | 2026-11-24 | — |
 
 Validation: `tsc --noEmit` passed; Vitest passed (36 files, 155 tests); `pnpm build` exited successfully from an env-isolated copy and emitted existing Edge Runtime/lint warnings. `pnpm lint` exited with 0 errors and 391 warnings. `pnpm test:tenant` detected the new override route as secure but failed on the existing `/api/locale` route. Playwright stopped at the database safety guard because no process-level `DATABASE_URL` was available. No Playwright pass is claimed; run the command above against the dedicated test database before accepting browser coverage.
+
+---
+
+# Entrivo — P11-U7b Preconditions (Remediation Only)
+
+U7b implementation has not started. The `/api/locale` public-route exception is explicitly justified in tenant verification; the endpoint validates supported locales, rate-limits by IP, updates only the authenticated user's own locale, audits authenticated changes, and sets a restrictive cookie without returning the submitted value. E2E now requires `E2E=1` and a dedicated `E2E_DATABASE_URL` with `test` or `e2e` in its database name; missing or unsafe configuration is a hard error.
+
+The authenticated 7a specs are intentionally not run by this prerequisite task. To run them after provisioning the dedicated E2E database, use Windows PowerShell:
+```powershell
+$env:E2E_DATABASE_URL = 'postgresql://<user>:<password>@localhost:5432/entrivo_e2e'
+$env:E2E = '1'
+pnpm test:e2e:7a
+```
+
+| Task ID | Description | Status | Date | Commit |
+|---------|-------------|--------|------|--------|
+| **P11-U7b-PRE** | Repair public locale route audit classification and safety tests; require a dedicated E2E database with deterministic per-run setup; validate prerequisites before any U7b work. | CODED; DATABASE VERIFICATION PENDING | 2026-11-24 | — |
+| **P11-U8** | Triage the existing ESLint warning baseline (391 warnings observed on 2026-11-24); U7b prerequisite lint gate is zero errors, and warning cleanup is deferred to U8. | BACKLOG | — | — |
+
+Validation: `pnpm test:tenant` passed with all 173 routes verified, including `/api/locale` as an explicitly justified public endpoint. `pnpm exec tsc --noEmit` passed. `pnpm exec eslint . --quiet` passed with zero errors. `pnpm test --maxWorkers=4` passed (37 files, 160 tests); an initial unbounded run hit the existing 5-second timeout in `calendar-oauth.test.ts`, and the bounded rerun passed. `pnpm i18n:check` still reports three unused message keys: `checkin.blacklistAlert`, `checkin.unauthorizedFlag`, and `checkin.companyHost`. The authenticated database setup and Playwright specs remain pending until `E2E_DATABASE_URL` is supplied; no browser pass is claimed. U7b has not started.
 
 
