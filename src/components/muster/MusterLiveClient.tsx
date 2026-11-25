@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
   Building2,
   Check,
   ChevronDown,
   Clock3,
+  History,
   LoaderCircle,
+  MapPin,
   Printer,
   RefreshCw,
   Search,
@@ -93,6 +96,7 @@ function isApiSuccess<T>(value: unknown): value is { success: true; data: T } {
 }
 
 export function MusterLiveClient({ branches, canBroadcast, canReadHostPhone }: Props) {
+  const t = useTranslations("muster");
   const [entries, setEntries] = useState<MusterEntry[]>([]);
   const [activeEvents, setActiveEvents] = useState<MusterEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,6 +357,12 @@ export function MusterLiveClient({ branches, canBroadcast, canReadHostPhone }: P
           <p className="mt-1 text-xs text-slate-400">Live accountability for everyone currently in the building.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/muster/history" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 px-4 text-xs font-bold text-slate-200 hover:bg-slate-800">
+            <History className="h-4 w-4" /> {t("historyTitle")}
+          </Link>
+          <Link href="/muster/points" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 px-4 text-xs font-bold text-slate-200 hover:bg-slate-800">
+            <MapPin className="h-4 w-4" /> {t("pointsTitle")}
+          </Link>
           <button type="button" onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-700 px-4 text-xs font-bold text-slate-200 hover:bg-slate-800">
             <Printer className="h-4 w-4" /> Print
           </button>

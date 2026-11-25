@@ -73,14 +73,6 @@ export async function GET(
       };
     });
 
-    await auditMusterAction({
-      organizationId: context.organizationId,
-      userId: context.user.id,
-      action: "MUSTER_EVENT_VIEWED",
-      entityId: event.id,
-      details: { deliveryStatusViewed: true },
-      clientIp: context.clientIp,
-    });
     return NextResponse.json(
       { success: true, data: { eventId: event.id, action: parsedAction.data, channels } },
       { headers: { "Cache-Control": "no-store" } }

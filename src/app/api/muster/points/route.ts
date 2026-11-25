@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requiredString } from "@/lib/zod-helpers";
@@ -39,13 +40,6 @@ export async function GET(request: Request) {
       include: { office: { select: { id: true, name: true, branchId: true } } },
       orderBy: [{ office: { name: "asc" } }, { name: "asc" }],
     });
-    await auditMusterAction({
-      organizationId: context.organizationId,
-      userId: context.user.id,
-      action: "MUSTER_POINTS_LISTED",
-      details: { count: points.length },
-      clientIp: context.clientIp,
-    });
     return NextResponse.json({ success: true, data: points });
   } catch (error) {
     return musterErrorResponse(error);
@@ -55,6 +49,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const context = await authorizeMuster(request, "muster.manage", "point-create", 20);
   if ("response" in context) return context.response;
+  const t = await getTranslations("muster");
 
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
@@ -74,7 +69,7 @@ export async function POST(request: Request) {
       },
       select: { id: true },
     });
-    if (!office) return NextResponse.json({ success: false, error: "Office not found" }, { status: 404 });
+    if (!office) return NextResponse.json({ success: false, error: t("officeNotFound") }, { status: 404 });
 
     const point = await prisma.musterPoint.create({
       data: {

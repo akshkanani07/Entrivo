@@ -94,3 +94,23 @@ export function auditMusterAction(input: {
     ipAddress: input.clientIp,
   });
 }
+
+export async function auditMusterRead(input: {
+  organizationId: string;
+  userId: string;
+  action: "MUSTER_VIEW_LIVE" | "MUSTER_EVENT_VIEWED";
+  entityId?: string;
+  details?: Record<string, string | number | boolean | null>;
+  clientIp?: string;
+  rateLimitResourceId: string;
+}) {
+  const rateLimit = checkRateLimit(
+    `muster:read-audit:${input.organizationId}:${input.userId}:${input.rateLimitResourceId}`,
+    { maxRequests: 1, windowMs: 15 * 60_000 }
+  );
+  if (!rateLimit.allowed) return false;
+
+  const { rateLimitResourceId: _rateLimitResourceId, ...auditInput } = input;
+  await auditMusterAction(auditInput);
+  return true;
+}

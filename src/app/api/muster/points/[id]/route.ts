@@ -1,11 +1,13 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authorizeMuster, auditMusterAction, musterErrorResponse } from "../../_helpers";
 
 const idSchema = z.string().trim().min(1).max(128);
 const patchSchema = z.object({
+  officeId: z.string().trim().min(1).max(128).optional(),
   name: z.string().trim().min(2).max(120).optional(),
   location: z.string().trim().min(2).max(500).optional(),
   isActive: z.boolean().optional(),
@@ -17,6 +19,7 @@ export async function PATCH(
 ) {
   const context = await authorizeMuster(request, "muster.manage", "point-update", 30);
   if ("response" in context) return context.response;
+  const t = await getTranslations("muster");
   const { id } = await params;
   const parsedId = idSchema.safeParse(id);
   if (!parsedId.success) return NextResponse.json({ success: false, error: "Invalid point ID" }, { status: 400 });
@@ -30,6 +33,20 @@ export async function PATCH(
   }
 
   try {
+    if (parsedBody.data.officeId) {
+      const office = await prisma.office.findFirst({
+        where: {
+          id: parsedBody.data.officeId,
+          branch: { organizationId: context.organizationId },
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+      if (!office) {
+        return NextResponse.json({ success: false, error: t("officeNotFound") }, { status: 404 });
+      }
+    }
+
     const result = await prisma.musterPoint.updateMany({
       where: {
         id: parsedId.data,

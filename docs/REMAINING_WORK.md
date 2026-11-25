@@ -17,13 +17,13 @@ Audit date: 2026-11-24. This is a static code audit; no browser/E2E run was perf
 | Live roster grouped by floor/zone with location filters | DONE | `src/app/(dashboard)/muster/page.tsx` loads tenant locations; `src/components/muster/MusterLiveClient.tsx` filters by office/floor/zone, groups rows, and refreshes the roster. `/api/muster` validates filters and scopes rows to the organization. Static code verified; no browser run. | — |
 | Emergency start, two-step confirmation, DRILL labeling | DONE | `MusterLiveClient.tsx` has form and confirmation steps and requires typing `START`; DRILL is called out in the dialog. `/api/muster/events` starts the event and queues broadcast work. `tests/unit/muster-core.test.ts` checks drill copy. Static code verified. | — |
 | Per-channel delivery progress and retry | DONE | `MusterLiveClient.tsx` displays channel counts/progress and offers retry. `/api/muster/events/[id]/deliveries` exposes status and retry; `tests/unit/muster-notifications.test.ts` covers delivery preparation and duplicate claims. Static code verified. | — |
-| Event detail roll-call UI: SAFE/MISSING/HOSPITAL, pinned unaccounted, ALL CLEAR | MISSING | API support exists in `src/app/api/muster/events/[id]/route.ts`, `src/app/api/muster/events/[id]/entries/[entryId]/route.ts`, and `src/app/api/muster/events/[id]/all-clear/route.ts`; the only dashboard page is `src/app/(dashboard)/muster/page.tsx`. `/muster/events/[id]` and `src/app/(dashboard)/muster/events/[id]/page.tsx` are absent, so none of these controls are exposed in a roll-call screen. | M |
-| Event-specific printable PDF and CSV | PARTIAL | The live page only calls `window.print()` for its roster. There is no event export UI or `/api/muster/events/[id]/export` route; no PDF/CSV roll-call export was found. | M |
+| Event detail roll-call UI: SAFE/MISSING/HOSPITAL, pinned unaccounted, ALL CLEAR | DONE | `/muster/events/[id]` and `MusterRollCallClient.tsx` provide live roll-call controls, counts, unaccounted grouping, two-step ALL CLEAR confirmation, action timeline, and closed-event unaccounted reporting. Static code verified; unit tests passed; no browser run. | — |
+| Event-specific printable PDF and CSV | DONE | `/api/muster/events/[id]/export` enforces `reports.export`, tenant scope, a 10-per-minute user limit, a 5,000-entry cap, CSV BOM/injection protection, audit logging, and PDF page breaks. The PDF warns in Latin text to open CSV for non-Latin names; no Gujarati/Devanagari PDF fonts were added. Static code and helper tests verified; no browser run. | — |
 | Offline roll-call snapshot, queued marks/clientEventId sync, banner | MISSING | The entry API requires `Idempotency-Key`, but `MusterLiveClient.tsx` has no IndexedDB snapshot, queued marks, retry/sync flow, or offline state. Generic PWA offline UI does not provide a muster queue. | L |
-| Muster-point manager | MISSING | Tenant-scoped CRUD exists in `src/app/api/muster/points/route.ts` and `src/app/api/muster/points/[id]/route.ts`; `/muster/points` and `src/app/(dashboard)/muster/points/page.tsx` are absent. | M |
-| Event history and post-incident report/export | PARTIAL | `/api/muster/events` supports ACTIVE/ALL_CLEAR/CLOSED filters, but `MusterLiveClient.tsx` requests only `status=ACTIVE`. There is no history/report screen or report/export endpoint. | M |
-| Global emergency banner in shell | PARTIAL | `src/components/dashboard/DashboardClient.tsx` shows an active-event alert only in the guard dashboard. `src/components/layout/DashboardShell.tsx` does not load or render emergency state, so the alert is not global across routes/roles. | M |
-| Sidebar and mobile bottom-tab access | PARTIAL | `src/components/layout/navigation.ts` and `Sidebar.tsx` include Muster. `DashboardShell.tsx` includes a Muster tab for SECURITY_GUARD only; the default admin/ORG_ADMIN mobile tab set omits it. | S |
+| Muster-point manager | DONE | `/muster/points` lists tenant-scoped points for muster viewers and supports create, edit (including office), activate, and soft-deactivate for `muster.manage`. Deactivation retains historical references. Static code verified; no browser run. | — |
+| Event history and post-incident report/export | DONE | `/muster/history` filters status, type, and inclusive date range with cursor pagination ordered by `(startedAt desc, id desc)`. Event reports include action timeline, final counts, unaccounted-at-close list, and permission-gated exports. Static code and cursor/timeline unit tests verified; no browser run. | — |
+| Global emergency banner in shell | DONE | `DashboardShell.tsx` polls one tenant-scoped active-event endpoint for every dashboard role, pauses while hidden, shows DRILL distinctly, and links to the event without visitor details. Static code verified; no browser run. | — |
+| Sidebar and mobile bottom-tab access | DONE | Muster is linked from the live Muster page and included in the default admin/ORG_ADMIN mobile bottom tabs. Static code verified; no browser run. | — |
 | Runbook, acceptance script/package command, Playwright drill test | MISSING | `docs/MUSTER_RUNBOOK.md`, `scripts/verify-p10-b-acceptance.ts`, package script `test:p10b`, and a muster drill spec under `tests/e2e` were not found. Existing muster coverage is unit-level only. | M |
 
 ## U5 — Internationalization
@@ -70,7 +70,7 @@ Audit date: 2026-11-24. This is a static code audit; no browser/E2E run was perf
 | U7f | NOT STARTED | Employees, organization, integrations, notifications/templates/logs, and settings route/tab redesign. | L |
 | U8 | NOT STARTED | Triage the existing ESLint warning baseline: 391 warnings were recorded in `docs/PROGRESS.md`; this audit did not fix warnings. | M |
 
-Remaining estimate count across the rows above: **30 items — 2 S, 21 M, 7 L**. Done items are excluded.
+Remaining estimate count across the rows above: **25 items — 1 S, 17 M, 7 L**. Done items are excluded.
 
 ## Cross-check
 
@@ -106,7 +106,7 @@ This lexical inventory ranks `.tsx` files under `src/app` and `src/components` t
 
 ### API-backed workflows without a matching full UI screen
 
-- **Muster (P10-B):** eight `/api/muster` route files support live roster, event detail/entries/all-clear/delivery, and points CRUD. Only `/muster` has a dashboard page; event roll-call, point manager, history/report, export, and offline queue screens are absent.
+- **Muster (P10-B):** `/api/muster` supports live roster, event detail/entries/all-clear/delivery, history pagination/export, and points CRUD. Live roll-call, history/report, exports, and point management are present; the IndexedDB offline queue remains absent (U4-3).
 - **Account:** auth session/2FA/password and notification preference APIs exist, but there is no `/account` page consolidating them.
 - **Contractors and deliveries:** collection/list screens exist, but dynamic company/worker and delivery detail pages are absent even though related mutation APIs exist.
 - The P10-A, P10-D, P10-E, P10-F, P10-G, and P10-H areas have corresponding public/review/list/dashboard pages in the route inventory. Their missing subflows are captured above; this is not a claim that every end-to-end journey was browser-tested.
@@ -114,7 +114,7 @@ This lexical inventory ranks `.tsx` files under `src/app` and `src/components` t
 
 ## Recommended order
 
-1. U4 roll-call and all-clear UI first, then offline persistence/idempotent sync, exports, points manager/history, and the global emergency banner.
+1. Finish U4 with offline persistence/idempotent sync and the runbook, acceptance script, Playwright drill, and remaining focused tests.
 2. U5 recipient locale routing for emergency/visitor notifications, functional language controls, localized Zod messages, and PDF/NDA localization/legal review; then migrate the remaining hard-coded UI strings.
 3. U6 account/detail/help surfaces, parking drawer, route-based settings with dirty-state handling, then add route-local loading/error boundaries.
 4. Execute U7b, U7c, U7d, U7e, and U7f one group per authorization, with their own acceptance runs.

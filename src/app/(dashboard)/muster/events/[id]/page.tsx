@@ -27,6 +27,7 @@ export default async function MusterEventPage({
       eventId={parsedId.data}
       canAccount={can(user, "muster.account")}
       canDeclareAllClear={can(user, "muster.broadcast")}
+      canExport={can(user, "reports.export")}
     />
   );
 }

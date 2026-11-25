@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
-import { AlertTriangle, Check, ChevronLeft, LoaderCircle, RefreshCw, Siren } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, Download, LoaderCircle, RefreshCw, Siren } from "lucide-react";
 import {
   getMusterRollCallCounts,
   groupUnaccountedMusterEntries,
   type MusterStatus,
 } from "@/services/muster/muster-core";
+import { buildMusterReportTimeline } from "@/services/muster/muster-reporting";
 
 const musterEntrySchema = z.object({
   id: z.string(),
@@ -19,6 +20,14 @@ const musterEntrySchema = z.object({
   accountedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   musterPoint: z.object({ id: z.string(), name: z.string(), location: z.string() }).nullable(),
   note: z.string().nullable(),
+  actions: z.array(z.object({
+    id: z.string(),
+    status: z.enum(["UNACCOUNTED", "SAFE", "MISSING", "HOSPITAL"]),
+    accountedAt: z.string(),
+    accountedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
+    musterPoint: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+    note: z.string().nullable(),
+  })),
 });
 
 const musterEventSchema = z.object({
@@ -59,6 +68,7 @@ interface Props {
   eventId: string;
   canAccount: boolean;
   canDeclareAllClear: boolean;
+  canExport: boolean;
 }
 
 function readSnapshot(entry: MusterEntry) {
@@ -66,7 +76,7 @@ function readSnapshot(entry: MusterEntry) {
   return entry.snapshot as Record<string, unknown>;
 }
 
-export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }: Props) {
+export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, canExport }: Props) {
   const t = useTranslations("muster");
   const statusLabels = {
     UNACCOUNTED: t("status.UNACCOUNTED"),
@@ -139,6 +149,19 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }
     () => event?.entries.filter((entry) => entry.status !== "UNACCOUNTED") ?? [],
     [event?.entries]
   );
+  const timeline = useMemo(
+    () => buildMusterReportTimeline(
+      (event?.entries ?? []).map((entry) => ({
+        id: entry.id,
+        snapshot: entry.snapshot,
+        actions: entry.actions.map((action) => ({
+          ...action,
+          musterPoint: action.musterPoint ?? null,
+        })),
+      }))
+    ),
+    [event?.entries]
+  );
 
   const updateEntryStatus = async (entryId: string, status: Exclude<MusterStatus, "UNACCOUNTED">) => {
     if (!event || !canAccount || savingRef.current) return;
@@ -165,7 +188,7 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }
           body: JSON.stringify({ status }),
         }
       );
-      const body: unknown = await response.json();
+      await response.json();
       if (!response.ok) throw new Error(t("markFailed"));
       await loadEvent();
     } catch {
@@ -197,7 +220,7 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }
         method: "POST",
         cache: "no-store",
       });
-      const body: unknown = await response.json();
+      await response.json();
       if (!response.ok) throw new Error(t("allClearFailed"));
       setAllClearStep("closed");
       setAllClearText("");
@@ -263,6 +286,16 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }
           <span className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${isActive ? "bg-rose-500/15 text-rose-200" : "bg-emerald-500/15 text-emerald-200"}`}>
             {eventStatusLabels[event.status]}
           </span>
+          {canExport && (
+            <>
+              <a href={`/api/muster/events/${encodeURIComponent(eventId)}/export?format=csv`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-xs font-bold text-slate-200">
+                <Download className="h-4 w-4" /> {t("exportCsv")}
+              </a>
+              <a href={`/api/muster/events/${encodeURIComponent(eventId)}/export?format=pdf`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-xs font-bold text-slate-200">
+                <Download className="h-4 w-4" /> {t("exportPdf")}
+              </a>
+            </>
+          )}
           <button type="button" onClick={() => void loadEvent()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-700 px-3 text-xs font-bold text-slate-200">
             <RefreshCw className="h-4 w-4" /> {t("refresh")}
           </button>
@@ -332,6 +365,45 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear }
               onMark={(status) => void updateEntryStatus(entry.id, status)}
             />
           ))}
+        </section>
+      )}
+
+      <section className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-4 sm:p-5">
+        <h2 className="text-sm font-extrabold text-slate-200">{t("reportTimelineTitle")}</h2>
+        <p className="text-xs text-slate-400">{t("reportFinalCounts")}</p>
+        {timeline.length > 0 ? (
+          <ol className="space-y-2">
+            {timeline.map((action) => (
+              <li key={action.id} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs">
+                <p className="font-bold text-white">
+                  {action.personName || t("unknownPerson")} · {statusLabels[action.status]}
+                </p>
+                <p className="mt-1 text-slate-400">
+                  {action.accountedBy?.name || t("unknownPerson")} · {new Date(action.accountedAt).toLocaleString()}
+                  {action.musterPoint?.name ? ` · ${action.musterPoint.name}` : ""}
+                </p>
+                {action.note && <p className="mt-1 text-slate-300">{action.note}</p>}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="text-xs text-slate-400">{t("reportTimelineEmpty")}</p>
+        )}
+      </section>
+
+      {event.status === "CLOSED" && (
+        <section className="space-y-2 rounded-2xl border border-amber-500/30 bg-amber-950/10 p-4">
+          <h2 className="text-sm font-extrabold text-amber-100">{t("reportUnaccountedAtClose")}</h2>
+          {event.entries.filter((entry) => entry.status === "UNACCOUNTED").length > 0 ? (
+            <ul className="list-inside list-disc space-y-1 text-sm text-amber-100">
+              {event.entries.filter((entry) => entry.status === "UNACCOUNTED").map((entry) => {
+                const snapshot = readSnapshot(entry);
+                return <li key={entry.id}>{typeof snapshot.name === "string" ? snapshot.name : t("unknownPerson")}</li>;
+              })}
+            </ul>
+          ) : (
+            <p className="text-xs text-amber-100">{t("reportNoUnaccountedAtClose")}</p>
+          )}
         </section>
       )}
 

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { can } from "@/lib/rbac-base";
 import { prisma } from "@/lib/db";
 import { storage } from "@/services/storage";
-import { authorizeMuster, auditMusterAction } from "./_helpers";
+import { authorizeMuster, auditMusterRead } from "./_helpers";
 
 const querySchema = z.object({
   branchId: z.string().trim().min(1).max(128).optional(),
@@ -184,10 +184,11 @@ export async function GET(request: Request) {
       ),
     ].join("|");
     const etag = `"${createHash("sha256").update(etagSource).digest("hex").slice(0, 24)}"`;
-    await auditMusterAction({
+    await auditMusterRead({
       organizationId: context.organizationId,
       userId: context.user.id,
       action: "MUSTER_VIEW_LIVE",
+      rateLimitResourceId: "live-roster",
       details: { count: checkIns.length },
       clientIp: context.clientIp,
     });

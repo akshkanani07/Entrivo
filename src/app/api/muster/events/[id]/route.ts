@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { can } from "@/lib/rbac-base";
 import { prisma } from "@/lib/db";
-import { authorizeMuster, auditMusterAction } from "../../_helpers";
+import { authorizeMuster, auditMusterRead } from "../../_helpers";
 
 const idSchema = z.string().trim().min(1).max(128);
 
@@ -46,7 +46,10 @@ export async function GET(
             musterPoint: { select: { id: true, name: true, location: true } },
             actions: {
               orderBy: { accountedAt: "asc" },
-              include: { accountedBy: { select: { id: true, name: true } } },
+              include: {
+                accountedBy: { select: { id: true, name: true } },
+                musterPoint: { select: { id: true, name: true } },
+              },
             },
           },
           orderBy: { createdAt: "asc" },
@@ -57,11 +60,12 @@ export async function GET(
 
     if (!event) return NextResponse.json({ success: false, error: "Emergency event not found" }, { status: 404 });
 
-    await auditMusterAction({
+    await auditMusterRead({
       organizationId: context.organizationId,
       userId: context.user.id,
       action: "MUSTER_EVENT_VIEWED",
       entityId: event.id,
+      rateLimitResourceId: event.id,
       clientIp: context.clientIp,
     });
     return NextResponse.json({
