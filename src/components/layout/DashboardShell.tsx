@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AlertTriangle,
   Bell,
   ClipboardCheck,
   LayoutDashboard,
@@ -13,10 +14,12 @@ import {
   ScanLine,
   Settings,
   ShieldAlert,
+  Siren,
   UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { CurrentUser } from "@/types";
@@ -58,9 +61,44 @@ function getMobileTabs(role: CurrentUser["role"]): MobileTab[] {
         { label: "Dashboard", href: "/", icon: LayoutDashboard },
         { label: "Visitors", href: "/visitors", icon: Users },
         { label: "Analytics", href: "/analytics", icon: ScanLine },
+        { label: "Muster", href: "/muster", icon: Siren },
         { label: "Settings", href: "/settings", icon: Settings },
       ];
   }
+}
+
+interface ActiveMusterBannerEvent {
+  id: string;
+  type: "REAL" | "DRILL";
+  kind: "FIRE" | "EARTHQUAKE" | "SECURITY" | "MEDICAL" | "OTHER";
+  startedAt: string;
+}
+
+function parseActiveMusterEvents(value: unknown): ActiveMusterBannerEvent[] {
+  if (!value || typeof value !== "object" || !("success" in value) || value.success !== true || !("data" in value) || !Array.isArray(value.data)) {
+    throw new Error("Invalid emergency status response");
+  }
+  return value.data.map((event: unknown) => {
+    if (
+      !event ||
+      typeof event !== "object" ||
+      !("id" in event) ||
+      typeof event.id !== "string" ||
+      !("type" in event) ||
+      (event.type !== "REAL" && event.type !== "DRILL") ||
+      !("kind" in event) ||
+      (event.kind !== "FIRE" &&
+        event.kind !== "EARTHQUAKE" &&
+        event.kind !== "SECURITY" &&
+        event.kind !== "MEDICAL" &&
+        event.kind !== "OTHER") ||
+      !("startedAt" in event) ||
+      typeof event.startedAt !== "string"
+    ) {
+      throw new Error("Invalid emergency status response");
+    }
+    return { id: event.id, type: event.type, kind: event.kind, startedAt: event.startedAt };
+  });
 }
 
 function NavigationLoader() {
@@ -106,6 +144,53 @@ export function DashboardShell({
   const mainRef = useRef<HTMLElement>(null);
   const tabs = getMobileTabs(currentUser?.role || "EMPLOYEE");
   const [badges, setBadges] = useState<{ approvals?: number; queue?: number }>({});
+  const navT = useTranslations("nav");
+  const musterT = useTranslations("muster");
+  const emergencyKindLabels = {
+    FIRE: musterT("kind.FIRE"),
+    EARTHQUAKE: musterT("kind.EARTHQUAKE"),
+    SECURITY: musterT("kind.SECURITY"),
+    MEDICAL: musterT("kind.MEDICAL"),
+    OTHER: musterT("kind.OTHER"),
+  };
+  const [activeMusterEvents, setActiveMusterEvents] = useState<ActiveMusterBannerEvent[]>([]);
+  const [musterBannerError, setMusterBannerError] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser?.organizationId) {
+      setActiveMusterEvents([]);
+      setMusterBannerError(false);
+      return;
+    }
+
+    let active = true;
+    const loadActiveMusterEvents = async () => {
+      if (document.hidden) return;
+      try {
+        const response = await fetch("/api/muster/active", { cache: "no-store" });
+        const body: unknown = await response.json();
+        if (!response.ok) throw new Error("Unable to read active emergency status");
+        const events = parseActiveMusterEvents(body);
+        if (!active) return;
+        setActiveMusterEvents(events);
+        setMusterBannerError(false);
+      } catch {
+        if (active) setMusterBannerError(true);
+      }
+    };
+
+    void loadActiveMusterEvents();
+    const timer = window.setInterval(() => void loadActiveMusterEvents(), 15_000);
+    const handleVisibility = () => {
+      if (!document.hidden) void loadActiveMusterEvents();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [currentUser?.organizationId]);
 
   useEffect(() => {
     const loadBadges = async () => {
@@ -156,6 +241,32 @@ export function DashboardShell({
           themePreference={themePreference}
           onToggleMobileMenu={() => setMobileMenuOpen((open) => !open)}
         />
+        {(activeMusterEvents.length > 0 || musterBannerError) && (
+          <section aria-label={musterT("globalBannerLabel")} className="space-y-2 px-3 pt-3 sm:px-6 md:px-8">
+            {musterBannerError && (
+              <p role="alert" className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-xs font-semibold text-amber-100">
+                {musterT("bannerLoadError")}
+              </p>
+            )}
+            {activeMusterEvents.map((event) => (
+              <Link
+                key={event.id}
+                href={`/muster/events/${encodeURIComponent(event.id)}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-950/70 px-4 py-3 text-sm text-rose-100 hover:bg-rose-950"
+              >
+                <span className="flex min-w-0 items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-rose-300" />
+                  <span className="flex min-w-0 flex-wrap items-center gap-2 font-extrabold">
+                    {event.type === "DRILL" && <span className="rounded bg-amber-400 px-2 py-0.5 text-[10px] font-black text-amber-950">{musterT("drill")}</span>}
+                    <span>{event.type === "DRILL" ? musterT("activeDrillBanner") : musterT("activeEmergencyBanner")}</span>
+                    <span className="text-xs font-semibold text-rose-200">{emergencyKindLabels[event.kind]}</span>
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs font-bold">{musterT("openRollCall")}</span>
+              </Link>
+            ))}
+          </section>
+        )}
         <main
           id="main-content"
           ref={mainRef}
@@ -167,7 +278,8 @@ export function DashboardShell({
       </div>
       <nav
         aria-label="Mobile primary navigation"
-        className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(4.25rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-slate-800 bg-[#0a0f1d]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-50 grid h-[calc(4.25rem+env(safe-area-inset-bottom))] border-t border-slate-800 bg-[#0a0f1d]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+        style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}
       >
         {tabs.map((tab) => {
           const active = isNavItemActive(pathname, tab.href);
@@ -190,7 +302,7 @@ export function DashboardShell({
                   </span>
                 )}
               </span>
-              <span className="truncate px-1">{tab.label}</span>
+              <span className="truncate px-1">{tab.href === "/muster" ? navT("itemEmergencyMuster") : tab.label}</span>
             </Link>
           );
         })}

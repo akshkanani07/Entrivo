@@ -2,6 +2,76 @@ export type EmergencyStatus = "ACTIVE" | "ALL_CLEAR" | "CLOSED";
 export type MusterStatus = "UNACCOUNTED" | "SAFE" | "MISSING" | "HOSPITAL";
 export type EmergencyAction = "ALERT" | "ALL_CLEAR";
 
+export interface MusterRollCallEntry {
+  id: string;
+  status: MusterStatus;
+  snapshot?: unknown;
+}
+
+export interface MusterRollCallCounts {
+  total: number;
+  unaccounted: number;
+  safe: number;
+  missing: number;
+  hospital: number;
+}
+
+export interface UnaccountedMusterGroup<T extends MusterRollCallEntry = MusterRollCallEntry> {
+  key: string;
+  floorName: string;
+  zoneName: string;
+  entries: T[];
+}
+
+export function getMusterRollCallCounts(
+  entries: MusterRollCallEntry[]
+): MusterRollCallCounts {
+  return entries.reduce<MusterRollCallCounts>(
+    (counts, entry) => {
+      counts.total += 1;
+      if (entry.status === "UNACCOUNTED") counts.unaccounted += 1;
+      if (entry.status === "SAFE") counts.safe += 1;
+      if (entry.status === "MISSING") counts.missing += 1;
+      if (entry.status === "HOSPITAL") counts.hospital += 1;
+      return counts;
+    },
+    { total: 0, unaccounted: 0, safe: 0, missing: 0, hospital: 0 }
+  );
+}
+
+export function groupUnaccountedMusterEntries<T extends MusterRollCallEntry>(
+  entries: T[]
+): UnaccountedMusterGroup<T>[] {
+  const groups = new Map<string, UnaccountedMusterGroup<T>>();
+
+  for (const entry of entries) {
+    if (entry.status !== "UNACCOUNTED") continue;
+    const snapshot =
+      entry.snapshot && typeof entry.snapshot === "object" && !Array.isArray(entry.snapshot)
+        ? (entry.snapshot as Record<string, unknown>)
+        : {};
+    const floorName =
+      typeof snapshot.floorName === "string" && snapshot.floorName.trim()
+        ? snapshot.floorName.trim()
+        : "Unassigned floor";
+    const zoneName =
+      typeof snapshot.zoneName === "string" && snapshot.zoneName.trim()
+        ? snapshot.zoneName.trim()
+        : "Unassigned zone";
+    const key = `${floorName}\u0000${zoneName}`;
+    const group: UnaccountedMusterGroup<T> = groups.get(key) ?? {
+      key,
+      floorName,
+      zoneName,
+      entries: [],
+    };
+    group.entries.push(entry);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
 export interface LocationFloor {
   id: string;
   name: string;

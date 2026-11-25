@@ -6,6 +6,8 @@ import {
   classifyMusterSubjectType,
   getBroadcastCooldown,
   getEmergencyNotificationCopy,
+  getMusterRollCallCounts,
+  groupUnaccountedMusterEntries,
   resolveCheckInLocation,
 } from "@/services/muster/muster-core";
 
@@ -52,6 +54,59 @@ describe("muster core behavior", () => {
     expect(canTransitionMusterStatus("UNACCOUNTED", "SAFE")).toBe(true);
     expect(canTransitionMusterStatus("MISSING", "SAFE")).toBe(true);
     expect(canTransitionMusterStatus("SAFE", "UNACCOUNTED")).toBe(false);
+  });
+
+  it("counts roll-call statuses and groups only unaccounted entries by snapshot location", () => {
+    const entries = [
+      { id: "one", status: "UNACCOUNTED" as const, snapshot: { floorName: "Floor 1", zoneName: "East" } },
+      { id: "two", status: "UNACCOUNTED" as const, snapshot: { floorName: "Floor 1", zoneName: "East" } },
+      { id: "three", status: "UNACCOUNTED" as const, snapshot: { floorName: "Floor 2", zoneName: "West" } },
+      { id: "four", status: "SAFE" as const, snapshot: { floorName: "Floor 1", zoneName: "East" } },
+      { id: "five", status: "MISSING" as const },
+      { id: "six", status: "HOSPITAL" as const },
+    ];
+
+    expect(getMusterRollCallCounts(entries)).toEqual({
+      total: 6,
+      unaccounted: 3,
+      safe: 1,
+      missing: 1,
+      hospital: 1,
+    });
+    expect(groupUnaccountedMusterEntries(entries)).toEqual([
+      {
+        key: "Floor 1\u0000East",
+        floorName: "Floor 1",
+        zoneName: "East",
+        entries: entries.slice(0, 2),
+      },
+      {
+        key: "Floor 2\u0000West",
+        floorName: "Floor 2",
+        zoneName: "West",
+        entries: [entries[2]],
+      },
+    ]);
+  });
+
+  it("places unaccounted entries with missing or malformed locations in a safe fallback group", () => {
+    expect(
+      groupUnaccountedMusterEntries([
+        { id: "one", status: "UNACCOUNTED" },
+        { id: "two", status: "UNACCOUNTED", snapshot: null },
+        { id: "three", status: "SAFE" },
+      ])
+    ).toEqual([
+      {
+        key: "Unassigned floor\u0000Unassigned zone",
+        floorName: "Unassigned floor",
+        zoneName: "Unassigned zone",
+        entries: [
+          { id: "one", status: "UNACCOUNTED" },
+          { id: "two", status: "UNACCOUNTED", snapshot: null },
+        ],
+      },
+    ]);
   });
 
   it("enforces the broadcast cooldown window", () => {
