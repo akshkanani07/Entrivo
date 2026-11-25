@@ -25,6 +25,12 @@ import { Header } from "./Header";
 import { CurrentUser } from "@/types";
 import type { ThemePreference } from "@/lib/theme";
 import { isNavItemActive } from "./navigation";
+import { getMusterQueueCounts } from "@/services/muster/muster-offline";
+import {
+  MUSTER_OFFLINE_CHANNEL,
+  musterOfflineStore,
+} from "@/services/muster/muster-offline-store";
+import { syncMusterOfflineQueue } from "@/services/muster/muster-offline-sync";
 
 interface MobileTab {
   label: string;
@@ -155,6 +161,84 @@ export function DashboardShell({
   };
   const [activeMusterEvents, setActiveMusterEvents] = useState<ActiveMusterBannerEvent[]>([]);
   const [musterBannerError, setMusterBannerError] = useState(false);
+  const [offlineMusterCounts, setOfflineMusterCounts] = useState({
+    owned: 0,
+    foreign: 0,
+    failed: false,
+  });
+  const currentUserId = currentUser?.id;
+  const organizationId = currentUser?.organizationId;
+
+  useEffect(() => {
+    if (!currentUserId || !organizationId) {
+      setOfflineMusterCounts({ owned: 0, foreign: 0, failed: false });
+      return;
+    }
+
+    let active = true;
+    const refreshOfflineMusterCounts = async (sync = false) => {
+      try {
+        await musterOfflineStore.purgeExpiredSnapshots();
+        let items = await musterOfflineStore.listMarks();
+        if (active) {
+          const counts = getMusterQueueCounts(items, currentUserId, organizationId);
+          setOfflineMusterCounts({ owned: counts.owned, foreign: counts.foreign, failed: false });
+        }
+        const hasSyncableMarks = items.some(
+          (item) =>
+            item.actorUserId === currentUserId &&
+            item.organizationId === organizationId &&
+            (item.state === "PENDING" || item.state === "SYNCING") &&
+            item.issue !== "AUTH_REQUIRED",
+        );
+        if (sync && hasSyncableMarks && navigator.onLine) {
+          await syncMusterOfflineQueue({
+            actorUserId: currentUserId,
+            organizationId,
+          });
+          items = await musterOfflineStore.listMarks();
+          if (active) {
+            const counts = getMusterQueueCounts(items, currentUserId, organizationId);
+            setOfflineMusterCounts({ owned: counts.owned, foreign: counts.foreign, failed: false });
+          }
+        }
+      } catch {
+        if (active) setOfflineMusterCounts({ owned: 0, foreign: 0, failed: true });
+      }
+    };
+
+    void refreshOfflineMusterCounts(true);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshOfflineMusterCounts(true);
+    }, 15_000);
+    const handleOnline = () => void refreshOfflineMusterCounts(true);
+    const handleVisibility = () => {
+      if (!document.hidden) void refreshOfflineMusterCounts(true);
+    };
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    const channel = typeof BroadcastChannel !== "undefined"
+      ? new BroadcastChannel(MUSTER_OFFLINE_CHANNEL)
+      : null;
+    if (channel) {
+      channel.onmessage = (event: MessageEvent<{ type?: string }>) => {
+        if (
+          event.data?.type === "QUEUE_CHANGED" ||
+          event.data?.type === "CLEAR_SENSITIVE_STATE"
+        ) {
+          void refreshOfflineMusterCounts(false);
+        }
+      };
+    }
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      channel?.close();
+    };
+  }, [currentUserId, organizationId]);
 
   useEffect(() => {
     if (!currentUser?.organizationId) {
@@ -265,6 +349,26 @@ export function DashboardShell({
                 <span className="shrink-0 text-xs font-bold">{musterT("openRollCall")}</span>
               </Link>
             ))}
+          </section>
+        )}
+        {(offlineMusterCounts.owned > 0 || offlineMusterCounts.foreign > 0 || offlineMusterCounts.failed) && (
+          <section aria-label={musterT("offlineBannerLabel")} className="space-y-1 px-3 pt-3 sm:px-6 md:px-8">
+            {offlineMusterCounts.failed && (
+              <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
+                {musterT("offlineCountUnavailable")}
+              </p>
+            )}
+            {offlineMusterCounts.owned > 0 && (
+              <p role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-xs font-semibold text-amber-100">
+                <span>{musterT("offlineNotSyncedCount", { count: offlineMusterCounts.owned })}</span>
+                <Link href="/muster" className="font-extrabold underline underline-offset-2">{musterT("openRollCall")}</Link>
+              </p>
+            )}
+            {offlineMusterCounts.foreign > 0 && (
+              <p role="status" className="rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-2 text-xs text-slate-300">
+                {musterT("offlineOtherUserCount", { count: offlineMusterCounts.foreign })}
+              </p>
+            )}
           </section>
         )}
         <main

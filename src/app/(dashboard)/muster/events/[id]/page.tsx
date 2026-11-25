@@ -25,6 +25,8 @@ export default async function MusterEventPage({
   return (
     <MusterRollCallClient
       eventId={parsedId.data}
+      actorUserId={user.id}
+      organizationId={user.organizationId ?? ""}
       canAccount={can(user, "muster.account")}
       canDeclareAllClear={can(user, "muster.broadcast")}
       canExport={can(user, "reports.export")}

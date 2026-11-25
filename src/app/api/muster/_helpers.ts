@@ -46,8 +46,24 @@ export async function authorizeMuster(
 
 export function musterErrorResponse(error: unknown) {
   if (error instanceof MusterServiceError) {
-    const status =
-      error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 400;
+    if (error.code === "PRECONDITION_FAILED") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: "ENTRY_VERSION_MISMATCH",
+          current: error.current,
+        },
+        { status: 412, headers: { "Cache-Control": "private, no-store" } }
+      );
+    }
+    if (error.code === "IDENTITY_MISMATCH") {
+      return NextResponse.json(
+        { success: false, error: error.message, code: "OFFLINE_ACTOR_MISMATCH" },
+        { status: 403, headers: { "Cache-Control": "private, no-store" } }
+      );
+    }
+    const status = error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 400;
     return NextResponse.json(
       { success: false, error: error.message },
       { status }

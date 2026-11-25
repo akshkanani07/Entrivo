@@ -11,12 +11,22 @@ import {
   type MusterStatus,
 } from "@/services/muster/muster-core";
 import { buildMusterReportTimeline } from "@/services/muster/muster-reporting";
+import {
+  getLatestMusterMarkByEntry,
+  sanitizeMusterRosterSnapshot,
+} from "@/services/muster/muster-offline";
+import { musterOfflineStore } from "@/services/muster/muster-offline-store";
+import { MusterOfflinePanel } from "./MusterOfflinePanel";
+import { useMusterOfflineQueue } from "./useMusterOfflineQueue";
 
 const musterEntrySchema = z.object({
   id: z.string(),
+  subjectType: z.enum(["VISITOR", "CONTRACTOR"]),
   status: z.enum(["UNACCOUNTED", "SAFE", "MISSING", "HOSPITAL"]),
-  snapshot: z.unknown(),
+  snapshot: z.unknown().optional(),
+  updatedAt: z.string().datetime(),
   accountedAt: z.string().nullable(),
+  accountedById: z.string().nullable(),
   accountedBy: z.object({ id: z.string(), name: z.string() }).nullable(),
   musterPoint: z.object({ id: z.string(), name: z.string(), location: z.string() }).nullable(),
   note: z.string().nullable(),
@@ -66,6 +76,8 @@ const activeEventResponseSchema = z.object({
 
 interface Props {
   eventId: string;
+  actorUserId: string;
+  organizationId: string;
   canAccount: boolean;
   canDeclareAllClear: boolean;
   canExport: boolean;
@@ -76,7 +88,14 @@ function readSnapshot(entry: MusterEntry) {
   return entry.snapshot as Record<string, unknown>;
 }
 
-export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, canExport }: Props) {
+export function MusterRollCallClient({
+  eventId,
+  actorUserId,
+  organizationId,
+  canAccount,
+  canDeclareAllClear,
+  canExport,
+}: Props) {
   const t = useTranslations("muster");
   const statusLabels = {
     UNACCOUNTED: t("status.UNACCOUNTED"),
@@ -106,23 +125,43 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, 
   const [allClearSaving, setAllClearSaving] = useState(false);
   const [allClearError, setAllClearError] = useState("");
   const savingRef = useRef(false);
+  const offline = useMusterOfflineQueue({ eventId, actorUserId, organizationId });
+  const { noteNetworkFailure, noteNetworkSuccess, finishEvent } = offline;
 
   const loadEvent = useCallback(async () => {
     try {
-      const response = await fetch(`/api/muster/events/${encodeURIComponent(eventId)}`, {
-        cache: "no-store",
-      });
+      let response: Response;
+      try {
+        response = await fetch(`/api/muster/events/${encodeURIComponent(eventId)}`, {
+          cache: "no-store",
+        });
+      } catch (error) {
+        noteNetworkFailure();
+        throw error;
+      }
       const body: unknown = await response.json();
       if (!response.ok) throw new Error(t("loadFailed"));
+      noteNetworkSuccess();
       const loaded = eventResponseSchema.parse(body).data;
       setEvent(loaded);
       setLoadError("");
+      try {
+        if (loaded.status === "ACTIVE") {
+          await musterOfflineStore.putSnapshot(
+            sanitizeMusterRosterSnapshot(eventId, Date.now(), loaded.entries)
+          );
+        } else {
+          await musterOfflineStore.clearSnapshot(eventId);
+        }
+      } catch {
+        setEntryError(t("offlineStorageFailed"));
+      }
     } catch {
       setLoadError(t("loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [eventId, t]);
+  }, [eventId, noteNetworkFailure, noteNetworkSuccess, t]);
 
   useEffect(() => {
     void loadEvent();
@@ -137,17 +176,49 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, 
     };
   }, [loadEvent]);
 
-  const counts = useMemo(
-    () => getMusterRollCallCounts(event?.entries ?? []),
-    [event?.entries]
+  useEffect(() => {
+    window.addEventListener("muster-offline-roster-changed", loadEvent);
+    return () => window.removeEventListener("muster-offline-roster-changed", loadEvent);
+  }, [loadEvent]);
+
+  const eventStatus = event?.status;
+  useEffect(() => {
+    if (eventStatus && eventStatus !== "ACTIVE") {
+      void finishEvent().catch(() => setEntryError(t("offlineStorageFailed")));
+    }
+  }, [eventStatus, finishEvent, t]);
+
+  const latestLocalMarks = useMemo(
+    () => getLatestMusterMarkByEntry(
+      offline.eventItems,
+      eventId,
+      actorUserId,
+      organizationId,
+    ),
+    [actorUserId, eventId, offline.eventItems, organizationId]
   );
+  const visibleEntries = useMemo(
+    () => (event?.entries ?? []).map((entry) => {
+      const localMark = latestLocalMarks.get(entry.id);
+      return localMark
+        ? {
+            ...entry,
+            status: localMark.status,
+            accountedAt: new Date(localMark.madeAt).toISOString(),
+            localPending: true,
+          }
+        : entry;
+    }),
+    [event?.entries, latestLocalMarks]
+  );
+  const counts = useMemo(() => getMusterRollCallCounts(visibleEntries), [visibleEntries]);
   const unaccountedGroups = useMemo(
-    () => groupUnaccountedMusterEntries(event?.entries ?? []),
-    [event?.entries]
+    () => groupUnaccountedMusterEntries(visibleEntries),
+    [visibleEntries]
   );
   const accountedEntries = useMemo(
-    () => event?.entries.filter((entry) => entry.status !== "UNACCOUNTED") ?? [],
-    [event?.entries]
+    () => visibleEntries.filter((entry) => entry.status !== "UNACCOUNTED"),
+    [visibleEntries]
   );
   const timeline = useMemo(
     () => buildMusterReportTimeline(
@@ -165,45 +236,14 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, 
 
   const updateEntryStatus = async (entryId: string, status: Exclude<MusterStatus, "UNACCOUNTED">) => {
     if (!event || !canAccount || savingRef.current) return;
-    const previousEntries = event.entries;
     savingRef.current = true;
     setSavingEntryId(entryId);
     setEntryError("");
-    setEvent({
-      ...event,
-      entries: event.entries.map((entry) =>
-        entry.id === entryId ? { ...entry, status, accountedAt: new Date().toISOString() } : entry
-      ),
-    });
-
     try {
-      const response = await fetch(
-        `/api/muster/events/${encodeURIComponent(eventId)}/entries/${encodeURIComponent(entryId)}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": crypto.randomUUID(),
-          },
-          body: JSON.stringify({ status }),
-        }
-      );
-      await response.json();
-      if (!response.ok) throw new Error(t("markFailed"));
+      await offline.queueMark({ entryId, status });
+      await offline.syncNow();
       await loadEvent();
     } catch {
-      setEvent((current) =>
-        current
-          ? {
-              ...current,
-              entries: current.entries.map((entry) =>
-                entry.id === entryId
-                  ? previousEntries.find((previous) => previous.id === entryId) ?? entry
-                  : entry
-              ),
-            }
-          : current
-      );
       setEntryError(t("markFailed"));
     } finally {
       savingRef.current = false;
@@ -303,6 +343,23 @@ export function MusterRollCallClient({ eventId, canAccount, canDeclareAllClear, 
       </header>
 
       {loadError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-xs text-amber-200">{loadError}</p>}
+
+      <MusterOfflinePanel
+        items={offline.eventItems}
+        entries={event.entries}
+        online={offline.isOnline}
+        syncing={offline.isSyncing}
+        authRequired={offline.authRequired}
+        storageFailed={offline.storageFailed}
+        ownedCount={offline.manualLogoutState.persistentNoticeCount}
+        otherUserCount={offline.counts.foreign}
+        needsReviewCount={offline.eventNeedsReviewCount}
+        statusLabels={statusLabels}
+        onSync={() => void offline.syncNow().then(loadEvent)}
+        onKeepServer={(id) => void offline.keepServer(id)}
+        onApplyMine={(id) => void offline.applyMine(id).then(loadEvent)}
+        onDismiss={(id) => void offline.dismiss(id)}
+      />
 
       <section aria-label={t("rollCallCounts")} className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <CountTile label={t("countTotal")} value={counts.total} />
@@ -553,7 +610,7 @@ function EntryCard({
   t,
   onMark,
 }: {
-  entry: MusterEntry;
+  entry: MusterEntry & { localPending?: boolean };
   eventActive: boolean;
   canAccount: boolean;
   saving: boolean;
@@ -580,7 +637,9 @@ function EntryCard({
             {[company, hostName ? t("hostName", { name: hostName }) : "", badgeNumber ? t("badgeNumber", { number: badgeNumber }) : "", [floorName, zoneName].filter(Boolean).join(" · ")].filter(Boolean).join(" · ")}
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            {statusLabels[entry.status]}{entry.accountedBy?.name ? ` · ${t("accountedBy", { name: entry.accountedBy.name })}` : ""}
+            {entry.localPending
+              ? `${statusLabels[entry.status]} · ${t("offlineMarkNotSynced")}`
+              : `${statusLabels[entry.status]}${entry.accountedBy?.name ? ` · ${t("accountedBy", { name: entry.accountedBy.name })}` : ""}`}
           </p>
         </div>
         {canAccount && eventActive && (

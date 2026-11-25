@@ -19,7 +19,7 @@ Audit date: 2026-11-24. This is a static code audit; no browser/E2E run was perf
 | Per-channel delivery progress and retry | DONE | `MusterLiveClient.tsx` displays channel counts/progress and offers retry. `/api/muster/events/[id]/deliveries` exposes status and retry; `tests/unit/muster-notifications.test.ts` covers delivery preparation and duplicate claims. Static code verified. | — |
 | Event detail roll-call UI: SAFE/MISSING/HOSPITAL, pinned unaccounted, ALL CLEAR | DONE | `/muster/events/[id]` and `MusterRollCallClient.tsx` provide live roll-call controls, counts, unaccounted grouping, two-step ALL CLEAR confirmation, action timeline, and closed-event unaccounted reporting. Static code verified; unit tests passed; no browser run. | — |
 | Event-specific printable PDF and CSV | DONE | `/api/muster/events/[id]/export` enforces `reports.export`, tenant scope, a 10-per-minute user limit, a 5,000-entry cap, CSV BOM/injection protection, audit logging, and PDF page breaks. The PDF warns in Latin text to open CSV for non-Latin names; no Gujarati/Devanagari PDF fonts were added. Static code and helper tests verified; no browser run. | — |
-| Offline roll-call snapshot, queued marks/clientEventId sync, banner | MISSING | The entry API requires `Idempotency-Key`, but `MusterLiveClient.tsx` has no IndexedDB snapshot, queued marks, retry/sync flow, or offline state. Generic PWA offline UI does not provide a muster queue. | L |
+| Offline roll-call snapshot, queued marks/clientEventId sync, banner | DONE | The roll-call uses a separate IndexedDB database with a 12-hour minimized roster snapshot and a 24-hour mark queue. Sync preserves idempotency keys, orders marks per entry, filters by actor and organization, uses Web Locks with an IndexedDB lease fallback, retries with capped backoff, and provides conflict review. The dashboard shows count-only unsynced/other-user notices; logout cleanup clears snapshots and locks without deleting queued marks. Focused unit/service tests, type-check, i18n, and build passed; static tenant audit passed while the local server was offline. No browser run. Reloading while offline still opens the existing offline page; marks remain queued and can sync after reconnect when the app is opened. | — |
 | Muster-point manager | DONE | `/muster/points` lists tenant-scoped points for muster viewers and supports create, edit (including office), activate, and soft-deactivate for `muster.manage`. Deactivation retains historical references. Static code verified; no browser run. | — |
 | Event history and post-incident report/export | DONE | `/muster/history` filters status, type, and inclusive date range with cursor pagination ordered by `(startedAt desc, id desc)`. Event reports include action timeline, final counts, unaccounted-at-close list, and permission-gated exports. Static code and cursor/timeline unit tests verified; no browser run. | — |
 | Global emergency banner in shell | DONE | `DashboardShell.tsx` polls one tenant-scoped active-event endpoint for every dashboard role, pauses while hidden, shows DRILL distinctly, and links to the event without visitor details. Static code verified; no browser run. | — |
@@ -106,7 +106,7 @@ This lexical inventory ranks `.tsx` files under `src/app` and `src/components` t
 
 ### API-backed workflows without a matching full UI screen
 
-- **Muster (P10-B):** `/api/muster` supports live roster, event detail/entries/all-clear/delivery, history pagination/export, and points CRUD. Live roll-call, history/report, exports, and point management are present; the IndexedDB offline queue remains absent (U4-3).
+- **Muster (P10-B):** `/api/muster` supports live roster, event detail/entries/all-clear/delivery, history pagination/export, and points CRUD. Live roll-call, history/report, exports, point management, and the IndexedDB offline queue are present; the runbook, acceptance script, and Playwright drill remain in U4-4.
 - **Account:** auth session/2FA/password and notification preference APIs exist, but there is no `/account` page consolidating them.
 - **Contractors and deliveries:** collection/list screens exist, but dynamic company/worker and delivery detail pages are absent even though related mutation APIs exist.
 - The P10-A, P10-D, P10-E, P10-F, P10-G, and P10-H areas have corresponding public/review/list/dashboard pages in the route inventory. Their missing subflows are captured above; this is not a claim that every end-to-end journey was browser-tested.
@@ -114,7 +114,7 @@ This lexical inventory ranks `.tsx` files under `src/app` and `src/components` t
 
 ## Recommended order
 
-1. Finish U4 with offline persistence/idempotent sync and the runbook, acceptance script, Playwright drill, and remaining focused tests.
+1. Finish U4 with the runbook, acceptance script, and Playwright drill.
 2. U5 recipient locale routing for emergency/visitor notifications, functional language controls, localized Zod messages, and PDF/NDA localization/legal review; then migrate the remaining hard-coded UI strings.
 3. U6 account/detail/help surfaces, parking drawer, route-based settings with dirty-state handling, then add route-local loading/error boundaries.
 4. Execute U7b, U7c, U7d, U7e, and U7f one group per authorization, with their own acceptance runs.

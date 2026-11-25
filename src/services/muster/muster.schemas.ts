@@ -25,6 +25,11 @@ export const accountMusterEntrySchema = z.object({
   status: z.enum(["SAFE", "MISSING", "HOSPITAL"]),
   musterPointId: z.string().trim().min(1).optional(),
   note: z.string().trim().max(1000).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
+  offlineIdentity: z.object({
+    actorUserId: requiredString("Accounted-by user is required"),
+    organizationId: requiredString("Organization is required"),
+  }).optional(),
 });
 
 export const emergencyEventScopeSchema = z.object({

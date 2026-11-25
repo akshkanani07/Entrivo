@@ -12,7 +12,17 @@ import { canTransitionMusterStatus, classifyMusterSubjectType } from "./muster-c
 export class MusterServiceError extends Error {
   constructor(
     message: string,
-    public readonly code: "INVALID_INPUT" | "NOT_FOUND" | "CONFLICT"
+    public readonly code:
+      | "INVALID_INPUT"
+      | "NOT_FOUND"
+      | "CONFLICT"
+      | "PRECONDITION_FAILED"
+      | "IDENTITY_MISMATCH",
+    public readonly current?: {
+      status: "UNACCOUNTED" | "SAFE" | "MISSING" | "HOSPITAL";
+      accountedAt: string | null;
+      accountedByName: string | null;
+    },
   ) {
     super(message);
     this.name = "MusterServiceError";
@@ -218,90 +228,173 @@ export async function startEmergencyEvent(rawInput: unknown) {
 export async function accountMusterEntry(rawInput: unknown) {
   const input = assertParsed(accountMusterEntrySchema.safeParse(rawInput));
 
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const event = await tx.emergencyEvent.findFirst({
-        where: { id: input.eventId, organizationId: input.organizationId },
-        select: { id: true, status: true, officeId: true, branchId: true },
-      });
-      if (!event) throw new MusterServiceError("Emergency event not found", "NOT_FOUND");
-      if (event.status !== "ACTIVE") {
-        throw new MusterServiceError("Emergency event is no longer active", "CONFLICT");
-      }
+  const runTransaction = () => {
+    const transactionBody = async (tx: Prisma.TransactionClient) => {
+    const event = await tx.emergencyEvent.findFirst({
+      where: { id: input.eventId, organizationId: input.organizationId },
+      select: { id: true, status: true, officeId: true, branchId: true },
+    });
+    if (!event) throw new MusterServiceError("Emergency event not found", "NOT_FOUND");
+    if (event.status !== "ACTIVE") {
+      throw new MusterServiceError("Emergency event is no longer active", "CONFLICT");
+    }
 
-      const replay = await tx.musterAccountEntry.findFirst({
-        where: { emergencyEventId: event.id, clientEventId: input.clientEventId },
-      });
-      if (replay) return replay;
-      const replayedAction = await tx.musterAccountAction.findFirst({
-        where: { emergencyEventId: event.id, clientEventId: input.clientEventId },
-        include: { musterEntry: true },
-      });
-      if (replayedAction) return replayedAction.musterEntry;
+    const replay = await tx.musterAccountEntry.findFirst({
+      where: { emergencyEventId: event.id, clientEventId: input.clientEventId },
+    });
+    if (replay) return replay;
+    const replayedAction = await tx.musterAccountAction.findFirst({
+      where: { emergencyEventId: event.id, clientEventId: input.clientEventId },
+      include: { musterEntry: true },
+    });
+    if (replayedAction) return replayedAction.musterEntry;
 
-      const entry = await tx.musterAccountEntry.findFirst({
-        where: { id: input.entryId, emergencyEventId: event.id },
-        select: { id: true, status: true },
-      });
-      if (!entry) throw new MusterServiceError("Muster entry not found in event", "NOT_FOUND");
-      if (!canTransitionMusterStatus(entry.status, input.status)) {
-        throw new MusterServiceError("Muster status transition is not allowed", "CONFLICT");
-      }
+    if (
+      input.offlineIdentity &&
+      (input.offlineIdentity.actorUserId !== input.actorId ||
+        input.offlineIdentity.organizationId !== input.organizationId)
+    ) {
+      throw new MusterServiceError("Offline mark belongs to another signed-in user", "IDENTITY_MISMATCH");
+    }
 
-      const user = await tx.user.findFirst({
-        where: { id: input.actorId, organizationId: input.organizationId, isActive: true },
+    const entry = await tx.musterAccountEntry.findFirst({
+      where: { id: input.entryId, emergencyEventId: event.id },
+      select: {
+        id: true,
+        status: true,
+        updatedAt: true,
+        accountedAt: true,
+        accountedById: true,
+        accountedBy: { select: { name: true } },
+      },
+    });
+    if (!entry) throw new MusterServiceError("Muster entry not found in event", "NOT_FOUND");
+    if (
+      input.expectedUpdatedAt &&
+      entry.updatedAt.toISOString() !== input.expectedUpdatedAt
+    ) {
+      throw new MusterServiceError("Muster entry changed after the offline roster was read", "PRECONDITION_FAILED", {
+        status: entry.status,
+        accountedAt: entry.accountedAt?.toISOString() ?? null,
+        accountedByName: entry.accountedBy?.name ?? null,
+      });
+    }
+    if (!canTransitionMusterStatus(entry.status, input.status)) {
+      throw new MusterServiceError("Muster status transition is not allowed", "CONFLICT");
+    }
+
+    const user = await tx.user.findFirst({
+      where: { id: input.actorId, organizationId: input.organizationId, isActive: true },
+      select: { id: true },
+    });
+    if (!user) throw new MusterServiceError("Accounted-by user not found", "NOT_FOUND");
+
+    if (input.musterPointId) {
+      const point = await tx.musterPoint.findFirst({
+        where: {
+          id: input.musterPointId,
+          organizationId: input.organizationId,
+          isActive: true,
+          office: { branch: { organizationId: input.organizationId } },
+          ...(event.officeId ? { officeId: event.officeId } : {}),
+          ...(event.branchId && !event.officeId
+            ? { office: { branchId: event.branchId } }
+            : {}),
+        },
         select: { id: true },
       });
-      if (!user) throw new MusterServiceError("Accounted-by user not found", "NOT_FOUND");
+      if (!point) throw new MusterServiceError("Muster point not found in event scope", "NOT_FOUND");
+    }
 
-      if (input.musterPointId) {
-        const point = await tx.musterPoint.findFirst({
-          where: {
-            id: input.musterPointId,
-            organizationId: input.organizationId,
-            isActive: true,
-            office: { branch: { organizationId: input.organizationId } },
-            ...(event.officeId ? { officeId: event.officeId } : {}),
-            ...(event.branchId && !event.officeId
-              ? { office: { branchId: event.branchId } }
-              : {}),
-          },
-          select: { id: true },
-        });
-        if (!point) throw new MusterServiceError("Muster point not found in event scope", "NOT_FOUND");
-      }
-
-      const accountedAt = new Date();
-      const updatedEntry = await tx.musterAccountEntry.update({
-        where: { id: entry.id },
-        data: {
-          status: input.status,
-          accountedById: user.id,
-          accountedAt,
-          musterPointId: input.musterPointId ?? null,
-          note: input.note ?? null,
-          clientEventId: input.clientEventId,
-        },
-      });
-      await tx.musterAccountAction.create({
-        data: {
+    const accountedAt = new Date();
+    const updateData = {
+      status: input.status,
+      accountedById: user.id,
+      accountedAt,
+      musterPointId: input.musterPointId ?? null,
+      note: input.note ?? null,
+      clientEventId: input.clientEventId,
+    };
+    let updatedEntry;
+    if (input.expectedUpdatedAt) {
+      const updated = await tx.musterAccountEntry.updateMany({
+        where: {
+          id: entry.id,
           emergencyEventId: event.id,
-          musterEntryId: entry.id,
-          clientEventId: input.clientEventId,
-          status: input.status,
-          accountedById: user.id,
-          accountedAt,
-          musterPointId: input.musterPointId ?? null,
-          note: input.note ?? null,
+          updatedAt: new Date(input.expectedUpdatedAt),
         },
+        data: updateData,
       });
-      return updatedEntry;
+      if (updated.count !== 1) {
+        const currentEntry = await tx.musterAccountEntry.findFirst({
+          where: { id: entry.id, emergencyEventId: event.id },
+          select: {
+            status: true,
+            accountedAt: true,
+            accountedBy: { select: { name: true } },
+          },
+        });
+        if (!currentEntry) throw new MusterServiceError("Muster entry not found in event", "NOT_FOUND");
+        throw new MusterServiceError("Muster entry changed after the offline roster was read", "PRECONDITION_FAILED", {
+          status: currentEntry.status,
+          accountedAt: currentEntry.accountedAt?.toISOString() ?? null,
+          accountedByName: currentEntry.accountedBy?.name ?? null,
+        });
+      }
+      updatedEntry = await tx.musterAccountEntry.findFirstOrThrow({
+        where: { id: entry.id, emergencyEventId: event.id },
+      });
+    } else {
+      updatedEntry = await tx.musterAccountEntry.update({
+        where: { id: entry.id },
+        data: updateData,
+      });
+    }
+    await tx.musterAccountAction.create({
+      data: {
+        emergencyEventId: event.id,
+        musterEntryId: entry.id,
+        clientEventId: input.clientEventId,
+        status: input.status,
+        accountedById: user.id,
+        accountedAt,
+        musterPointId: input.musterPointId ?? null,
+        note: input.note ?? null,
+      },
     });
+      return updatedEntry;
+    };
+    return input.expectedUpdatedAt
+      ? prisma.$transaction(transactionBody, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        })
+      : prisma.$transaction(transactionBody);
+  };
+
+  try {
+    return await runTransaction();
   } catch (error) {
+    if (
+      input.expectedUpdatedAt &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2034"
+    ) {
+      return await runTransaction();
+    }
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      if (input.expectedUpdatedAt) {
+        const currentEvent = await prisma.emergencyEvent.findFirst({
+          where: { id: input.eventId, organizationId: input.organizationId },
+          select: { status: true },
+        });
+        if (!currentEvent) throw new MusterServiceError("Emergency event not found", "NOT_FOUND");
+        if (currentEvent.status !== "ACTIVE") {
+          throw new MusterServiceError("Emergency event is no longer active", "CONFLICT");
+        }
+      }
       const replay = await prisma.musterAccountEntry.findFirst({
         where: {
           emergencyEventId: input.eventId,

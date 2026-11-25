@@ -1,3 +1,5 @@
+import { clearMusterSnapshotAndLocks } from "@/services/muster/muster-offline-store";
+
 /**
  * Entrivo — Offline IndexedDB Storage Engine
  * Manages the offline check-in/walk-in queue and minimal cached expected visitor directory.
@@ -243,8 +245,13 @@ export async function clearOfflineStorage(): Promise<void> {
       tx.objectStore("expected_visitors").clear();
 
       tx.oncomplete = () => {
-        console.log("[Entrivo Offline] IndexedDB caches purged successfully.");
-        resolve();
+        void clearMusterSnapshotAndLocks().then(
+          () => {
+            console.log("[Entrivo Offline] IndexedDB caches purged successfully.");
+            resolve();
+          },
+          reject
+        );
       };
       tx.onerror = () => reject(tx.error);
     });
